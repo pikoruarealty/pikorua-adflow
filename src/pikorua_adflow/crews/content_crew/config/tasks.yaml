@@ -10,6 +10,17 @@ write_meta_ads:
     - Sound like it was written for a HNI or NRI buyer, not a first-time homebuyer
     - Never use: affordable, deal, cheap, limited time, hurry, don't miss out
 
+    Headlines must be specific and evocative — not generic filler.
+    BAD examples (do not write these): "Luxury Living", "Premium Homes", "Your Dream Home"
+    GOOD examples (this is the standard to meet):
+      "Where the sea earns its view" (aspiration)
+      "Your Mumbai address. Finally." (NRI homecoming)
+      "Three floors above the noise" (exclusivity)
+      "A home your portfolio remembers" (investment return)
+      "Built for the name after yours" (legacy)
+    These are examples of the STYLE and SPECIFICITY required — do not copy them verbatim.
+    Write originals that are specific to {product} and the {city} market.
+
     Buyer context:
     {target_audience}
 
@@ -21,9 +32,11 @@ write_meta_ads:
   expected_output: >
     A numbered list of 5 ad copy variants. Each variant is labelled with its
     emotional angle and contains:
-      Headline: (<=30 chars)
-      Body: (<=125 chars)
+      Headline: (<=30 chars, character count in brackets)
+      Body: (<=125 chars, character count in brackets)
     No variant should share the same opening word or phrase as another.
+    Headlines must be evocative and specific — reject any headline that could apply
+    to any other luxury real estate brand in India.
   agent: campaign_copywriter
 
 write_google_ads:

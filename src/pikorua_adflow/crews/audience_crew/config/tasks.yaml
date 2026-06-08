@@ -44,8 +44,9 @@ scout_competitors:
 
 analyse_trends:
   description: >
-    Search for current real estate demand signals, policy changes, or news events
-    in {city} that are relevant to luxury property buyers right now.
+    Today's date is {today}. Search for real estate demand signals, policy changes,
+    or news events in {city} that are current and relevant to luxury property buyers
+    right now — in mid-2026.
 
     Look for:
     - Infrastructure announcements (metro, airport, expressway)
@@ -53,11 +54,19 @@ analyse_trends:
     - NRI remittance or FEMA/RERA policy changes
     - Any recent news about the {city} luxury property market
 
+    IMPORTANT — staleness filter:
+    - Discard any insight where the predicted event or milestone was dated 2025 or earlier
+      and has already occurred or clearly did not materialise.
+    - Only include trends that are genuinely relevant and actionable in {today}.
+    - If a source says "expected by 2025" and it is now {today}, that insight is stale —
+      do not include it. Find something more recent.
+
     Produce 3 trend hooks — each a one-line insight that could anchor a campaign angle.
     Example: "Mumbai sea-view inventory at 10-year low — urgency angle is credible."
   expected_output: >
     3 trend hooks, each as a headline-style insight (1–2 sentences) with a source or
-    search result cited. If no relevant trends found, say so — do not fabricate signals.
+    search result cited. Each hook must be relevant as of {today} — no stale predictions.
+    If no current trends are found, say so explicitly — do not fabricate signals.
     Save to outputs/trend_hooks.md.
   agent: trend_analyst
   output_file: outputs/trend_hooks.md

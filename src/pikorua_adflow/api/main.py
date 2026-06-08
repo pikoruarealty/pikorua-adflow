@@ -1,22 +1,170 @@
 """
 FastAPI portal endpoint — Task 1.6.
 Allows Pikorua team to launch campaigns without terminal access.
+
+Run with:
+    uvicorn pikorua_adflow.api.main:app --reload --port 8000
+
+Then open: http://localhost:8000  (redirects to portal form)
+Or POST directly to: http://localhost:8000/launch-campaign
 """
-# TODO (Task 1.6): implement POST /launch-campaign endpoint
-# Accepts: property_name, platform, goal, budget_inr, city, property_type, price_cr
-# Returns: {status, run_id, review_folder}
-# Do NOT add auth or user management — this is an internal tool only.
 
-from fastapi import FastAPI
+import sys
+import uuid
+import threading
+from pathlib import Path
+from datetime import datetime, date
 
-app = FastAPI(title="Pikorua Campaign Portal")
+# Must set up dotenv and litellm before any crew imports
+from dotenv import load_dotenv
+load_dotenv()
+import litellm
+litellm.drop_params = True
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+app = FastAPI(
+    title="Pikorua Campaign Portal",
+    description="Internal tool — launches AI-generated ad campaigns for Pikorua Realty team.",
+    version="1.0.0",
+)
+
+# In-memory run registry — good enough for an internal single-user tool
+_runs: dict[str, dict] = {}
+
+
+class CampaignBrief(BaseModel):
+    property_name: str = Field(..., min_length=2, description="Name/description of the property")
+    platform: str = Field(..., description="e.g. 'Meta Ads', 'Google Ads'")
+    goal: str = Field(..., description="e.g. 'Lead Generation', 'Brand Awareness'")
+    budget_inr: int = Field(..., gt=0, description="Campaign budget in INR")
+    city: str = Field(..., min_length=2, description="Target city, e.g. 'Mumbai'")
+    property_type: str = Field(..., description="e.g. 'sea-view apartment', '4BHK villa'")
+    price_cr: str = Field(..., description="Price in crores, e.g. '4.5'")
+
+
+def _run_pipeline(run_id: str, brief: CampaignBrief):
+    """Runs both crews in a background thread and updates the run registry."""
+    # Import here so dotenv is already loaded before CrewAI initialises
+    from pikorua_adflow.crews.audience_crew.audience_crew import AudienceCrew
+    from pikorua_adflow.crews.content_crew.content_crew import ContentCrew
+    from pikorua_adflow.utils.output_saver import save_for_review
+
+    sys.stdout.reconfigure(encoding="utf-8")
+
+    inputs = {
+        "platform": brief.platform,
+        "product": (
+            f"Pikorua — Luxury Real Estate Consultancy. Property: {brief.property_name}, "
+            f"a {brief.property_type} in {brief.city} at ₹{brief.price_cr} Cr."
+        ),
+        "target_audience": (
+            f"HNIs and NRIs seeking premium {brief.property_type} in {brief.city}. "
+            f"Campaign goal: {brief.goal}. Budget: ₹{brief.budget_inr:,}."
+        ),
+        "property_type": brief.property_type,
+        "city": brief.city,
+        "price_cr": brief.price_cr,
+        "persona": "No persona data — audience crew has not run yet.",
+        "trends": "No trend data — audience crew has not run yet.",
+        "today": date.today().strftime("%B %d, %Y"),
+    }
+
+    _runs[run_id]["status"] = "running_stage1"
+
+    audience_output = None
+    try:
+        audience_result = AudienceCrew().crew().kickoff(inputs=inputs)
+        audience_output = str(audience_result)
+        inputs["persona"] = audience_output
+        inputs["trends"] = "See persona output above for extracted trend hooks."
+        _runs[run_id]["status"] = "running_stage2"
+    except Exception as exc:
+        _runs[run_id]["stage1_warning"] = str(exc)
+        _runs[run_id]["status"] = "running_stage2"
+
+    try:
+        content_result = ContentCrew().crew().kickoff(inputs=inputs)
+        review_folder = save_for_review(content_result, audience_result=audience_output)
+        _runs[run_id]["status"] = "complete"
+        _runs[run_id]["review_folder"] = str(review_folder)
+    except Exception as exc:
+        _runs[run_id]["status"] = "failed"
+        _runs[run_id]["error"] = str(exc)
+
+
+@app.get("/", response_class=RedirectResponse)
+def root():
+    """Redirect root to the portal form."""
+    return RedirectResponse(url="/portal")
+
+
+@app.get("/portal", response_class=HTMLResponse)
+def portal():
+    """Serve the campaign launch form from portal/index.html."""
+    portal_path = Path(__file__).parent.parent.parent.parent / "portal" / "index.html"
+    if not portal_path.exists():
+        raise HTTPException(status_code=404, detail="portal/index.html not found")
+    return HTMLResponse(content=portal_path.read_text(encoding="utf-8"))
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
 
-# @app.post("/launch-campaign")
-# def launch_campaign(brief: CampaignBrief):
-#     ...  # implement in Task 1.6
+@app.post("/launch-campaign")
+def launch_campaign(brief: CampaignBrief):
+    """
+    Accepts a campaign brief, queues a pipeline run in the background,
+    and immediately returns a run_id so the caller can poll /status/{run_id}.
+
+    The pipeline runs both crews sequentially:
+      Stage 1 — AudienceCrew (persona, competitor intel, trends)
+      Stage 2 — ContentCrew (Meta ads, Google ads, WhatsApp, email)
+
+    Outputs are saved to outputs/pending_review/<timestamp>/ for human review.
+    No ad platform API is called. DRY_RUN=true is the default.
+    """
+    run_id = str(uuid.uuid4())[:8]
+    _runs[run_id] = {
+        "status": "queued",
+        "brief": brief.model_dump(),
+        "created_at": datetime.utcnow().isoformat(),
+        "review_folder": None,
+    }
+
+    thread = threading.Thread(
+        target=_run_pipeline,
+        args=(run_id, brief),
+        daemon=True,
+        name=f"pipeline-{run_id}",
+    )
+    thread.start()
+
+    return JSONResponse(
+        status_code=202,
+        content={
+            "status": "queued",
+            "run_id": run_id,
+            "message": "Pipeline started. Poll /status/{run_id} for progress.",
+            "poll_url": f"/status/{run_id}",
+        },
+    )
+
+
+@app.get("/status/{run_id}")
+def get_status(run_id: str):
+    """Returns the current status of a pipeline run."""
+    if run_id not in _runs:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
+    return _runs[run_id]
+
+
+@app.get("/runs")
+def list_runs():
+    """Lists all runs in this server session (most recent first)."""
+    return sorted(_runs.items(), key=lambda x: x[1]["created_at"], reverse=True)

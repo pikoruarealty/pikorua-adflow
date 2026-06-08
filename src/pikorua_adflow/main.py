@@ -1,5 +1,6 @@
 import sys
 import time
+from datetime import date
 sys.stdout.reconfigure(encoding="utf-8")
 
 from dotenv import load_dotenv
@@ -22,6 +23,7 @@ inputs = {
     # Fallback values — overwritten by audience crew output at runtime
     "persona": "No persona data — audience crew has not run.",
     "trends": "No trend data — audience crew has not run.",
+    "today": date.today().strftime("%B %d, %Y"),
 }
 
 
