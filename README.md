@@ -57,6 +57,3 @@ docs/runbook.md           # Operations runbook (Task 5.1)
 
 ---
 
-## Phase status
-
-See [tasklist.md](../tasklist.md) for the full task list and progress tracker.
