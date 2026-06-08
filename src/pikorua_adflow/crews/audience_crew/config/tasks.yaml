@@ -1,0 +1,63 @@
+research_persona:
+  description: >
+    Research and build a detailed buyer persona for a {property_type} priced at ₹{price_cr} Cr
+    in {city}.
+
+    The persona must include:
+    - Age range and life stage
+    - Income / net worth bracket
+    - Primary motivation for buying (investment, lifestyle, legacy, NRI reconnection, etc.)
+    - Top 2 pain points or fears in the buying process
+    - Preferred communication channels (WhatsApp, email, Instagram, etc.)
+    - Decision-making style (impulse vs. considered, solo vs. family committee)
+    - The one thing that would make them trust a real estate consultancy
+
+    Base your persona on real market patterns for luxury buyers in {city}, not assumptions.
+    If you cannot find specific data for {city}, note the gap explicitly.
+  expected_output: >
+    A structured JSON object with keys: age_range, net_worth, primary_motivation,
+    pain_points (list of 2), preferred_channels (list), decision_style, trust_trigger.
+    Save to outputs/persona.json.
+  agent: persona_researcher
+  output_file: outputs/persona.json
+
+scout_competitors:
+  description: >
+    Search for luxury real estate ads and campaigns currently running in {city}.
+    Check Meta Ad Library (search: "luxury apartments {city}", "premium villa {city}",
+    "real estate {city}") and Google (site:housing.com OR 99acres.com luxury {city}).
+
+    For each competitor found, note:
+    - Brand name (if visible)
+    - Headline / main message
+    - Emotional angle used (aspiration, fear of missing out, investment return, lifestyle, etc.)
+    - CTA used
+
+    If no competitors are found, state this explicitly — do not invent data.
+  expected_output: >
+    A markdown report with 3–5 competitor ad summaries, each covering brand, headline,
+    angle, and CTA. Ends with a "Gap Analysis" section: what angle is no one using
+    that Pikorua could own?
+    Save to outputs/competitor_report.md.
+  agent: competitor_scout
+  output_file: outputs/competitor_report.md
+
+analyse_trends:
+  description: >
+    Search for current real estate demand signals, policy changes, or news events
+    in {city} that are relevant to luxury property buyers right now.
+
+    Look for:
+    - Infrastructure announcements (metro, airport, expressway)
+    - RBI interest rate moves and their effect on HNI buyers
+    - NRI remittance or FEMA/RERA policy changes
+    - Any recent news about the {city} luxury property market
+
+    Produce 3 trend hooks — each a one-line insight that could anchor a campaign angle.
+    Example: "Mumbai sea-view inventory at 10-year low — urgency angle is credible."
+  expected_output: >
+    3 trend hooks, each as a headline-style insight (1–2 sentences) with a source or
+    search result cited. If no relevant trends found, say so — do not fabricate signals.
+    Save to outputs/trend_hooks.md.
+  agent: trend_analyst
+  output_file: outputs/trend_hooks.md

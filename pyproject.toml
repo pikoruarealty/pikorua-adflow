@@ -1,0 +1,22 @@
+[project]
+name = "pikorua-adflow"
+version = "0.1.0"
+description = "Agentic digital marketing pipeline for Pikorua Realty, built on CrewAI"
+authors = [{ name = "Pikorua", email = "pruthvi.pikorua@gmail.com" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[tools]==1.14.5a2"
+]
+
+[project.scripts]
+kickoff = "pikorua_adflow.main:kickoff"
+run_crew = "pikorua_adflow.main:kickoff"
+plot = "pikorua_adflow.main:plot"
+run_with_trigger = "pikorua_adflow.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "flow"

@@ -1,0 +1,10 @@
+.env
+.env.example
+__pycache__/
+lib/
+.DS_Store
+outputs/pending_review/*/
+logs/*.log
+*.pyc
+venv/
+.venv/

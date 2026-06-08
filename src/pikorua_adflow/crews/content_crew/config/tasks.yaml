@@ -1,0 +1,122 @@
+write_meta_ads:
+  description: >
+    Write 5 Meta ad copy variants for {product} on Meta Ads.
+
+    Each variant must:
+    - Have a headline of 30 characters or fewer
+    - Have a body of 125 characters or fewer
+    - Target a different emotional angle — one per angle from this list:
+      aspiration, investment return, legacy/family, exclusivity, NRI homecoming
+    - Sound like it was written for a HNI or NRI buyer, not a first-time homebuyer
+    - Never use: affordable, deal, cheap, limited time, hurry, don't miss out
+
+    Buyer context:
+    {target_audience}
+
+    Persona insight (use this to make copy specific, not generic):
+    {persona}
+
+    Trend hooks to weave in where natural:
+    {trends}
+  expected_output: >
+    A numbered list of 5 ad copy variants. Each variant is labelled with its
+    emotional angle and contains:
+      Headline: (<=30 chars)
+      Body: (<=125 chars)
+    No variant should share the same opening word or phrase as another.
+  agent: campaign_copywriter
+
+write_google_ads:
+  description: >
+    Write Google Search ad copy for {product}.
+
+    Requirements:
+    - 3 headlines, each 30 characters or fewer
+    - 2 descriptions, each 90 characters or fewer
+    - Headlines should be keyword-rich but not robotic
+    - Descriptions should expand on a specific benefit, not repeat the headline
+
+    Buyer context:
+    {target_audience}
+
+    Persona insight:
+    {persona}
+  expected_output: >
+    Formatted as:
+      Headline 1: ... [X chars]
+      Headline 2: ... [X chars]
+      Headline 3: ... [X chars]
+      Description 1: ... [X chars]
+      Description 2: ... [X chars]
+    With character counts noted after each line in brackets.
+  agent: campaign_copywriter
+
+write_whatsapp_script:
+  description: >
+    Write a WhatsApp Business message template for {product}.
+
+    The message must follow this structure:
+    1. Greeting (personalised, not "Dear Sir/Madam")
+    2. Hook (one sentence specific to the property or market moment)
+    3. Offer statement (what Pikorua is presenting, no pressure language)
+    4. CTA (soft, relationship-driven e.g. "Would you like a private walkthrough?")
+    5. Opt-out line (required: "Reply STOP to unsubscribe")
+
+    Total length: 160 words or fewer.
+    Tone: the kind of message a trusted advisor would send, not a salesperson.
+
+    Buyer context:
+    {target_audience}
+
+    Persona insight:
+    {persona}
+  expected_output: >
+    The complete WhatsApp message ready to paste into a BSP template submission.
+    Label each section (Greeting / Hook / Offer / CTA / Opt-out).
+    Note total word count at the end.
+  agent: campaign_copywriter
+
+write_email:
+  description: >
+    Write a single email for {product} targeting {target_audience}.
+
+    Requirements:
+    - Subject line: 50 characters or fewer, no clickbait
+    - Preview text: 90 characters or fewer
+    - Body: 150 words. Structure: opening that earns attention, 1-2 sentences on
+      the specific property or opportunity, Pikorua's value as advisor, soft CTA.
+    - Tone: the email a trusted wealth manager would send, not a mass-market mailer
+
+    Persona insight (use to personalise the angle):
+    {persona}
+
+    Trend hooks (weave in where it adds credibility):
+    {trends}
+  expected_output: >
+    Formatted as:
+      Subject: ...
+      Preview: ...
+      ---
+      [Email body]
+    Word count noted at the end.
+  agent: campaign_copywriter
+
+format_for_api:
+  description: >
+    Take the 5 Meta ad copy variants from write_meta_ads and format them into a
+    valid Meta Ads API JSON payload for {product}.
+
+    Required fields:
+    - Campaign: name, objective (LEAD_GENERATION), status (PAUSED),
+      special_ad_categories: ["HOUSING"]
+    - Ad set: name, targeting (city-level only, no age/gender per housing policy),
+      daily_budget
+    - Ad creative: headline, body, call_to_action
+
+    Use descriptive placeholders for unknown IDs: <AD_ACCOUNT_ID>, <PAGE_ID>.
+    Label the entire output as DRY-RUN at the top.
+  expected_output: >
+    A valid JSON object following Meta campaign creation structure.
+    First line comment: "// DRY-RUN -- review and fill placeholders before deploying"
+    Formatted with 2-space indentation.
+  agent: ad_ops_manager
