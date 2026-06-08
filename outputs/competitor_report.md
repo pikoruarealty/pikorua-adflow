@@ -1,25 +1,31 @@
-# Competitor Report
-## Introduction
-The luxury real estate market in Ahmemdabad is highly competitive, with several players vying for the attention of high-net-worth individuals. This report summarizes the findings of an analysis of current ads and campaigns in Ahmemdabad, highlighting the brand name, headline, emotional angle, and call-to-action (CTA) used by each competitor.
+# Luxury Real Estate Competitor Report: Ahmedabad
 
-## Competitor Summaries
-### Competitor 1: Godrej Properties
-* Brand Name: Godrej Properties
-* Headline: Experience the pinnacle of luxury living
-* Emotional Angle: Aspiration, Lifestyle
-* CTA: Book now and elevate your lifestyle
+## Competitor Ad Summaries
 
-### Competitor 2: Adani Realty
-* Brand Name: Adani Realty
-* Headline: Invest in the future of luxury real estate
-* Emotional Angle: Investment Return, Fear of Missing Out
-* CTA: Don't miss out, invest today
+1. **TAKSHASHILA ELEGNA**  
+   - **Headline:** "Spacious 4BHK Flat | ₹3.04 Cr"  
+   - **Angle:** Lifestyle (spacious family-friendly living)  
+   - **CTA:** "Contact seller" (implied price negotiation)  
 
-### Competitor 3: Tata Housing
-* Brand Name: Tata Housing
-* Headline: Live the life you deserve
-* Emotional Angle: Lifestyle, Aspiration
-* CTA: Visit our website to know more
+2. **Unnamed Developer (Mithakhali, CG Road)**  
+   - **Headline:** "Luxury 2/3/4 BHK Flats | ₹6,455-7,500/sqft"  
+   - **Angle:** Investment return (premium pricing)  
+   - **CTA:** "Enquire now" (inferred via 99acres contact forms)  
 
-## Gap Analysis
-The analysis reveals that most competitors are focusing on the aspiration and lifestyle aspects of luxury real estate, with a few emphasizing investment returns and fear of missing out. However, there is a gap in the market for a brand that can effectively leverage the emotional angle of "trust and reliability" to resonate with high-net-worth individuals in Ahmemdabad. Pikorua could own this space by highlighting its track record of successful projects, personal referrals, and reputation for delivering high-quality properties on time. By doing so, Pikorua can differentiate itself from competitors and establish a unique selling proposition that resonates with the target audience.
+3. **SG Highway Project**  
+   - **Headline:** "Luxury Apartments in Ahmedabad West"  
+   - **Angle:** Location aspiration (proximity to business hubs)  
+   - **CTA:** "Explore listings"  
+
+No active Meta Ad Library campaigns found for Ahmedabad luxury real estate during this analysis window.
+
+## Gap Analysis  
+**Current Missing Angle:**  
+*NRIs' Legacy & Risk Mitigation*  
+- No competitor emphasizes transparent legal documentation (RERA certification), developer exit strategies, or post-purchase property management support for overseas buyers.  
+- **Pikorua Opportunity:**  
+  - Position as "The Only Ahmedabad Ultra-Luxury Developer With 100% RERA-Compliant Titles"  
+  - Messaging: "Build Your Family Legacy Without Crossing Oceans: Full Legal Clarity + NRI-Managed Maintenance"  
+  - CTA: "Get Verified Legal Documents via WhatsApp" (aligning with NRI preferred channel)  
+
+Final report saved to outputs/competitor_report.md
