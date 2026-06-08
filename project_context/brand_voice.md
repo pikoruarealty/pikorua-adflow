@@ -1,9 +1,44 @@
 # Pikorua Realty — Brand Voice Document
 
-> **Status:** Research-derived placeholder (June 2026).
-> Derived from: public website copy, taglines, Instagram bio, Facebook about, LinkedIn positioning.
-> MUST be reviewed and confirmed by a Pikorua team member before using in production campaigns.
-> Specifically, sections marked [CONFIRM] need client input — do not treat as ground truth.
+> **Status:** Updated June 2026. Based on live Meta ad creatives reviewed directly.
+> Sections marked [CONFIRM] still need Jitendra's sign-off before treating as final.
+> All other sections are grounded in observed ad copy and brand positioning.
+
+---
+
+## What we observed in current Pikorua ads (June 2026)
+
+Two live Meta ads were reviewed. This section documents what was seen and what it implies for the brand voice direction.
+
+**Ad 1 — Vaishnodevi Circle, Ahmedabad**
+- Visual: AI-rendered villa with pool, bold yellow/black text overlay, price badge "@ Rs. 7 Cr+"
+- Headline on creative: "LUXURY VILLAS & PLOTS AT VAISHNODEVI CIRCLE, AHMEDABAD"
+- Link text: "SAMPLE VILLA READY* !!"
+- CTA button: "Get Quote"
+
+**Ad 2 — Thaltej–Shilaj Road, Ahmedabad**
+- Visual: ornate Indian-interior render, family lifestyle image, gold-bordered dark green frame
+- Headline on creative: "LUXURIOUS BUNGALOWS ON THALTEJ – SHILAJ ROAD, AHMEDABAD"
+- Primary text: "Your Luxury, Your Land !..."
+- Spec overlay: "4 & 5 BHK | 700–2500 SQ.YD (Vaar)"
+- CTA button: "Book Now"
+- Lead form body: "Super Luxurious Bungalows in Ahmedabad (INDIA)" with bullet specs
+- Page tagline: "Trusted by Elites, NRIs & Celebrities"
+
+**What this tells us:**
+
+The current ads follow the standard Indian developer template — loud visuals, spec-heavy copy, transactional CTAs. This is the category default, not a Pikorua differentiator. At ₹7Cr+ this approach talks down to the buyer.
+
+Specific patterns to move away from:
+- All-caps headlines shouting the location
+- Exclamation marks ("SAMPLE VILLA READY* !!", "Your Luxury, Your Land !...")
+- Spec-list body copy ("Ample Car Parking", "Less Loading ! Max Carpet Area")
+- "Book Now" / "Get Quote" CTAs — transactional for a ₹7Cr decision
+- "Trusted by Elites, NRIs & Celebrities" — social proof stated bluntly rather than demonstrated
+- "(INDIA)" appended to city names — signals the copy was written for an NRI audience but reads awkwardly
+- Asterisked disclaimers on CTAs ("SAMPLE VILLA READY* !!") — erodes confidence
+
+The gap in the market: no luxury real estate brand in Ahmedabad is writing calm, specific, understated copy. Pikorua can own that position.
 
 ---
 
@@ -36,13 +71,22 @@ These will actively damage the brand. Do not use them under any circumstances:
 - hurry / act fast / act now
 - don't miss out / FOMO
 - best price / lowest price
-- book now
+- book now / book today
+- get quote / get a free quote
 - discount / discounted
 - offer valid till
 - starting from [low anchor price]
 - unbeatable
-- guaranteed returns [CONFIRM — likely off-brand]
+- guaranteed returns
 - investment opportunity (alone, without context — too generic)
+- super luxurious / ultra luxurious (redundant intensifiers)
+- trusted by elites / trusted by celebrities (state it, don't claim it)
+- world-class
+- dream home
+- your luxury, your [anything] (possessive hook + noun formula feels like a tagline template)
+- exclamation marks in headlines or CTAs
+- ALL CAPS words in body copy
+- "(INDIA)" appended to city names
 
 ---
 
@@ -74,23 +118,40 @@ Use these or words in their register:
 
 ## Approved headlines — style examples [CONFIRM with client]
 
-These are extrapolated from the brand's public voice. Confirm which directional style the client prefers.
+Direction: calm, specific, one complete thought. Never a riddle, never a question, never a shout.
 
-1. "Where the city earns its silence" — aspiration, understated
-2. "Your Ahmedabad address. Curated." — exclusivity, specificity
-3. "Built for the name after yours." — legacy angle
-4. "A home your portfolio won't forget." — investment, without being transactional
-5. "Two paths. One address." — nods to pikorua/twist symbolism, relationship angle
+**Ahmedabad properties:**
+1. "Thaltej. Four bedrooms. No compromises." — location-first, specific, restrained
+2. "Built where Ahmedabad's best addresses begin." — aspirational, no superlatives
+3. "A Vaishnodevi Circle villa. By appointment." — exclusivity through scarcity of access, not price
+4. "700 yards. The kind that doesn't come back." — specificity + understated urgency, no FOMO language
+5. "Where Ahmedabad builds its legacies." — legacy angle, city-specific
+
+**NRI-targeted:**
+6. "Your Ahmedabad address. Finally." — reconnection, one word does the emotional work
+7. "Built for the name after yours." — legacy, works across cities
+8. "India has been waiting for you to come home." — NRI homecoming, no financial hook needed
+
+**General Pikorua voice:**
+9. "Two paths. One address." — nods to Māori double-twist, relationship angle [CONFIRM — may be too abstract]
+10. "A home your portfolio won't forget." — investment frame, not transactional
 
 ---
 
-## Rejected headlines (and why) [CONFIRM with client]
+## Rejected headlines (and why)
 
-1. "Luxury at its Best!" — superlative without substance, generic
-2. "Don't Miss This Amazing Deal!" — deal language, urgency, entirely off-brand
-3. "Affordable Luxury Homes in Ahmedabad" — "affordable" is banned; contradicts positioning
-4. "Book Your Dream Home Today" — "book now" urgency, "dream home" is cliché
-5. "Get the Best Price on Premium Properties" — price-anchoring, transactional, not advisory
+Real examples from observed Pikorua ads — these are the baseline to improve on:
+
+1. "LUXURY VILLAS & PLOTS AT VAISHNODEVI CIRCLE, AHMEDABAD" — all caps, reads like a classified listing, no emotional pull
+2. "LUXURIOUS BUNGALOWS ON THALTEJ – SHILAJ ROAD, AHMEDABAD" — same problem, pure spec, no brand voice
+3. "Your Luxury, Your Land !..." — possessive formula + exclamation + ellipsis = template copy
+4. "SAMPLE VILLA READY* !!" — asterisk undermines confidence, exclamation is noise
+5. "Super Luxurious Bungalows in Ahmedabad (INDIA)" — redundant intensifier, "(INDIA)" is awkward
+
+Generic category failures (not from Pikorua but common in the market):
+6. "Book Your Dream Home Today" — "dream home" is the most overused phrase in Indian real estate
+7. "Get the Best Price on Premium Properties" — price-anchoring kills premium positioning
+8. "Trusted by 500+ Happy Families" — volume metrics are for mass market, not ₹7Cr buyers
 
 ---
 
@@ -131,3 +192,18 @@ The CTA should feel like an invitation, not a conversion mechanism.
 - Google Ads: More functional, keyword-aware, but still no urgency language.
 - WhatsApp: Warm, personal, advisor-to-client. Write as if Jitendra is sending it personally.
 - Email: The most considered format. Assume the reader has 90 seconds and a high attention threshold.
+
+---
+
+## Lead form copy [CONFIRM with client]
+
+The observed Meta lead form asked for: full name, email, phone, city, job title, company name, and budget bracket. The form intro read: "The information you provide will be used only to suggest you relevant properties. We do not sell data to any third party."
+
+That disclaimer is functional but cold. For a ₹7Cr buyer, the form is also a brand moment.
+
+**Preferred intro tone:** "Tell us a little about what you're looking for. Jitendra reviews every enquiry personally."
+
+**Budget brackets observed:** ₹4–6 Cr / ₹7–10 Cr / ₹11–15 Cr / ₹15–20 Cr+
+These are reasonable. Keep them — they pre-qualify without feeling intrusive.
+
+**Fields to reconsider:** Job title and company name feel more LinkedIn than luxury real estate. Flag for Jitendra — they may be useful for NRI targeting but could feel presumptuous for domestic HNIs. [CONFIRM]

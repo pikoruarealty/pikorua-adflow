@@ -151,7 +151,10 @@
 <body>
 
 <div class="card">
-  <div class="logo">Pikorua Realty</div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;">
+    <div class="logo">Pikorua Realty</div>
+    <a href="/runs" style="font-size:0.75rem;color:#8a7d6e;text-decoration:none;letter-spacing:0.05em;">View all runs ›</a>
+  </div>
   <h1>Launch Campaign</h1>
   <p class="subtitle">Internal tool — AI-generated drafts for human review only</p>
 
@@ -277,9 +280,12 @@
           setStatus('status-running', '<span class="spinner"></span>Stage 1 — researching audience, competitors, trends...');
         } else if (s === 'running_stage2') {
           setStatus('status-running', '<span class="spinner"></span>Stage 2 — generating ad copy, WhatsApp scripts, email...');
+        } else if (s === 'running_stage3') {
+          setStatus('status-running', '<span class="spinner"></span>Stage 3 — evaluating copy quality, rewriting flagged variants...');
         } else if (s === 'complete') {
           clearInterval(pollTimer);
-          setStatus('status-complete', '&#10003; Complete — review your outputs before any deployment.');
+          const scorecard = data.copy_scorecard_summary ? '<br><small>' + data.copy_scorecard_summary + '</small>' : '';
+          setStatus('status-complete', '&#10003; Complete — review your outputs before any deployment.' + scorecard);
           if (data.review_folder) {
             rpath.textContent = 'Saved to: ' + data.review_folder;
           }

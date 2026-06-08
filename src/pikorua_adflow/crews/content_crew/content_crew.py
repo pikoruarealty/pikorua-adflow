@@ -12,8 +12,7 @@ class ContentCrew:
     def __init__(self):
         self._brand_voice = load_brand_voice()
 
-    def _copywriter_backstory(self) -> str:
-        base = self.agents_config["campaign_copywriter"]["backstory"]
+    def _with_brand_voice(self, base: str) -> str:
         if self._brand_voice:
             return f"{base}\n\nBRAND VOICE REFERENCE:\n{self._brand_voice}"
         return base
@@ -21,16 +20,20 @@ class ContentCrew:
     @agent
     def campaign_copywriter(self) -> Agent:
         cfg = dict(self.agents_config["campaign_copywriter"])
-        cfg["backstory"] = self._copywriter_backstory()
+        cfg["backstory"] = self._with_brand_voice(cfg["backstory"])
         return Agent(config=cfg, verbose=True)
 
     @agent
     def ad_ops_manager(self) -> Agent:
-        return Agent(config=self.agents_config["ad_ops_manager"], verbose=True)
+        cfg = dict(self.agents_config["ad_ops_manager"])
+        cfg["backstory"] = self._with_brand_voice(cfg["backstory"])
+        return Agent(config=cfg, verbose=True)
 
     @agent
     def copy_evaluator(self) -> Agent:
-        return Agent(config=self.agents_config["copy_evaluator"], verbose=True)
+        cfg = dict(self.agents_config["copy_evaluator"])
+        cfg["backstory"] = self._with_brand_voice(cfg["backstory"])
+        return Agent(config=cfg, verbose=True)
 
     @task
     def write_meta_ads(self) -> Task:

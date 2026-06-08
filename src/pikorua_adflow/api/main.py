@@ -106,10 +106,22 @@ def _run_pipeline(run_id: str, brief: CampaignBrief):
         _runs[run_id]["status"] = "running_stage2"
 
     try:
+        _runs[run_id]["status"] = "running_stage2"
         content_result = ContentCrew().crew().kickoff(inputs=inputs)
         review_folder = save_for_review(content_result, audience_result=audience_output)
         _runs[run_id]["status"] = "complete"
         _runs[run_id]["review_folder"] = str(review_folder)
+        # Surface copy scorecard summary if the evaluator wrote it
+        scorecard_path = Path(__file__).parent.parent.parent.parent / "outputs" / "copy_scorecard.md"
+        if scorecard_path.exists():
+            text = scorecard_path.read_text(encoding="utf-8")
+            # Pull just the summary line (last non-empty line starting with a digit or "X/")
+            summary = next(
+                (l.strip() for l in reversed(text.splitlines()) if l.strip() and ("passed" in l or "flagged" in l)),
+                None,
+            )
+            if summary:
+                _runs[run_id]["copy_scorecard_summary"] = summary
     except Exception as exc:
         _runs[run_id]["status"] = "failed"
         _runs[run_id]["error"] = str(exc)
@@ -183,7 +195,79 @@ def get_status(run_id: str):
     return _runs[run_id]
 
 
-@app.get("/runs")
-def list_runs():
-    """Lists all runs in this server session (most recent first)."""
+@app.get("/runs/json")
+def list_runs_json():
+    """Lists all runs as JSON (most recent first)."""
     return sorted(_runs.items(), key=lambda x: x[1]["created_at"], reverse=True)
+
+
+@app.get("/runs", response_class=HTMLResponse)
+def list_runs():
+    """Renders a simple HTML history page of all runs this session."""
+    rows = sorted(_runs.items(), key=lambda x: x[1]["created_at"], reverse=True)
+
+    def status_badge(s):
+        colours = {
+            "complete": "#2a4030", "failed": "#5a2820",
+            "running_stage1": "#2d5038", "running_stage2": "#2d5038", "queued": "#5a5040",
+        }
+        bg = {"complete": "#f0f4ee", "failed": "#fdf0ee",
+              "running_stage1": "#eef4f0", "running_stage2": "#eef4f0", "queued": "#f0ede6"}
+        c = colours.get(s, "#333")
+        b = bg.get(s, "#eee")
+        label = s.replace("_", " ").title()
+        return f'<span style="background:{b};color:{c};padding:2px 8px;border-radius:2px;font-size:0.75rem;">{label}</span>'
+
+    run_rows = ""
+    for run_id, run in rows:
+        brief = run.get("brief", {})
+        scorecard = run.get("copy_scorecard_summary", "")
+        scorecard_html = f'<div style="font-size:0.75rem;color:#5a5040;margin-top:4px;">{scorecard}</div>' if scorecard else ""
+        folder = run.get("review_folder", "") or ""
+        folder_html = f'<div style="font-family:monospace;font-size:0.72rem;color:#8a7d6e;margin-top:2px;">{folder}</div>' if folder else ""
+        run_rows += f"""
+        <tr>
+          <td style="padding:10px 12px;font-family:monospace;font-size:0.82rem;">{run_id}</td>
+          <td style="padding:10px 12px;font-size:0.85rem;">
+            {brief.get('property_name','—')}<br>
+            <span style="font-size:0.75rem;color:#8a7d6e;">{brief.get('city','')} · ₹{brief.get('price_cr','')} Cr · {brief.get('platform','')}</span>
+          </td>
+          <td style="padding:10px 12px;">{status_badge(run.get('status',''))}</td>
+          <td style="padding:10px 12px;font-size:0.82rem;color:#5a5040;">
+            {run.get('created_at','')[:16].replace('T',' ')}
+          </td>
+          <td style="padding:10px 12px;">
+            {scorecard_html}
+            {folder_html}
+          </td>
+        </tr>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8"/>
+  <title>Pikorua — Campaign Runs</title>
+  <style>
+    body {{font-family:'Georgia',serif;background:#f7f5f0;color:#1a1a1a;padding:2rem;}}
+    .logo {{font-size:0.75rem;letter-spacing:0.2em;text-transform:uppercase;color:#8a7d6e;}}
+    h1 {{font-size:1.4rem;font-weight:normal;margin:0.3rem 0 1.5rem;}}
+    table {{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e0dbd0;}}
+    th {{text-align:left;padding:8px 12px;font-size:0.72rem;letter-spacing:0.08em;
+         text-transform:uppercase;color:#5a5040;border-bottom:1px solid #e0dbd0;background:#fdfcf9;}}
+    tr:not(:last-child) td {{border-bottom:1px solid #f0ede6;}}
+    tr:hover td {{background:#fdfcf9;}}
+    a {{color:#3a3028;font-size:0.82rem;}}
+  </style>
+</head><body>
+  <div class="logo">Pikorua Realty</div>
+  <h1>Campaign Runs <span style="font-size:0.85rem;color:#8a7d6e;">— this session only</span></h1>
+  <table>
+    <thead><tr>
+      <th>Run ID</th><th>Property</th><th>Status</th><th>Started</th><th>Scorecard / Output</th>
+    </tr></thead>
+    <tbody>{run_rows if run_rows else '<tr><td colspan="5" style="padding:16px;color:#8a7d6e;">No runs yet this session.</td></tr>'}</tbody>
+  </table>
+  <p style="margin-top:1rem;font-size:0.8rem;color:#8a7d6e;">
+    <a href="/portal">&#8592; Launch new campaign</a>
+  </p>
+</body></html>"""
+    return HTMLResponse(content=html)

@@ -1,10 +1,10 @@
 # Pikorua AdFlow — Task Progress
 
-## Phase 0 — Foundation (BLOCKED on client)
-- [ ] 0.1 Brand voice doc — needs working session with Jitendra
+## Phase 0 — Foundation
+- [x] 0.1 Brand voice doc — drafted from live Meta ads; [CONFIRM] items flagged for Jitendra
 - [ ] 0.2 Data audit — needs CRM access
-- [ ] 0.3 project_context/ finalised — blocked on 0.1 + 0.2
-- [ ] 1.2 Wire brand voice into agents — blocked on 0.1
+- [ ] 0.3 project_context/ finalised — blocked on 0.2
+- [x] 1.2 Wire brand voice into agents — copywriter, evaluator, ad_ops_manager all receive brand voice context
 
 ## Phase 1 — Pipeline (COMPLETE)
 - [x] 0.4 Pipeline runs end-to-end (~98s), no errors

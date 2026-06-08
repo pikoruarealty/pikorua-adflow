@@ -28,8 +28,8 @@ def save_for_review(content_result, audience_result=None) -> pathlib.Path:
 
     (folder / "ad_copy.md").write_text(str(content_result), encoding="utf-8")
 
-    # Copy evaluator outputs into the review folder if they were written this run
-    for filename in ("copy_scorecard.md", "copy_rewrites.md"):
+    # Copy audience + evaluator outputs into the review folder if written this run
+    for filename in ("targeting_brief.md", "copy_scorecard.md", "copy_rewrites.md"):
         src = outputs_root / filename
         if src.exists():
             (folder / filename).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
