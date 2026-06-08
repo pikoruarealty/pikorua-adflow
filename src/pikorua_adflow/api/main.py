@@ -42,8 +42,12 @@ class CampaignBrief(BaseModel):
     goal: str = Field(..., description="e.g. 'Lead Generation', 'Brand Awareness'")
     budget_inr: int = Field(..., gt=0, description="Campaign budget in INR")
     city: str = Field(..., min_length=2, description="Target city, e.g. 'Mumbai'")
+    locality: str = Field("", description="Specific area within city, e.g. 'Thaltej', 'Bandra West'")
     property_type: str = Field(..., description="e.g. 'sea-view apartment', '4BHK villa'")
     price_cr: str = Field(..., description="Price in crores, e.g. '4.5'")
+    buyer_type: str = Field("HNI/NRI", description="Target buyer segment: 'HNI', 'NRI', or 'HNI/NRI'")
+    nri_geographies: str = Field("", description="NRI diaspora locations if relevant, e.g. 'UAE, US, UK'")
+    campaign_duration_days: int = Field(30, gt=0, description="Campaign flight duration in days")
 
 
 def _run_pipeline(run_id: str, brief: CampaignBrief):
@@ -55,21 +59,30 @@ def _run_pipeline(run_id: str, brief: CampaignBrief):
 
     sys.stdout.reconfigure(encoding="utf-8")
 
+    locality_str = f", {brief.locality}" if brief.locality else ""
+    nri_str = f" NRI target geographies: {brief.nri_geographies}." if brief.nri_geographies else ""
     inputs = {
         "platform": brief.platform,
         "product": (
             f"Pikorua — Luxury Real Estate Consultancy. Property: {brief.property_name}, "
-            f"a {brief.property_type} in {brief.city} at ₹{brief.price_cr} Cr."
+            f"a {brief.property_type} in {brief.city}{locality_str} at ₹{brief.price_cr} Cr."
         ),
         "target_audience": (
-            f"HNIs and NRIs seeking premium {brief.property_type} in {brief.city}. "
-            f"Campaign goal: {brief.goal}. Budget: ₹{brief.budget_inr:,}."
+            f"{brief.buyer_type} buyers seeking premium {brief.property_type} in {brief.city}. "
+            f"Campaign goal: {brief.goal}. Budget: ₹{brief.budget_inr:,}. "
+            f"Duration: {brief.campaign_duration_days} days.{nri_str}"
         ),
         "property_type": brief.property_type,
         "city": brief.city,
+        "locality": brief.locality,
         "price_cr": brief.price_cr,
+        "goal": brief.goal,
+        "buyer_type": brief.buyer_type,
+        "nri_geographies": brief.nri_geographies,
+        "campaign_duration_days": str(brief.campaign_duration_days),
         "persona": "No persona data — audience crew has not run yet.",
         "trends": "No trend data — audience crew has not run yet.",
+        "targeting": "No targeting data — audience crew has not run yet.",
         "today": date.today().strftime("%B %d, %Y"),
     }
 
@@ -81,6 +94,12 @@ def _run_pipeline(run_id: str, brief: CampaignBrief):
         audience_output = str(audience_result)
         inputs["persona"] = audience_output
         inputs["trends"] = "See persona output above for extracted trend hooks."
+        # Load targeting brief from file if the agent wrote it; fall back to crew output
+        targeting_path = Path(__file__).parent.parent.parent.parent / "outputs" / "targeting_brief.md"
+        if targeting_path.exists():
+            inputs["targeting"] = targeting_path.read_text(encoding="utf-8")
+        else:
+            inputs["targeting"] = audience_output
         _runs[run_id]["status"] = "running_stage2"
     except Exception as exc:
         _runs[run_id]["stage1_warning"] = str(exc)

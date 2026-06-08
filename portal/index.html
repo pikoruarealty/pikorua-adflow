@@ -178,6 +178,19 @@
 
     <div class="row">
       <div class="field">
+        <label for="locality">Locality <span style="text-transform:none;font-size:0.72rem;color:#b0a898;">(optional)</span></label>
+        <input type="text" id="locality" name="locality"
+               placeholder="e.g. Bandra West, Thaltej" />
+      </div>
+      <div class="field">
+        <label for="campaign_duration_days">Campaign Duration (days)</label>
+        <input type="number" id="campaign_duration_days" name="campaign_duration_days"
+               placeholder="e.g. 30" min="1" value="30" required />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
         <label for="price_cr">Price (Crores)</label>
         <input type="text" id="price_cr" name="price_cr"
                placeholder="e.g. 4.5" required />
@@ -208,6 +221,22 @@
           <option value="Site Visits">Site Visits</option>
           <option value="WhatsApp Enquiries">WhatsApp Enquiries</option>
         </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="buyer_type">Buyer Type</label>
+        <select id="buyer_type" name="buyer_type" required>
+          <option value="HNI/NRI">HNI + NRI</option>
+          <option value="HNI">HNI only</option>
+          <option value="NRI">NRI only</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="nri_geographies">NRI Geographies <span style="text-transform:none;font-size:0.72rem;color:#b0a898;">(if NRI)</span></label>
+        <input type="text" id="nri_geographies" name="nri_geographies"
+               placeholder="e.g. UAE, US, UK" />
       </div>
     </div>
 
@@ -273,13 +302,17 @@
     rid.textContent = '';
 
     const payload = {
-      property_name: form.property_name.value.trim(),
-      platform:      form.platform.value,
-      goal:          form.goal.value,
-      budget_inr:    parseInt(form.budget_inr.value, 10),
-      city:          form.city.value.trim(),
-      property_type: form.property_type.value.trim(),
-      price_cr:      form.price_cr.value.trim(),
+      property_name:          form.property_name.value.trim(),
+      platform:               form.platform.value,
+      goal:                   form.goal.value,
+      budget_inr:             parseInt(form.budget_inr.value, 10),
+      city:                   form.city.value.trim(),
+      locality:               form.locality.value.trim(),
+      property_type:          form.property_type.value.trim(),
+      price_cr:               form.price_cr.value.trim(),
+      buyer_type:             form.buyer_type.value,
+      nri_geographies:        form.nri_geographies.value.trim(),
+      campaign_duration_days: parseInt(form.campaign_duration_days.value, 10),
     };
 
     setStatus('status-queued', 'Submitting...');

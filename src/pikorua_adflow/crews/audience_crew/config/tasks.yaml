@@ -42,6 +42,65 @@ scout_competitors:
   agent: competitor_scout
   output_file: outputs/competitor_report.md
 
+build_targeting_brief:
+  description: >
+    Build a complete geo, demographic, and professional targeting brief for a
+    {property_type} priced at ₹{price_cr} Cr in {city}.
+
+    PART 1 — GEO TARGETING:
+    Search for the pincode of the property locality ({locality} if provided, otherwise
+    the main luxury belt of {city}). Then find 8–12 nearby pincodes covering:
+    - Adjacent affluent residential localities
+    - Areas where the target buyer demographic (HNI, NRI) is known to live or work
+    - Nearby commercial/business hubs where HNIs work (offices, SEZs, business parks)
+    Do not invent pincodes. Search for them and list only verified ones.
+    Format: locality name — pincode
+
+    PART 2 — DEMOGRAPHIC TARGETING:
+    Based on the price tier (₹{price_cr} Cr) and property type ({property_type}), specify:
+    - Age range (e.g. 35–55)
+    - Household income bracket (in INR annual, e.g. ₹50L+)
+    - Gender targeting recommendation (all / skew male / skew female — with reasoning)
+    - NRI segment: yes/no and which diaspora geographies to target (UAE, US, UK, etc.)
+
+    PART 3 — PROFESSIONAL TARGETING:
+    Identify the specific job titles, industries, and seniority levels that represent
+    likely buyers at this price point. Be specific — not "business owners" but:
+    - C-suite: CEOs, MDs, CMOs, CFOs, COOs of mid-to-large companies
+    - Founders/promoters of manufacturing, pharma, textile, real estate, FMCG companies
+    - Senior professionals: VPs, Directors, Partners at law firms / CA firms / investment banks
+    - NRI professionals: IT directors/VPs in US/UK, finance professionals in UAE/Singapore
+    - Entrepreneurs with exits or active businesses valued ₹20 Cr+
+    List these as targetable segments on LinkedIn (for NRI/professional targeting)
+    and as Meta interest/employer categories where available.
+
+    PART 4 — META ADS TARGETING SEGMENTS:
+    List specific interest and behavioural targeting segments available on Meta Ads:
+    - Interests: luxury real estate, property investment, interior design, golf,
+      business class travel, wealth management, premium automobiles
+    - Behaviours: frequent international travellers, business owners, high-value purchases
+    - Employer/industry targeting if relevant
+    - Note: special_ad_category HOUSING restricts age/gender/radius — flag any restrictions
+
+    PART 5 — GOOGLE ADS TARGETING:
+    List:
+    - 10–15 specific search keywords (exact and phrase match) the buyer would use
+    - 5 negative keywords to exclude irrelevant traffic (e.g. "cheap", "under 1 crore")
+    - In-market audience segments relevant for Google Ads
+    - Recommended bidding strategy for the campaign goal: {goal}
+
+    NEVER INVENT: All pincodes must be searched and verified. Flag any you could not confirm.
+  expected_output: >
+    A structured markdown document with 5 clearly labelled sections:
+    1. Geo Targeting — table of locality + pincode (verified, flag unconfirmed)
+    2. Demographics — age, income, gender, NRI segments
+    3. Professional Targeting — job titles, industries, seniority, platforms
+    4. Meta Ads Segments — interests, behaviours, restrictions
+    5. Google Ads — keywords, negatives, in-market audiences, bidding strategy
+    Save to outputs/targeting_brief.md.
+  agent: targeting_researcher
+  output_file: outputs/targeting_brief.md
+
 analyse_trends:
   description: >
     Today's date is {today}. Search for real estate demand signals, policy changes,

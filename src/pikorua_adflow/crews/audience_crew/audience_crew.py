@@ -38,6 +38,14 @@ class AudienceCrew:
             verbose=True,
         )
 
+    @agent
+    def targeting_researcher(self) -> Agent:
+        return Agent(
+            config=self.agents_config["targeting_researcher"],
+            tools=[search_tool],
+            verbose=True,
+        )
+
     @task
     def research_persona(self) -> Task:
         return Task(config=self.tasks_config["research_persona"])
@@ -45,6 +53,10 @@ class AudienceCrew:
     @task
     def scout_competitors(self) -> Task:
         return Task(config=self.tasks_config["scout_competitors"])
+
+    @task
+    def build_targeting_brief(self) -> Task:
+        return Task(config=self.tasks_config["build_targeting_brief"])
 
     @task
     def analyse_trends(self) -> Task:

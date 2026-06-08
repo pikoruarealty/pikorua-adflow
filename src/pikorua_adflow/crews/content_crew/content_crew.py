@@ -28,6 +28,10 @@ class ContentCrew:
     def ad_ops_manager(self) -> Agent:
         return Agent(config=self.agents_config["ad_ops_manager"], verbose=True)
 
+    @agent
+    def copy_evaluator(self) -> Agent:
+        return Agent(config=self.agents_config["copy_evaluator"], verbose=True)
+
     @task
     def write_meta_ads(self) -> Task:
         return Task(config=self.tasks_config["write_meta_ads"])
@@ -43,6 +47,14 @@ class ContentCrew:
     @task
     def write_email(self) -> Task:
         return Task(config=self.tasks_config["write_email"])
+
+    @task
+    def evaluate_copy(self) -> Task:
+        return Task(config=self.tasks_config["evaluate_copy"])
+
+    @task
+    def rewrite_flagged(self) -> Task:
+        return Task(config=self.tasks_config["rewrite_flagged"])
 
     @task
     def format_for_api(self) -> Task:

@@ -21,11 +21,18 @@ def get_review_folder() -> pathlib.Path:
 
 def save_for_review(content_result, audience_result=None) -> pathlib.Path:
     folder = get_review_folder()
+    outputs_root = pathlib.Path(__file__).parent.parent.parent.parent / "outputs"
 
     if audience_result is not None:
         (folder / "persona.md").write_text(str(audience_result), encoding="utf-8")
 
     (folder / "ad_copy.md").write_text(str(content_result), encoding="utf-8")
+
+    # Copy evaluator outputs into the review folder if they were written this run
+    for filename in ("copy_scorecard.md", "copy_rewrites.md"):
+        src = outputs_root / filename
+        if src.exists():
+            (folder / filename).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
     print(f"\n{'='*60}")
     print(f"  REVIEW REQUIRED")

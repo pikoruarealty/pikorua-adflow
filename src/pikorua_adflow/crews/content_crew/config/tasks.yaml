@@ -10,16 +10,28 @@ write_meta_ads:
     - Sound like it was written for a HNI or NRI buyer, not a first-time homebuyer
     - Never use: affordable, deal, cheap, limited time, hurry, don't miss out
 
-    Headlines must be specific and evocative — not generic filler.
-    BAD examples (do not write these): "Luxury Living", "Premium Homes", "Your Dream Home"
-    GOOD examples (this is the standard to meet):
-      "Where the sea earns its view" (aspiration)
-      "Your Mumbai address. Finally." (NRI homecoming)
-      "Three floors above the noise" (exclusivity)
-      "A home your portfolio remembers" (investment return)
-      "Built for the name after yours" (legacy)
-    These are examples of the STYLE and SPECIFICITY required — do not copy them verbatim.
-    Write originals that are specific to {product} and the {city} market.
+    HEADLINE RULES:
+    - Must be a complete, confident thought — not a riddle or a question
+    - Must be calm and assured — not clever-for-the-sake-of-it
+    - BAD: "Thaltej. Ten crores today. Tomorrow?" (riddle, not confident)
+    - BAD: "Luxury Living", "Premium Homes", "Your Dream Home" (generic filler)
+    - GOOD: "Where the sea earns its view" — specific, visual, understated
+    - GOOD: "Your Mumbai address. Finally." — simple, emotionally direct
+    - GOOD: "Built for the name after yours." — one clear idea, no cleverness needed
+    Write originals in this style, specific to {product} and {city}.
+
+    BODY COPY RULES:
+    - Maximum 2 sentences. Do not stack clauses.
+    - Each sentence does one job — do not try to say everything at once.
+    - BAD: "A 4BHK where scarcity outpaces demand. Pikorua's data-driven conviction." (jargon, fabricated)
+    - GOOD: "A 4BHK on Sindhu Bhavan Road, available through Pikorua. By private appointment."
+    - End with a soft CTA or Pikorua's name — never a hard sell.
+
+    NEVER INVENT FACTS:
+    - Do not invent numbers (inventory counts, appreciation percentages, floor counts)
+    - Do not invent statistics ("8% annual appreciation", "10-year low inventory")
+    - Only use details present in {product}, {city}, {price_cr}, {persona}, or {trends}
+    - If you have no specific fact to anchor a line, use emotion and restraint instead
 
     Buyer context:
     {target_audience}
@@ -30,13 +42,11 @@ write_meta_ads:
     Trend hooks to weave in where natural:
     {trends}
   expected_output: >
-    A numbered list of 5 ad copy variants. Each variant is labelled with its
-    emotional angle and contains:
-      Headline: (<=30 chars, character count in brackets)
-      Body: (<=125 chars, character count in brackets)
-    No variant should share the same opening word or phrase as another.
-    Headlines must be evocative and specific — reject any headline that could apply
-    to any other luxury real estate brand in India.
+    A numbered list of 5 ad copy variants. Each variant labelled with its emotional angle:
+      Headline: [text] [X chars]
+      Body: [text] [X chars]
+    No variant shares the same opening word as another.
+    No invented statistics or inventory numbers anywhere in the output.
   agent: campaign_copywriter
 
 write_google_ads:
@@ -69,14 +79,18 @@ write_whatsapp_script:
     Write a WhatsApp Business message template for {product}.
 
     The message must follow this structure:
-    1. Greeting (personalised, not "Dear Sir/Madam")
-    2. Hook (one sentence specific to the property or market moment)
+    1. Greeting (use [Name] as placeholder — warm, not "Dear Sir/Madam")
+    2. Hook (one sentence about the specific property — only use details from {product})
     3. Offer statement (what Pikorua is presenting, no pressure language)
-    4. CTA (soft, relationship-driven e.g. "Would you like a private walkthrough?")
+    4. CTA (soft, relationship-driven — "Would you like a private walkthrough?")
     5. Opt-out line (required: "Reply STOP to unsubscribe")
 
     Total length: 160 words or fewer.
-    Tone: the kind of message a trusted advisor would send, not a salesperson.
+    Tone: the message Jitendra would personally send to a client he knows — warm,
+    direct, no sales language. One clear thought per sentence.
+
+    NEVER INVENT: Do not add details not present in {product} — no invented
+    floor numbers, inventory counts, percentage returns, or market statistics.
 
     Buyer context:
     {target_audience}
@@ -84,9 +98,9 @@ write_whatsapp_script:
     Persona insight:
     {persona}
   expected_output: >
-    The complete WhatsApp message ready to paste into a BSP template submission.
-    Label each section (Greeting / Hook / Offer / CTA / Opt-out).
-    Note total word count at the end.
+    The complete WhatsApp message with each section labelled:
+    Greeting / Hook / Offer / CTA / Opt-out.
+    Total word count noted at the end. No invented facts.
   agent: campaign_copywriter
 
 write_email:
@@ -94,25 +108,122 @@ write_email:
     Write a single email for {product} targeting {target_audience}.
 
     Requirements:
-    - Subject line: 50 characters or fewer, no clickbait
+    - Subject line: 50 characters or fewer — specific, no clickbait
     - Preview text: 90 characters or fewer
-    - Body: 150 words. Structure: opening that earns attention, 1-2 sentences on
-      the specific property or opportunity, Pikorua's value as advisor, soft CTA.
-    - Tone: the email a trusted wealth manager would send, not a mass-market mailer
+    - Body: 100–130 words. Three short paragraphs:
+        1. One sentence that earns attention (specific to the property)
+        2. Two sentences on the property and why Pikorua is presenting it
+        3. One soft CTA — an invitation, not a conversion push
+    - Sign off as Jitendra
+    - Tone: a trusted advisor's note, not a newsletter
+
+    NEVER INVENT: Only use property details present in {product}.
+    No fabricated statistics, appreciation percentages, or inventory claims.
 
     Persona insight (use to personalise the angle):
     {persona}
 
-    Trend hooks (weave in where it adds credibility):
+    Trend hooks (weave in only if genuinely relevant — do not force):
     {trends}
   expected_output: >
     Formatted as:
-      Subject: ...
-      Preview: ...
+      Subject: ... [X chars]
+      Preview: ... [X chars]
       ---
-      [Email body]
+      [Email body — 3 short paragraphs, signed Jitendra]
     Word count noted at the end.
   agent: campaign_copywriter
+
+evaluate_copy:
+  description: >
+    Review all 5 Meta ad copy variants produced in write_meta_ads.
+    Score each variant on four dimensions, each out of 10:
+
+    1. BRAND VOICE COMPLIANCE
+       Does it sound like Pikorua — calm, specific, understated luxury?
+       Or does it sound generic, loud, or template-driven?
+       Penalise: "affordable", "deal", "hurry", "don't miss out", exclamation marks,
+       all-caps words, invented statistics, vague superlatives ("world-class", "ultra-premium").
+
+    2. PLATFORM FIT
+       Is the headline within 30 characters? Body within 125 characters?
+       Does it suit the Meta feed format — scroll-stopping but not clickbait?
+       Penalise: headlines that are riddles, questions, or incomplete thoughts.
+
+    3. SPECIFICITY
+       Does the copy use real, concrete details from {product} and {city}?
+       Or is it interchangeable with any other property ad?
+       Penalise: copy that could describe any luxury property anywhere in India.
+
+    4. LUXURY SIGNAL
+       Does it signal exclusivity and status without stating it bluntly?
+       Would a ₹7Cr+ buyer feel seen, or feel sold to?
+       Penalise: "Trusted by celebrities", "Book Now", "Get Quote", "Limited availability".
+
+    Scoring: 1–5 = failing, 6–7 = acceptable, 8–9 = strong, 10 = rare/exceptional.
+    A variant scores below 6 on ANY dimension = FLAG FOR REWRITE.
+
+    For each flagged variant give ONE specific, actionable failure reason.
+    Example: "Variant 3 — Specificity 4/10: 'Where luxury meets lifestyle' could describe
+    any property in India. Replace with a detail specific to {product}."
+
+    Context for scoring:
+    Product: {product}
+    City: {city}
+    Persona: {persona}
+  expected_output: >
+    A structured scorecard with this format for each variant:
+
+      Variant N — [emotional angle]
+      1. Brand Voice:   X/10
+      2. Platform Fit:  X/10
+      3. Specificity:   X/10
+      4. Luxury Signal: X/10
+      Overall: X/10 (average)
+      Status: PASS or FLAG — [one-line reason if flagged]
+
+    Followed by a summary line:
+      "X/5 variants passed. Y flagged for rewrite: Variants [list]."
+
+    Save to outputs/copy_scorecard.md.
+  agent: copy_evaluator
+  output_file: outputs/copy_scorecard.md
+  context:
+    - write_meta_ads
+
+rewrite_flagged:
+  description: >
+    Read the copy scorecard from evaluate_copy.
+    If 0 variants were flagged, output "No rewrites needed." and stop.
+
+    For each flagged variant, rewrite ONLY that variant.
+    You must address the specific failure reason given in the scorecard.
+    Do not rewrite variants that passed.
+    Maximum 2 rewrite attempts per variant — if you cannot improve the score,
+    note the difficulty and leave the original with a warning.
+
+    Apply the same rules as write_meta_ads:
+    - Headline ≤ 30 characters, body ≤ 125 characters
+    - No invented facts, no banned words
+    - Specific to {product} and {city}
+    - One clear emotional angle per variant
+
+    Persona context: {persona}
+    Trend hooks: {trends}
+  expected_output: >
+    For each rewritten variant:
+      Variant N — REWRITE [attempt 1]
+      Headline: [text] [X chars]
+      Body: [text] [X chars]
+      Fix applied: [one line explaining what was changed and why]
+
+    If no variants were flagged: "No rewrites needed — all variants passed evaluation."
+    Save to outputs/copy_rewrites.md.
+  agent: campaign_copywriter
+  output_file: outputs/copy_rewrites.md
+  context:
+    - write_meta_ads
+    - evaluate_copy
 
 format_for_api:
   description: >
@@ -122,14 +233,30 @@ format_for_api:
     Required fields:
     - Campaign: name, objective (LEAD_GENERATION), status (PAUSED),
       special_ad_categories: ["HOUSING"]
-    - Ad set: name, targeting (city-level only, no age/gender per housing policy),
-      daily_budget
+    - Ad set: name, daily_budget, targeting block structured as follows:
+        - geo_locations: use pincodes and cities from the targeting brief below
+          (HOUSING policy restricts radius targeting — use geo_locations with cities array)
+        - age_min / age_max: from demographic targeting in the brief
+        - Note: special_ad_category HOUSING prohibits targeting by gender, zip radius,
+          or detailed demographic filters — use only city/region and interest targeting
+        - interests: use the Meta interest segments listed in the targeting brief
+        - behaviours: use the behavioural segments from the targeting brief
     - Ad creative: headline, body, call_to_action
 
+    Targeting brief (use this to populate geo, demographic, and interest fields):
+    {targeting}
+
+    Use rewritten variants from rewrite_flagged where available — prefer those over
+    the originals from write_meta_ads for any variant that was flagged.
     Use descriptive placeholders for unknown IDs: <AD_ACCOUNT_ID>, <PAGE_ID>.
     Label the entire output as DRY-RUN at the top.
   expected_output: >
     A valid JSON object following Meta campaign creation structure.
     First line comment: "// DRY-RUN -- review and fill placeholders before deploying"
+    Targeting block must reflect real pincodes/cities and interest segments from the
+    targeting brief — not generic city-level placeholders.
     Formatted with 2-space indentation.
   agent: ad_ops_manager
+  context:
+    - write_meta_ads
+    - rewrite_flagged
