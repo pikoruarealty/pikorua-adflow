@@ -55,6 +55,10 @@ class AudienceCrew:
         return Task(config=self.tasks_config["scout_competitors"])
 
     @task
+    def analyse_crm_leads(self) -> Task:
+        return Task(config=self.tasks_config["analyse_crm_leads"])
+
+    @task
     def build_targeting_brief(self) -> Task:
         return Task(config=self.tasks_config["build_targeting_brief"])
 

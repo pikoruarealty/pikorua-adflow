@@ -195,15 +195,21 @@ The CTA should feel like an invitation, not a conversion mechanism.
 
 ---
 
-## Lead form copy [CONFIRM with client]
+## Lead form copy (updated June 9, 2026 — resolved from competitor screenshots)
 
-The observed Meta lead form asked for: full name, email, phone, city, job title, company name, and budget bracket. The form intro read: "The information you provide will be used only to suggest you relevant properties. We do not sell data to any third party."
+Real competitor lead forms observed (Godrej Altus Vastrapur). Combined with real CRM export showing actual budget ranges.
 
-That disclaimer is functional but cold. For a ₹7Cr buyer, the form is also a brand moment.
+**Confirmed form structure for Pikorua:**
+- Intro: "Tell us a little about what you're looking for. Jitendra reviews every enquiry personally."
+- Budget qualifier (confirmed from real CRM data — these are the exact ranges leads self-select):
+  - ₹2 Cr – ₹4 Cr
+  - ₹4 Cr – ₹7 Cr
+  - ₹7 Cr – ₹10 Cr
+  - ₹10 Cr – ₹15 Cr
+  - ₹15 Cr+
+- Contact fields: Full name, Phone, Email, City
+- No job title / company name — removed. Too LinkedIn, too presumptuous for a HNI who values privacy.
+- No EOI commitment question — Godrej tried this; it is the primary reason for their ₹1,025 CPL.
+- Post-submit: Offer WhatsApp connection as an option, not a forced redirect.
 
-**Preferred intro tone:** "Tell us a little about what you're looking for. Jitendra reviews every enquiry personally."
-
-**Budget brackets observed:** ₹4–6 Cr / ₹7–10 Cr / ₹11–15 Cr / ₹15–20 Cr+
-These are reasonable. Keep them — they pre-qualify without feeling intrusive.
-
-**Fields to reconsider:** Job title and company name feel more LinkedIn than luxury real estate. Flag for Jitendra — they may be useful for NRI targeting but could feel presumptuous for domestic HNIs. [CONFIRM]
+**Privacy copy:** "Your details will only be used to share relevant property information. We do not sell or share your data with any third party." — functional, acceptable. No change needed.

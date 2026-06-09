@@ -16,6 +16,7 @@ _FILES = [
     ("brand_voice.md", "BRAND VOICE"),
     ("pikorua_overview.md", "COMPANY OVERVIEW"),
     ("campaign_examples.md", "CAMPAIGN EXAMPLES (few-shot)"),
+    ("data_audit.md", "META ADS PERFORMANCE BENCHMARKS & COMPETITOR ANALYSIS"),
 ]
 
 

@@ -1,0 +1,1 @@
+No rewrites needed — all variants passed evaluation.

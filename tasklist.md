@@ -2,8 +2,8 @@
 
 ## Phase 0 — Foundation
 - [x] 0.1 Brand voice doc — drafted from live Meta ads; [CONFIRM] items flagged for Jitendra
-- [ ] 0.2 Data audit — needs CRM access
-- [ ] 0.3 project_context/ finalised — blocked on 0.2
+- [x] 0.2 Data audit — Meta Ads export analysed (5 campaigns, CPL benchmarks extracted); CRM/WhatsApp/listings still unknown
+- [ ] 0.3 project_context/ finalised — CRM and WhatsApp contacts still needed
 - [x] 1.2 Wire brand voice into agents — copywriter, evaluator, ad_ops_manager all receive brand voice context
 
 ## Phase 1 — Pipeline (COMPLETE)
@@ -23,7 +23,11 @@
 ## Phase 2 — Quality & Memory
 - [x] 2.1 Copy evaluator agent — scores all 5 Meta variants on 4 dimensions, flags below 6
 - [x] 2.2 Regeneration loop — rewrite_flagged task retries flagged variants (max 2 attempts)
-- [ ] 2.3 Qdrant vector memory — store successful campaigns for future retrieval
+- [x] 2.3 Qdrant vector memory — local on-disk Qdrant, store_approved_campaign() +
+         retrieve_similar_campaigns() + format_as_fewshot(); /approve/{run_id} API endpoint;
+         Approve button in /runs portal; seeding deferred until first approved pipeline run
+- [x] 2.4 Image prompt generator — visual_prompter agent; generate_banner_prompts (3 Ideogram)
+         + generate_render_prompts (2 Flux 2 Pro); outputs to outputs/visual_brief.md + review folder
 
 ## Phase 3 — Deployment (GATED: needs Phase 2 complete + platform credentials)
 - [ ] 3.1 Meta Ads live launch via API

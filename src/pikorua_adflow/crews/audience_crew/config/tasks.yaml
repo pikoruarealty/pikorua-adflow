@@ -42,6 +42,36 @@ scout_competitors:
   agent: competitor_scout
   output_file: outputs/competitor_report.md
 
+analyse_crm_leads:
+  description: >
+    You have been given a CRM intelligence report from Pikorua's past leads.
+    Read it carefully and extract 3–5 specific signals the campaign team should act on.
+
+    CRM data:
+    {crm_insights}
+
+    Your job:
+    - Identify which ad angles or lead sources have historically produced the best-quality leads
+      (leads that progressed to site visit or negotiation, not just first contact)
+    - Identify which buyer profile (budget bracket, buyer type, city) converts deepest in the funnel
+    - Flag any angles or audiences that consistently produce dead/lost leads — avoid repeating them
+    - Produce a concise "CRM Signal" summary: 3–5 bullet points, each a specific, actionable insight
+
+    If the CRM data says "No CRM data available", output:
+    "No historical lead data available — proceeding with market research only."
+    Do not fabricate insights when data is absent.
+  expected_output: >
+    A markdown section titled "## CRM Signal" with 3–5 bullet points.
+    Each bullet is one specific, actionable insight grounded in the CRM data.
+    Example format:
+    ## CRM Signal
+    - Legacy/Family angle produced the highest funnel depth (avg 3.8/5) — lead with this in new creative.
+    - NRI leads from UAE progress furthest; domestic HNI leads from Ahmedabad stall at first contact.
+    - Leads in the ₹11–15 Cr bracket are 2× more likely to reach site visit than ₹7–10 Cr bracket.
+    Save to outputs/crm_signal.md.
+  agent: targeting_researcher
+  output_file: outputs/crm_signal.md
+
 build_targeting_brief:
   description: >
     Build a complete geo, demographic, and professional targeting brief for a

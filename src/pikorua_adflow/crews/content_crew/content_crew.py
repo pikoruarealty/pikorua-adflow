@@ -35,6 +35,10 @@ class ContentCrew:
         cfg["backstory"] = self._with_brand_voice(cfg["backstory"])
         return Agent(config=cfg, verbose=True)
 
+    @agent
+    def visual_prompter(self) -> Agent:
+        return Agent(config=self.agents_config["visual_prompter"], verbose=True)
+
     @task
     def write_meta_ads(self) -> Task:
         return Task(config=self.tasks_config["write_meta_ads"])
@@ -62,6 +66,14 @@ class ContentCrew:
     @task
     def format_for_api(self) -> Task:
         return Task(config=self.tasks_config["format_for_api"])
+
+    @task
+    def generate_banner_prompts(self) -> Task:
+        return Task(config=self.tasks_config["generate_banner_prompts"])
+
+    @task
+    def generate_render_prompts(self) -> Task:
+        return Task(config=self.tasks_config["generate_render_prompts"])
 
     @crew
     def crew(self) -> Crew:

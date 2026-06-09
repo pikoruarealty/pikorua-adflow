@@ -18,6 +18,13 @@ write_meta_ads:
     - GOOD: "Where the sea earns its view" — specific, visual, understated
     - GOOD: "Your Mumbai address. Finally." — simple, emotionally direct
     - GOOD: "Built for the name after yours." — one clear idea, no cleverness needed
+
+    ASPIRATION ANGLE WARNING — the evaluator will flag generic aspiration copy:
+    - BAD aspiration: "Elevated living, redefined" / "Where aspirations find a home"
+      (could describe any property in India — no specificity)
+    - GOOD aspiration: "Sindhu Bhavan Road. The address Ahmedabad remembers."
+      (the address itself IS the aspiration — grounded in a real detail)
+    - Rule: aspiration must be specific to {product} or {city}, not a feeling floating free
     Write originals in this style, specific to {product} and {city}.
 
     BODY COPY RULES:
@@ -53,11 +60,33 @@ write_google_ads:
   description: >
     Write Google Search ad copy for {product}.
 
-    Requirements:
+    FORMAT:
     - 3 headlines, each 30 characters or fewer
     - 2 descriptions, each 90 characters or fewer
-    - Headlines should be keyword-rich but not robotic
-    - Descriptions should expand on a specific benefit, not repeat the headline
+
+    HEADLINE RULES:
+    - Each headline must do a different job — do NOT write three variations of the same idea
+    - At least one headline must include a specific detail from {product}, {city}, or {price_cr}
+      (not just "Luxury Homes Ahmedabad" — that tells the buyer nothing they didn't already type)
+    - One headline should name Pikorua as the consultancy — builds brand recall
+    - Never use: affordable, deal, cheap, limited time, hurry, don't miss out, exclusive offer
+
+    DESCRIPTION RULES:
+    - Each description must do a different job — do NOT repeat the headline or each other
+    - Description 1: state what makes this property or Pikorua's access to it specific
+    - Description 2: soft CTA — an invitation, not a command ("Book Now", "Get Quote" are banned)
+
+    EXAMPLES:
+    BAD headline: "Luxury 5BHK | Book Now" (robotic, no reason to click, hard sell)
+    BAD headline: "Premium Homes Ahmedabad" (generic — anyone could write this)
+    GOOD headline: "5BHK, Sindhu Bhavan Rd" (specific address — rare in search ads)
+    GOOD headline: "Private viewings — Pikorua" (creates intrigue, names the brand)
+
+    BAD description: "Find your dream luxury home in Ahmedabad. Contact us today for more information."
+    GOOD description: "A ₹13 Cr 5BHK on Sindhu Bhavan Road — available through Pikorua before wider listing."
+
+    NEVER INVENT: Only use details present in {product}, {city}, {price_cr}.
+    No fabricated statistics, appreciation figures, or inventory claims.
 
     Buyer context:
     {target_audience}
@@ -72,22 +101,50 @@ write_google_ads:
       Description 1: ... [X chars]
       Description 2: ... [X chars]
     With character counts noted after each line in brackets.
+    Each line serves a distinct purpose — noted in one word after the count (e.g. [28 chars — address]).
   agent: campaign_copywriter
 
 write_whatsapp_script:
   description: >
     Write a WhatsApp Business message template for {product}.
 
+    Context: Pikorua is a luxury real estate consultancy. Jitendra is sending this
+    to a client he already knows. Pikorua has sourced this property and is giving
+    the client early access before it gets wider attention.
+
     The message must follow this structure:
     1. Greeting (use [Name] as placeholder — warm, not "Dear Sir/Madam")
-    2. Hook (one sentence about the specific property — only use details from {product})
-    3. Offer statement (what Pikorua is presenting, no pressure language)
+    2. Hook (one sentence about the specific property — only use details from {product};
+       must be intriguing and specific, not generic — make the recipient stop scrolling)
+    3. Offer statement (Pikorua has arranged access; frame it as a privilege, not a pitch)
     4. CTA (soft, relationship-driven — "Would you like a private walkthrough?")
     5. Opt-out line (required: "Reply STOP to unsubscribe")
 
-    Total length: 160 words or fewer.
-    Tone: the message Jitendra would personally send to a client he knows — warm,
-    direct, no sales language. One clear thought per sentence.
+    Total length: 120 words or fewer.
+    Tone: Jitendra texting a contact he respects — warm, direct, one thought per
+    sentence. Not a newsletter. Not a press release. A message a real person sends.
+
+    BANNED PHRASES — never use any of these or close variants:
+    - "I am reaching out because"
+    - "has just come to our attention"
+    - "given your profile"
+    - "vision for the next chapter"
+    - "I wanted to ensure you were aware"
+    - "I hope this message finds you well"
+    - "I am pleased to present"
+    - "curated exclusively for"
+
+    TONE EXAMPLES (match this register):
+    BAD: "I am reaching out because a property that aligns with your vision for the
+    next chapter has just come to our attention. Given your profile, I wanted to
+    ensure you were aware of this unique opportunity."
+    GOOD: "Hi [Name], came across a 5BHK on Sindhu Bhavan Road that I think is
+    exactly what you had in mind. Pikorua is doing private viewings before it goes
+    wider — only a few slots this week. Want me to hold one for you?"
+
+    The GOOD example works because it tells the recipient something specific, signals
+    that Pikorua has done the work of finding the property for them, and creates a
+    natural reason to reply — without inventing any facts.
 
     NEVER INVENT: Do not add details not present in {product} — no invented
     floor numbers, inventory counts, percentage returns, or market statistics.
@@ -107,15 +164,43 @@ write_email:
   description: >
     Write a single email for {product} targeting {target_audience}.
 
+    Context: Pikorua is a luxury real estate consultancy. Jitendra is writing to a
+    prospect or known client. The email should feel like a note from an advisor who
+    thought of this person specifically when he heard about the property — not a
+    blast email.
+
     Requirements:
-    - Subject line: 50 characters or fewer — specific, no clickbait
-    - Preview text: 90 characters or fewer
+    - Subject line: 50 characters or fewer — specific, creates curiosity, no clickbait
+    - Preview text: 90 characters or fewer — extends the subject's intrigue, not a repeat
     - Body: 100–130 words. Three short paragraphs:
-        1. One sentence that earns attention (specific to the property)
-        2. Two sentences on the property and why Pikorua is presenting it
-        3. One soft CTA — an invitation, not a conversion push
+        1. One sentence that earns attention — specific to {product}, not generic;
+           open with something the reader hasn't heard before
+        2. Two sentences: what the property is and why Pikorua is the right guide to it
+        3. One soft CTA — an invitation to connect, not a form fill or "Book Now"
     - Sign off as Jitendra
-    - Tone: a trusted advisor's note, not a newsletter
+    - Tone: a trusted advisor's note, not a newsletter; reads like it was written for
+      this one person, not formatted for a mail merge
+
+    BANNED PHRASES — never use any of these or close variants:
+    - "I hope this email finds you well"
+    - "I am pleased to share"
+    - "given your investment profile"
+    - "I wanted to bring to your attention"
+    - "a rare opportunity"
+    - "don't miss out"
+    - "limited availability"
+
+    SUBJECT LINE EXAMPLES:
+    BAD: "Exclusive Luxury Property — Sindhu Bhavan Road" (generic, sounds like spam)
+    BAD: "A Rare Opportunity in Ahmedabad" (vague, overused phrase)
+    GOOD: "A 5BHK on Sindhu Bhavan Road — before it goes wider"
+    GOOD: "Thought of you when I saw this one"
+
+    BODY OPENING EXAMPLES:
+    BAD: "I am pleased to bring to your attention a rare property that aligns with
+    your investment profile and lifestyle aspirations."
+    GOOD: "There's a 5BHK on Sindhu Bhavan Road that's not been listed anywhere yet.
+    I think it's worth 20 minutes of your time."
 
     NEVER INVENT: Only use property details present in {product}.
     No fabricated statistics, appreciation percentages, or inventory claims.
@@ -262,3 +347,89 @@ format_for_api:
   context:
     - write_meta_ads
     - rewrite_flagged
+
+generate_banner_prompts:
+  description: >
+    Generate 3 Ideogram 3 image prompts for text-in-image ad banners for {product}.
+
+    Each prompt must:
+    - Specify the visual scene anchored in {property_type}, {city}, and {locality}
+    - Specify a colour palette that suits a luxury Indian real estate brand (avoid white-on-white
+      or generic blues — think warm stone, teak, deep navy, champagne, or terracotta)
+    - Include a text overlay instruction with the headline to be embedded in the image
+      (use the best-performing headline from write_meta_ads or rewrite_flagged)
+    - Specify typography style: elegant serif (e.g. Garamond, Bodoni) at a specific
+      placement (e.g. "bottom-left third", "centred with breathing room")
+    - Specify lighting: golden hour, overcast diffuse, dusk, or specific time of day
+    - Specify shot type: wide establishing, detail close-up, aerial, interior vignette
+    - End with: "Photorealistic. 1200x628px. High detail. No watermarks."
+
+    NEVER use generic descriptors alone: not just "luxury", "modern", "beautiful".
+    Every adjective must be paired with a specific visual reference.
+
+    Property: {product}
+    City: {city}
+    Locality: {locality}
+    Property type: {property_type}
+    Price: ₹{price_cr} Cr
+  expected_output: >
+    Three numbered Ideogram prompts, each labelled with its intended emotional angle
+    (matching the Meta ad variants from write_meta_ads):
+
+      Prompt 1 — [angle]:
+      "[Full Ideogram prompt]"
+
+      Prompt 2 — [angle]:
+      "[Full Ideogram prompt]"
+
+      Prompt 3 — [angle]:
+      "[Full Ideogram prompt]"
+
+    Each prompt is 60–120 words. No invented facts about the property beyond what's
+    in {product}. Saved to outputs/visual_brief.md.
+  agent: visual_prompter
+  output_file: outputs/visual_brief.md
+  context:
+    - write_meta_ads
+    - rewrite_flagged
+
+generate_render_prompts:
+  description: >
+    Generate 2 Flux 2 Pro prompts for photorealistic architectural renders of {product}.
+
+    Prompt 1 — Exterior render:
+    - Show the building facade or entrance from a compelling angle
+    - Specify architectural style consistent with {property_type} and {locality}
+    - Specify time of day and lighting (evening golden hour preferred for luxury)
+    - Include landscaping details appropriate to Ahmedabad's climate (not tropical palms)
+    - Specify camera angle: street-level, slight elevation, or courtyard view
+
+    Prompt 2 — Interior/lifestyle render:
+    - Show the primary living space or signature feature of a {property_type}
+    - Specify materials: flooring (marble, engineered wood), walls, ceiling height cues
+    - Specify furniture style (understated contemporary, not ornate)
+    - Include natural light source: floor-to-ceiling windows, diffuse afternoon light
+    - One human element is allowed (a figure in the background, not centre-frame)
+
+    Both prompts must:
+    - Be specific enough to produce a render indistinguishable from a real photograph
+    - Avoid clichés: no infinity pools unless {product} mentions one, no Bollywood-style opulence
+    - End with: "Architectural photography. 4K. Sharp focus. No text overlays."
+
+    Property: {product}
+    City: {city}, India
+    Property type: {property_type}
+  expected_output: >
+    Two Flux 2 Pro prompts appended to outputs/visual_brief.md:
+
+      Prompt 4 — Exterior render:
+      "[Full Flux prompt]"
+
+      Prompt 5 — Interior/lifestyle render:
+      "[Full Flux prompt]"
+
+    Each prompt is 60–100 words. Photorealistic and specific — no generic luxury tropes.
+  agent: visual_prompter
+  output_file: outputs/render_prompts.md
+  context:
+    - generate_banner_prompts

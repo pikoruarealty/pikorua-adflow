@@ -1,0 +1,7 @@
+### outputs/visual_brief.md
+
+**Prompt 4 — Exterior render:**
+"A photorealistic eye-level architectural capture of the Oberoi Sky Heights facade in Bandra, Mumbai, during the golden hour. The building's sleek, contemporary glass and steel silhouette glows against a deep violet and amber twilight sky. Landscaping features structured, non-tropical native Indian flowering shrubs and manicured boxwood hedges along the base. The driveway is paved with dark charcoal basalt stone, reflecting the soft ambient glow of concealed facade lighting. The shot conveys exclusivity and structural precision, capturing the building’s stature against the coastal urban backdrop. Architectural photography. 4K. Sharp focus. No text overlays."
+
+**Prompt 5 — Interior/lifestyle render:**
+"A wide-angle interior shot of a primary living room at Oberoi Sky Heights featuring expansive floor-to-ceiling windows with an unobstructed panoramic view of the Arabian Sea at dusk. The space is finished with large-format ivory marble flooring and floor-to-ceiling dark walnut wall paneling. Furnishings are understated and contemporary: a low-profile linen sofa in pebble grey, a travertine coffee table, and hidden recessed lighting. In the background, a single silhouetted figure stands by the glass, looking out at the sea. Diffused, soft evening light fills the room. Architectural photography. 4K. Sharp focus. No text overlays."

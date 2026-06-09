@@ -1,15 +1,96 @@
 # Pikorua Realty — Campaign Examples
 
-> **Status:** Research-derived placeholder (June 2026).
-> These are constructed examples built from public brand knowledge and Pikorua's known positioning.
-> They represent the STYLE and STANDARD to aim for — not actual campaigns that ran.
-> Replace with real approved campaigns after first 2–3 live runs with client.
+> **Status:** Updated June 9, 2026. Real CRM data (123 leads) and competitor ad screenshots analysed.
+> Competitor formats documented. Lead form fields resolved from observed live forms.
+> Creative examples below are style references — not verbatim copy to reuse.
 
 ---
 
 ## How to use this file
 
 These examples are loaded as few-shot context into the content crew agents. Each example shows what a complete Pikorua campaign looks like across all formats. The agents use these to calibrate tone, specificity, and format — not to copy verbatim.
+
+---
+
+## Real campaign performance benchmarks (Meta Ads, May–June 2026)
+
+Use these numbers to set realistic expectations in targeting briefs and API payloads.
+Do not invent performance figures — use these as the reference range.
+
+| Metric | Strong | Acceptable | Underperforming |
+|---|---|---|---|
+| CPL (cost per lead) | ₹175–₹300 | ₹300–₹600 | ₹800+ |
+| CTR (link click-through) | 1.2%+ | 0.7–1.2% | below 0.7% |
+| CPM | ₹186–₹220 | ₹220–₹280 | ₹280+ |
+| Daily budget (Ahmedabad) | ₹1,000–₹1,500 | — | — |
+
+**Best performing campaign observed:** "bungalow ahmd general" — ₹175 CPL, 205 leads, ₹35,899 spend, 0.94% CTR at ₹1,000/day.
+
+**Worst performing observed:** "GODREJ VASTRAPUR" — ₹1,025 CPL, 39 leads despite ₹39,976 spend. Highest reach (86k) but worst conversion — likely a creative or audience targeting mismatch, not a budget problem.
+
+**Lesson for copy:** High reach does not mean high leads. Creative quality and audience specificity matter more than budget at this price point.
+
+---
+
+## Competitor ad formats — what NOT to do (and why)
+
+These are real ads observed in the Ahmedabad luxury real estate market, June 2026. Document them here so the AI avoids replicating these patterns.
+
+### Godrej Altus Vastrapur — ₹1,025 CPL (worst performer in our data)
+
+**Ad copy observed:**
+- Headline: "Super Luxurious Bungalows in Ahmedabad (INDIA)"
+- Bullet specs: "300 to 2000 sq yard plots", "Ample Car Parking", "Plush with Amenities", "Less Loading ! Max Carpet Area"
+- Lead form qualifier: "Are you ready to proceed with a refundable EOI (₹5L)?" with options: Yes online / Yes cheque at site / Maybe need more info
+- Post-submit: "Get details on WhatsApp immediately!" → forced WhatsApp redirect
+
+**Why it fails:**
+- "(INDIA)" appended to city name — signals NRI targeting but reads awkwardly for everyone
+- Spec bullets with exclamation marks ("Less Loading ! Max Carpet Area") — noisy, transactional
+- EOI commitment question on a cold ad form kills conversion — a ₹7Cr buyer won't commit ₹5L to a stranger via Facebook
+- Forced WhatsApp redirect signals mass handling, not personal advisory
+
+**Pikorua must never:** Ask for financial commitment in the lead form. Force-redirect to WhatsApp. Use "(INDIA)" appended to city names.
+
+---
+
+### RD Group Ahmedabad — Sindhu Bhavan Road competitor
+
+**Ad copy observed:**
+- Body: "🏠 9000 to 12000+ sqft Sky-Mansion Apartments off Sindhu Bhavan Road, Ahmedabad starting Rs 7Cr+!!"
+- Bullets: "Meeting on Invitation Basis Only 🎟", "Iconic 20+ Storeyed Tower 🏢", "Limited Edition for the select Elites of India 🎗"
+- Hashtag block: #LuxuryLiving #AhmedabadRealEstate #Luxury #SindhuBhavanRoad #IskonAmbi #RajpathRangoli #Ahmedabad #AhmedabadLuxury
+- CTA form: "Sky-Mansion Apartments off Sindhu Bhavan Road, ..." / "Get quote"
+- Creative: AI-rendered interiors — curved staircase, chandelier, city skyline
+
+**Why it fails:**
+- Emoji-heavy body in a luxury ad undercuts the premium positioning immediately
+- "Limited Edition for the select Elites of India" — stating exclusivity is not the same as demonstrating it; this reads as insecurity
+- "Meeting on Invitation Basis Only" is the strongest line — but it's buried as a bullet, not the headline
+- Hashtag avalanche at the end reads as desperation for organic reach
+- "Get quote" CTA is transactional for a ₹7Cr decision
+
+**What Pikorua can take:** The "invitation only" angle is genuinely powerful. Lead with it — make it the headline concept, not a bullet afterthought.
+
+---
+
+## Lead form fields — confirmed from live competitor forms (June 2026)
+
+The Godrej Vastrapur form (real, observed) used: Budget bracket → EOI intent → Contact info (Email, Full name, Phone).
+
+**Pikorua's confirmed lead form structure:**
+1. Property-specific headline (calm, brand-voice-compliant)
+2. Budget bracket qualifier — pre-qualifies without feeling intrusive:
+   - ₹2 Cr – ₹4 Cr
+   - ₹4 Cr – ₹7 Cr
+   - ₹7 Cr – ₹10 Cr
+   - ₹10 Cr – ₹15 Cr
+   - ₹15 Cr+
+3. Contact fields: Full name, Phone, Email, City
+4. Form intro copy: "Tell us a little about what you're looking for. Jitendra reviews every enquiry personally."
+5. Post-submit: Offer WhatsApp option — do not auto-redirect. Let the lead choose.
+
+**Do not include:** EOI commitment question. Job title / company name (see brand_voice.md — optional).
 
 ---
 

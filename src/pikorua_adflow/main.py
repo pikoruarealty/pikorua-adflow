@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 load_dotenv()
 import litellm
 litellm.drop_params = True
+litellm.num_retries = 6
+litellm.request_timeout = 120
 
 from pikorua_adflow.crews.content_crew.content_crew import ContentCrew
 from pikorua_adflow.crews.audience_crew.audience_crew import AudienceCrew

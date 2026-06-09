@@ -146,6 +146,150 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    #results-section {
+      display: none;
+      margin-top: 2rem;
+    }
+
+    .results-heading {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #8a7d6e;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #e0dbd0;
+    }
+
+    .variant-card {
+      background: #fdfcf9;
+      border: 1px solid #e0dbd0;
+      border-radius: 3px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .variant-card.flagged {
+      border-left: 3px solid #c8905a;
+    }
+
+    .variant-card.passed {
+      border-left: 3px solid #7aaa88;
+    }
+
+    .variant-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #8a7d6e;
+      margin-bottom: 0.4rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .variant-badge {
+      font-size: 0.65rem;
+      padding: 1px 7px;
+      border-radius: 2px;
+      font-style: normal;
+    }
+
+    .badge-pass { background: #eef4f0; color: #2a4030; }
+    .badge-flag { background: #fdf3ec; color: #7a4020; }
+    .badge-rewrite { background: #f0f0f8; color: #2a2060; }
+
+    .copy-headline {
+      font-size: 1rem;
+      font-weight: normal;
+      color: #1a1a1a;
+      margin-bottom: 0.3rem;
+    }
+
+    .copy-body {
+      font-size: 0.88rem;
+      color: #5a5040;
+      line-height: 1.5;
+      margin-bottom: 0.6rem;
+    }
+
+    .scores-row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .score-chip {
+      font-size: 0.7rem;
+      color: #8a7d6e;
+    }
+
+    .score-chip span {
+      font-weight: bold;
+      color: #1a1a1a;
+    }
+
+    .rewrite-block {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px dashed #d0c8b8;
+    }
+
+    .rewrite-label {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6060a0;
+      margin-bottom: 0.35rem;
+    }
+
+    .flag-reason {
+      font-size: 0.78rem;
+      color: #7a4020;
+      font-style: italic;
+      margin-bottom: 0.5rem;
+    }
+
+    .summary-line {
+      font-size: 0.82rem;
+      color: #2a4030;
+      padding: 0.6rem 0.75rem;
+      background: #eef4f0;
+      border-radius: 2px;
+      margin-bottom: 1rem;
+    }
+
+    .view-raw-btn {
+      font-size: 0.75rem;
+      color: #8a7d6e;
+      background: none;
+      border: 1px solid #d0c8b8;
+      padding: 4px 10px;
+      cursor: pointer;
+      border-radius: 2px;
+      width: auto;
+      margin-top: 0.75rem;
+      letter-spacing: 0.05em;
+      text-transform: none;
+    }
+
+    .view-raw-btn:hover { background: #f0ede6; }
+
+    #raw-copy {
+      display: none;
+      margin-top: 0.75rem;
+      background: #f7f5f0;
+      border: 1px solid #e0dbd0;
+      border-radius: 2px;
+      padding: 1rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.75rem;
+      white-space: pre-wrap;
+      color: #3a3028;
+      max-height: 400px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -251,6 +395,14 @@
     <div class="run-id" id="run-id-display"></div>
     <div class="review-path" id="review-path-display"></div>
   </div>
+
+  <div id="results-section">
+    <div class="results-heading">Generated Copy — Meta Ads</div>
+    <div class="summary-line" id="results-summary"></div>
+    <div id="variant-cards"></div>
+    <button class="view-raw-btn" onclick="toggleRaw()">View raw output</button>
+    <pre id="raw-copy"></pre>
+  </div>
 </div>
 
 <script>
@@ -290,6 +442,7 @@
             rpath.textContent = 'Saved to: ' + data.review_folder;
           }
           btn.disabled = false;
+          loadResults(runId);
         } else if (s === 'failed') {
           clearInterval(pollTimer);
           setStatus('status-failed', '&#10007; Pipeline failed: ' + (data.error || 'unknown error'));
@@ -299,6 +452,89 @@
       .catch(() => {
         // server momentarily busy — keep polling
       });
+  }
+
+  function scoreColor(n) {
+    if (n >= 8) return '#2a4030';
+    if (n >= 6) return '#5a5040';
+    return '#7a4020';
+  }
+
+  function renderVariants(variants) {
+    const container = document.getElementById('variant-cards');
+    container.innerHTML = '';
+    variants.forEach(v => {
+      const isPassed = v.status === 'PASS';
+      const hasRewrite = v.rewrite && (v.rewrite.headline || v.rewrite.body);
+      const displayHeadline = hasRewrite ? v.rewrite.headline || v.headline : v.headline;
+      const displayBody = hasRewrite ? v.rewrite.body || v.body : v.body;
+
+      const scoresHtml = Object.entries(v.scores || {}).map(([k, val]) => {
+        const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        return `<span class="score-chip">${label}: <span style="color:${scoreColor(val)}">${val}/10</span></span>`;
+      }).join('');
+
+      const badgeHtml = hasRewrite
+        ? '<span class="variant-badge badge-rewrite">Rewritten</span>'
+        : isPassed
+          ? '<span class="variant-badge badge-pass">Pass</span>'
+          : '<span class="variant-badge badge-flag">Flagged</span>';
+
+      const flagHtml = v.flag_reason
+        ? `<div class="flag-reason">Flagged: ${v.flag_reason}</div>`
+        : '';
+
+      const rewriteHtml = hasRewrite && (v.headline || v.body) ? `
+        <div class="rewrite-block">
+          <div class="rewrite-label">Rewritten from original</div>
+          <div style="font-size:0.82rem;color:#8a7d6e;">
+            <em>Original — ${v.headline || '—'}</em><br>
+            <em>${v.body || ''}</em>
+          </div>
+        </div>` : '';
+
+      const card = document.createElement('div');
+      card.className = `variant-card ${isPassed || hasRewrite ? 'passed' : 'flagged'}`;
+      card.innerHTML = `
+        <div class="variant-label">
+          <span>Variant ${v.variant}${v.angle ? ' — ' + v.angle : ''}</span>
+          ${badgeHtml}
+        </div>
+        ${displayHeadline ? `<div class="copy-headline">${displayHeadline}</div>` : ''}
+        ${displayBody ? `<div class="copy-body">${displayBody}</div>` : ''}
+        ${flagHtml}
+        <div class="scores-row">${scoresHtml}</div>
+        ${rewriteHtml}
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function loadResults(runId) {
+    fetch('/results/' + runId)
+      .then(r => r.json())
+      .then(data => {
+        const section = document.getElementById('results-section');
+        const summary = document.getElementById('results-summary');
+        section.style.display = 'block';
+        summary.textContent = data.summary || 'Copy evaluation complete.';
+        if (data.variants && data.variants.length > 0) {
+          renderVariants(data.variants);
+        } else if (data.ad_copy_raw) {
+          // Fallback: scorecard couldn't be parsed, show raw
+          document.getElementById('raw-copy').textContent = data.ad_copy_raw;
+          document.getElementById('raw-copy').style.display = 'block';
+        }
+        if (data.ad_copy_raw) {
+          document.getElementById('raw-copy').textContent = data.ad_copy_raw;
+        }
+      })
+      .catch(() => { /* results not critical — don't break the page */ });
+  }
+
+  function toggleRaw() {
+    const el = document.getElementById('raw-copy');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
   }
 
   form.addEventListener('submit', function(e) {
