@@ -1,0 +1,22 @@
+{
+  "8adda33a": {
+    "status": "complete",
+    "brief": {
+      "property_name": "ABC Heights, 4 BHK",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 50000,
+      "city": "Ahmedabad",
+      "locality": "Sindhubhavan Road",
+      "property_type": "Lake view apartment",
+      "price_cr": "10",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "",
+      "campaign_duration_days": 30
+    },
+    "created_at": "2026-06-09T17:22:23",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-09_17-22-23",
+    "copy_scorecard_summary": "4/5 variants passed. 1 flagged for rewrite: Variants [2].",
+    "approved": true
+  }
+}

@@ -35,8 +35,30 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# In-memory run registry — good enough for an internal single-user tool
-_runs: dict[str, dict] = {}
+# Persistent run registry — survives server restarts
+_RUNS_PATH = Path(__file__).parent.parent.parent.parent / "outputs" / "runs.json"
+
+
+def _load_runs() -> dict[str, dict]:
+    if not _RUNS_PATH.exists():
+        return {}
+    try:
+        data = json.loads(_RUNS_PATH.read_text(encoding="utf-8"))
+        for run in data.values():
+            if run.get("status", "").startswith("running_") or run.get("status") == "queued":
+                run["status"] = "failed"
+                run["error"] = "Server restarted while run was in progress."
+        return data
+    except Exception:
+        return {}
+
+
+def _save_runs() -> None:
+    _RUNS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _RUNS_PATH.write_text(json.dumps(_runs, indent=2, default=str), encoding="utf-8")
+
+
+_runs: dict[str, dict] = _load_runs()
 
 
 class CampaignBrief(BaseModel):
@@ -150,9 +172,11 @@ def _run_pipeline(run_id: str, brief: CampaignBrief):
             )
             if summary:
                 _runs[run_id]["copy_scorecard_summary"] = summary
+        _save_runs()
     except Exception as exc:
         _runs[run_id]["status"] = "failed"
         _runs[run_id]["error"] = str(exc)
+        _save_runs()
 
 
 @app.get("/", response_class=RedirectResponse)
@@ -195,6 +219,7 @@ def launch_campaign(brief: CampaignBrief):
         "created_at": datetime.utcnow().isoformat(),
         "review_folder": None,
     }
+    _save_runs()
 
     thread = threading.Thread(
         target=_run_pipeline,
@@ -1009,6 +1034,7 @@ def approve_run(run_id: str):
     )
 
     _runs[run_id]["approved"] = True
+    _save_runs()
     return {"status": "approved", "run_id": run_id, "message": message}
 
 
@@ -1075,7 +1101,6 @@ def list_runs():
         folder_html = f'<div style="font-family:monospace;font-size:0.72rem;color:#8a7d6e;margin-top:2px;">{folder}</div>' if folder else ""
         approved = run.get("approved", False)
         approve_cell = ""
-        crm_cell = ""
         if run.get("status") == "complete":
             if approved:
                 approve_cell = '<span style="color:#2a4030;font-size:0.78rem;">✓ Stored in memory</span>'
@@ -1085,12 +1110,6 @@ def list_runs():
                     f'style="background:#2a4030;color:#f7f5f0;border:none;padding:4px 12px;'
                     f'font-size:0.78rem;cursor:pointer;border-radius:2px;">Approve</button>'
                 )
-            crm_cell = (
-                f'<button onclick="uploadCRMLookalike(\'{run_id}\')" id="crm-{run_id}" '
-                f'style="background:#1a3050;color:#f7f5f0;border:none;padding:4px 10px;'
-                f'font-size:0.75rem;cursor:pointer;border-radius:2px;margin-top:4px;display:block;">'
-                f'Upload CRM Lookalike</button>'
-            )
         run_rows += f"""
         <tr>
           <td style="padding:10px 12px;font-family:monospace;font-size:0.82rem;">{run_id}</td>
@@ -1107,7 +1126,6 @@ def list_runs():
             {folder_html}
           </td>
           <td style="padding:10px 12px;">{approve_cell}</td>
-          <td style="padding:10px 12px;">{crm_cell}</td>
           <td style="padding:10px 12px;">
             {'<a href="/results/' + run_id + '" style="font-size:0.8rem;">View →</a>' if run.get("status") == "complete" else ""}
           </td>
@@ -1130,10 +1148,19 @@ def list_runs():
   </style>
 </head><body>
   <div class="logo">Pikorua Realty</div>
-  <h1>Campaign Runs <span style="font-size:0.85rem;color:#8a7d6e;">— this session only</span></h1>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1.5rem;">
+    <h1 style="margin:0;">Campaign Runs <span style="font-size:0.85rem;color:#8a7d6e;">— this session only</span></h1>
+    <div>
+      <button id="crm-global" onclick="uploadCRMLookalike()"
+        style="background:#1a3050;color:#f7f5f0;border:none;padding:5px 14px;font-size:0.78rem;cursor:pointer;border-radius:2px;">
+        Upload CRM Lookalike
+      </button>
+      <div style="font-size:0.68rem;color:#8a7d6e;margin-top:3px;text-align:right;">Phase 3 — requires META_ACCESS_TOKEN</div>
+    </div>
+  </div>
   <table>
     <thead><tr>
-      <th>Run ID</th><th>Property</th><th>Status</th><th>Started</th><th>Scorecard / Output</th><th>Memory</th><th>CRM</th><th>Detail</th>
+      <th>Run ID</th><th>Property</th><th>Status</th><th>Started</th><th>Scorecard / Output</th><th>Memory</th><th>Detail</th>
     </tr></thead>
     <tbody>{run_rows if run_rows else '<tr><td colspan="5" style="padding:16px;color:#8a7d6e;">No runs yet this session.</td></tr>'}</tbody>
   </table>
@@ -1164,8 +1191,8 @@ def list_runs():
         alert('Request failed: ' + e.message);
       }}
     }}
-    async function uploadCRMLookalike(runId) {{
-      const btn = document.getElementById('crm-' + runId);
+    async function uploadCRMLookalike() {{
+      const btn = document.getElementById('crm-global');
       btn.disabled = true;
       btn.textContent = 'Uploading...';
       try {{
@@ -1178,7 +1205,7 @@ def list_runs():
         if (res.ok) {{
           btn.replaceWith(Object.assign(document.createElement('span'), {{
             textContent: `✓ ${{data.leads_uploaded}} leads uploaded`,
-            style: 'color:#1a3050;font-size:0.75rem;display:block;margin-top:4px;'
+            style: 'color:#1a3050;font-size:0.78rem;'
           }}));
         }} else {{
           btn.disabled = false;
