@@ -63,11 +63,15 @@ analyse_crm_leads:
   expected_output: >
     A markdown section titled "## CRM Signal" with 3–5 bullet points.
     Each bullet is one specific, actionable insight grounded in the CRM data.
-    Example format:
+    Every number you cite must come from the CRM data above — do not invent figures to
+    match the example's shape.
+
+    The example below shows the FORMAT and specificity to aim for. Its numbers are
+    placeholders for illustration only — never copy them into your output:
     ## CRM Signal
-    - Legacy/Family angle produced the highest funnel depth (avg 3.8/5) — lead with this in new creative.
-    - NRI leads from UAE progress furthest; domestic HNI leads from Ahmedabad stall at first contact.
-    - Leads in the ₹11–15 Cr bracket are 2× more likely to reach site visit than ₹7–10 Cr bracket.
+    - [Angle] produced the highest funnel depth (cite the actual figure) — lead with this in new creative.
+    - [Which buyer profile] progresses furthest; [which] stalls at first contact — per the data.
+    - [Which budget bracket] reaches site visit most often — state the real comparison from the data.
     Save to outputs/crm_signal.md.
   agent: targeting_researcher
   output_file: outputs/crm_signal.md
@@ -151,7 +155,9 @@ analyse_trends:
       do not include it. Find something more recent.
 
     Produce 3 trend hooks — each a one-line insight that could anchor a campaign angle.
-    Example: "Mumbai sea-view inventory at 10-year low — urgency angle is credible."
+    Each hook must come from a real search result you can cite. The following only shows
+    the one-line shape — do not reuse its claim unless your own search actually supports it:
+    "[City] [segment] inventory at multi-year low — urgency angle is credible (source)."
   expected_output: >
     3 trend hooks, each as a headline-style insight (1–2 sentences) with a source or
     search result cited. Each hook must be relevant as of {today} — no stale predictions.

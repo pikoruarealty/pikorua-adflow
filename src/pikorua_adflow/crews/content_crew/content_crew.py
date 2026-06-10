@@ -1,4 +1,5 @@
-from crewai import Agent, Crew, Process, Task
+import os
+from crewai import Agent, Crew, LLM, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 
 from pikorua_adflow.utils.brand_voice_loader import load_brand_voice
@@ -11,6 +12,14 @@ class ContentCrew:
 
     def __init__(self):
         self._brand_voice = load_brand_voice()
+        # Creative tasks need a stronger model than the mechanical default (flash-lite).
+        # CREATIVE_MODEL is a free, higher-capability model (Groq qwen3-32b by default);
+        # swap to an OpenRouter/frontier model in production via .env.
+        creative_model = os.getenv("CREATIVE_MODEL", "groq/qwen/qwen3-32b")
+        # Copywriter: high temperature → variety across the 5 variants.
+        self._creative_llm = LLM(model=creative_model, temperature=0.9)
+        # Evaluator: low temperature → consistent, repeatable scoring.
+        self._evaluator_llm = LLM(model=creative_model, temperature=0.3)
 
     def _with_brand_voice(self, base: str) -> str:
         if self._brand_voice:
@@ -21,7 +30,7 @@ class ContentCrew:
     def campaign_copywriter(self) -> Agent:
         cfg = dict(self.agents_config["campaign_copywriter"])
         cfg["backstory"] = self._with_brand_voice(cfg["backstory"])
-        return Agent(config=cfg, verbose=True)
+        return Agent(config=cfg, verbose=True, llm=self._creative_llm)
 
     @agent
     def ad_ops_manager(self) -> Agent:
@@ -33,7 +42,7 @@ class ContentCrew:
     def copy_evaluator(self) -> Agent:
         cfg = dict(self.agents_config["copy_evaluator"])
         cfg["backstory"] = self._with_brand_voice(cfg["backstory"])
-        return Agent(config=cfg, verbose=True)
+        return Agent(config=cfg, verbose=True, llm=self._evaluator_llm)
 
     @agent
     def visual_prompter(self) -> Agent:

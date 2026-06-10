@@ -67,11 +67,15 @@ def upload_crm_lookalike(
     ad_account_id: str,
     crm_path: pathlib.Path = _CRM_PATH,
     min_stage: str = _MIN_STAGE_DEFAULT,
+    target_countries: list[str] | None = None,
 ) -> dict:
     """
     Upload qualified CRM leads as a Meta Custom Audience and create a Lookalike.
+    target_countries: ISO-2 list for the lookalike (default ["IN"]; use ["AE","US","SG"] for NRI).
     Returns dict with custom_audience_id, lookalike_audience_id, or error.
     """
+    if target_countries is None:
+        target_countries = ["IN"]
     token = os.getenv("META_ACCESS_TOKEN", "")
     if not token:
         return {"error": "META_ACCESS_TOKEN not set — Phase 3 prerequisite missing."}
@@ -113,20 +117,29 @@ def upload_crm_lookalike(
     ca_id = ca_resp.json().get("id")
 
     # Step 2 — upload hashed users
+    # Build one row per lead containing only the fields that lead actually has.
+    # Meta requires consistent schema across all rows, so use EXTERN_ID as a
+    # stable anchor when a lead is missing email or phone — this prevents empty
+    # string misalignment when the schema has both EMAIL_SHA256 and PHONE_SHA256.
+    has_email = any("email" in lead for lead in leads)
+    has_phone = any("phone" in lead for lead in leads)
+
     schema = []
-    if any("email" in lead for lead in leads):
+    if has_email:
         schema.append("EMAIL_SHA256")
-    if any("phone" in lead for lead in leads):
+    if has_phone:
         schema.append("PHONE_SHA256")
 
     data_entries = []
     for lead in leads:
         row = []
-        if "EMAIL_SHA256" in schema:
-            row.append(lead.get("email", ""))
-        if "PHONE_SHA256" in schema:
-            row.append(lead.get("phone", ""))
-        data_entries.append(row)
+        if has_email:
+            row.append(lead.get("email") or "")
+        if has_phone:
+            row.append(lead.get("phone") or "")
+        # Skip rows that would be entirely empty (lead had neither email nor phone)
+        if any(v for v in row):
+            data_entries.append(row)
 
     upload_payload = {
         "payload": {
@@ -143,22 +156,28 @@ def upload_crm_lookalike(
 
     # Step 3 — create Lookalike Audience
     lal_payload = {
-        "name": f"Pikorua Lookalike — {min_stage}+ leads",
+        "name": f"Pikorua Lookalike — {min_stage}+ leads — {','.join(target_countries)}",
         "subtype": "LOOKALIKE",
         "origin_audience_id": ca_id,
         "lookalike_spec": {
             "type": "similarity",
-            "country": "IN",
+            "country": target_countries[0],  # primary market
             "ratio": 0.01,  # top 1% similarity
         },
     }
     lal_resp = requests.post(f"{base_url}/customaudiences", json=lal_payload, headers=headers, timeout=30)
-    lal_id = lal_resp.json().get("id") if lal_resp.ok else None
+    if not lal_resp.ok:
+        return {
+            "error": f"Lookalike creation failed: {lal_resp.text}",
+            "custom_audience_id": ca_id,
+            "leads_uploaded": len(data_entries),
+        }
 
+    lal_id = lal_resp.json().get("id")
     return {
         "custom_audience_id": ca_id,
         "lookalike_audience_id": lal_id,
-        "leads_uploaded": len(leads),
+        "leads_uploaded": len(data_entries),
         "min_stage": min_stage,
-        "lookalike_error": None if lal_resp.ok else lal_resp.text,
+        "target_countries": target_countries,
     }

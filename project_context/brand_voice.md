@@ -116,7 +116,14 @@ Use these or words in their register:
 
 ---
 
-## Approved headlines — style examples [CONFIRM with client]
+## Register calibration — how an approved headline FEELS [CONFIRM with client]
+
+> **These are not a menu. Do not reuse any line below verbatim or as a fill-in-the-blank
+> template.** They exist to show the *register* — the calm, one-complete-thought feel of a
+> Pikorua line — so you can recognise when your own writing has it. If your headline shares
+> a sentence shape with one of these, you have copied the form, not learned the voice. Write
+> something that earns its place for the specific property in front of you, then check it has
+> this feel.
 
 Direction: calm, specific, one complete thought. Never a riddle, never a question, never a shout.
 

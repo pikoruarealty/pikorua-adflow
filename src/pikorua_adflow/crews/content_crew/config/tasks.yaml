@@ -1,55 +1,65 @@
 write_meta_ads:
   description: >
-    Write 5 Meta ad copy variants for {product} on Meta Ads.
+    Write 5 Meta ad copy variants for {product}. Your BRAND VOICE REFERENCE (in your
+    backstory) is the authority on tone, banned words, and register — follow it. This
+    task adds only the structure and the hard rules.
 
-    Each variant must:
-    - Have a headline of 30 characters or fewer
-    - Have a body of 125 characters or fewer
-    - Target a different emotional angle — one per angle from this list:
-      aspiration, investment return, legacy/family, exclusivity, NRI homecoming
-    - Sound like it was written for a HNI or NRI buyer, not a first-time homebuyer
-    - Never use: affordable, deal, cheap, limited time, hurry, don't miss out
+    FORMAT (hard limits):
+    - Headline: 30 characters or fewer. A complete, confident thought — not a riddle,
+      not a question, not generic filler ("Luxury Living", "Premium Homes").
+    - Body: 125 characters or fewer. Maximum 2 sentences, each doing one job — do not
+      stack clauses. End with a soft invitation or Pikorua's name, never a hard sell.
+    - No two variants may open with the same word or share a sentence shape.
 
-    HEADLINE RULES:
-    - Must be a complete, confident thought — not a riddle or a question
-    - Must be calm and assured — not clever-for-the-sake-of-it
-    - BAD: "Thaltej. Ten crores today. Tomorrow?" (riddle, not confident)
-    - BAD: "Luxury Living", "Premium Homes", "Your Dream Home" (generic filler)
-    - GOOD: "Where the sea earns its view" — specific, visual, understated
-    - GOOD: "Your Mumbai address. Finally." — simple, emotionally direct
-    - GOOD: "Built for the name after yours." — one clear idea, no cleverness needed
+    STEP 1 — FIND 5 HOOKS IN THE BRIEF, NOT IN A CATEGORY LIST.
+    Before writing a single word, read {product} and {persona}. List 5 specific things
+    about THIS property that could make a HNI or NRI buyer stop mid-scroll and think
+    "what is that?" Each hook must be grounded in a real detail — the address, the size,
+    the access, the buyer profile, something from the persona. If the hook would work
+    equally well for a different property in the same city, discard it and find a better one.
+    The test: read only the headline. Would you click? If not, rewrite.
 
-    ASPIRATION ANGLE WARNING — the evaluator will flag generic aspiration copy:
-    - BAD aspiration: "Elevated living, redefined" / "Where aspirations find a home"
-      (could describe any property in India — no specificity)
-    - GOOD aspiration: "Sindhu Bhavan Road. The address Ahmedabad remembers."
-      (the address itself IS the aspiration — grounded in a real detail)
-    - Rule: aspiration must be specific to {product} or {city}, not a feeling floating free
-    Write originals in this style, specific to {product} and {city}.
+    STEP 2 — WRITE ONE VARIANT PER HOOK.
+    Each variant pursues one of those 5 hooks. Use a different creative move per variant:
+    - Number as statement: a raw measurement opens, then the second line reframes it as
+      a position, not a quantity. (A watch brand turns "300 metres" into status.)
+    - Place as identity: name only the location and stop. Trust the address to carry weight.
+      (A hotel says only "Park Avenue" and lets the reader supply the prestige.)
+    - Contrast: name what the category does, then name what this property does instead.
+      The gap between them is the headline. (A car brand: faster vs. quieter.)
+    - Fragment sequence: short, rhythmic pieces accumulate to a single decision.
+    - Reversal: deny the literal thing the buyer thinks they're buying, offer something larger.
+    - Restraint as scarcity: imply rarity through what you do NOT say.
+    If two variants share the same sentence shape, rewrite the weaker one.
 
-    BODY COPY RULES:
-    - Maximum 2 sentences. Do not stack clauses.
-    - Each sentence does one job — do not try to say everything at once.
-    - BAD: "A 4BHK where scarcity outpaces demand. Pikorua's data-driven conviction." (jargon, fabricated)
-    - GOOD: "A 4BHK on Sindhu Bhavan Road, available through Pikorua. By private appointment."
-    - End with a soft CTA or Pikorua's name — never a hard sell.
+    COVERAGE CHECK (after writing, not before):
+    Look back at your 5 variants. Between them, have you touched: something aspirational,
+    something financial, something about legacy or family, something about discretion/access?
+    If three variants say the same thing from different angles, replace the weakest.
+    These are diversity guardrails — do not use them as angle labels or write toward them
+    before you've found the hooks in the property.
 
-    NEVER INVENT FACTS:
-    - Do not invent numbers (inventory counts, appreciation percentages, floor counts)
-    - Do not invent statistics ("8% annual appreciation", "10-year low inventory")
-    - Only use details present in {product}, {city}, {price_cr}, {persona}, or {trends}
-    - If you have no specific fact to anchor a line, use emotion and restraint instead
+    TREND CONTEXT — background only:
+    {trends} is research context. Use a trend only if it directly applies to THIS property's
+    specific locality — not the city in general, not a nearby district. If a trend mentions
+    GIFT City and the property is on Sindhu Bhavan Road, the trend is background, not copy
+    material. Buyers will verify the address. Mismatched geography destroys trust.
 
-    Buyer context:
-    {target_audience}
+    ORIGINALITY CHECK — last step before output:
+    Read your 5 headlines. If any headline matches phrasing you recognise from training data,
+    industry examples, or your brand voice reference, rewrite it. The brand voice examples
+    exist for register calibration only — they are not a phrase bank. Every line must have
+    been written for THIS specific property.
 
-    Persona insight (use this to make copy specific, not generic):
-    {persona}
+    TWO HARD RULES (evaluator auto-fails these):
+    - Never name the property/project. Reference by address, size, type only.
+    - Never invent a number — no unit counts, floor counts, percentages, occupancy rates.
 
-    Trend hooks to weave in where natural:
-    {trends}
+    Buyer context: {target_audience}
+    Persona insight: {persona}
   expected_output: >
-    A numbered list of 5 ad copy variants. Each variant labelled with its emotional angle:
+    A numbered list of 5 ad copy variants. Each variant labelled with its hook (written
+    as an ad creative would label it — a short, punchy descriptor, not an analyst's category):
       Headline: [text] [X chars]
       Body: [text] [X chars]
     No variant shares the same opening word as another.
@@ -64,26 +74,24 @@ write_google_ads:
     - 3 headlines, each 30 characters or fewer
     - 2 descriptions, each 90 characters or fewer
 
+    Your BRAND VOICE REFERENCE (in your backstory) governs tone and banned words —
+    Google copy is more functional than Meta, but the no-urgency, no-hard-sell rules still apply.
+
     HEADLINE RULES:
-    - Each headline must do a different job — do NOT write three variations of the same idea
-    - At least one headline must include a specific detail from {product}, {city}, or {price_cr}
-      (not just "Luxury Homes Ahmedabad" — that tells the buyer nothing they didn't already type)
-    - One headline should name Pikorua as the consultancy — builds brand recall
-    - Never use: affordable, deal, cheap, limited time, hurry, don't miss out, exclusive offer
+    - Each headline does a different job — not three variations of one idea.
+    - At least one must carry a concrete detail from {product}, {city}, or {price_cr}
+      (an address, size, or price tier). A headline that only repeats what the buyer
+      typed into search ("Premium Homes Ahmedabad") wastes the slot — it is interchangeable
+      with every competitor.
+    - One headline should name Pikorua, to build brand recall.
 
     DESCRIPTION RULES:
-    - Each description must do a different job — do NOT repeat the headline or each other
-    - Description 1: state what makes this property or Pikorua's access to it specific
-    - Description 2: soft CTA — an invitation, not a command ("Book Now", "Get Quote" are banned)
+    - Each description does a different job — do not repeat the headline or each other.
+    - Description 1: what makes this property, or Pikorua's access to it, specific.
+    - Description 2: a soft invitation, not a command (no "Book Now" / "Get Quote").
 
-    EXAMPLES:
-    BAD headline: "Luxury 5BHK | Book Now" (robotic, no reason to click, hard sell)
-    BAD headline: "Premium Homes Ahmedabad" (generic — anyone could write this)
-    GOOD headline: "5BHK, Sindhu Bhavan Rd" (specific address — rare in search ads)
-    GOOD headline: "Private viewings — Pikorua" (creates intrigue, names the brand)
-
-    BAD description: "Find your dream luxury home in Ahmedabad. Contact us today for more information."
-    GOOD description: "A ₹13 Cr 5BHK on Sindhu Bhavan Road — available through Pikorua before wider listing."
+    The test for every line: could a competitor paste it under their own listing unchanged?
+    If yes, it is too generic — add the detail only Pikorua has.
 
     NEVER INVENT: Only use details present in {product}, {city}, {price_cr}.
     No fabricated statistics, appreciation figures, or inventory claims.
@@ -124,27 +132,20 @@ write_whatsapp_script:
     Tone: Jitendra texting a contact he respects — warm, direct, one thought per
     sentence. Not a newsletter. Not a press release. A message a real person sends.
 
-    BANNED PHRASES — never use any of these or close variants:
-    - "I am reaching out because"
-    - "has just come to our attention"
-    - "given your profile"
-    - "vision for the next chapter"
-    - "I wanted to ensure you were aware"
-    - "I hope this message finds you well"
-    - "I am pleased to present"
-    - "curated exclusively for"
+    Your BRAND VOICE REFERENCE (in your backstory) lists the words and phrases that
+    damage the brand. On WhatsApp the specific killers are corporate-letter openers —
+    avoid "I am reaching out because", "has come to our attention", "given your profile",
+    "I hope this message finds you well", "I am pleased to present", "curated exclusively
+    for", and any close variant.
 
-    TONE EXAMPLES (match this register):
-    BAD: "I am reaching out because a property that aligns with your vision for the
-    next chapter has just come to our attention. Given your profile, I wanted to
-    ensure you were aware of this unique opportunity."
-    GOOD: "Hi [Name], came across a 5BHK on Sindhu Bhavan Road that I think is
-    exactly what you had in mind. Pikorua is doing private viewings before it goes
-    wider — only a few slots this week. Want me to hold one for you?"
-
-    The GOOD example works because it tells the recipient something specific, signals
-    that Pikorua has done the work of finding the property for them, and creates a
-    natural reason to reply — without inventing any facts.
+    REGISTER — match this feel, do not reuse the wording:
+    - WRONG feel: "I am reaching out because a property that aligns with your vision for
+      the next chapter has come to our attention." (a form letter wearing a tie)
+    - RIGHT feel: Jitendra texts a contact he respects — one specific true detail about
+      the property (from {product}), a signal that Pikorua found it for them, and a natural
+      reason to reply. Warm, brief, no invented facts.
+    Build your own message from {product}. Do not lift an example address or phrasing —
+    if it isn't in {product}, it doesn't go in the message.
 
     NEVER INVENT: Do not add details not present in {product} — no invented
     floor numbers, inventory counts, percentage returns, or market statistics.
@@ -181,26 +182,23 @@ write_email:
     - Tone: a trusted advisor's note, not a newsletter; reads like it was written for
       this one person, not formatted for a mail merge
 
-    BANNED PHRASES — never use any of these or close variants:
-    - "I hope this email finds you well"
-    - "I am pleased to share"
-    - "given your investment profile"
-    - "I wanted to bring to your attention"
-    - "a rare opportunity"
-    - "don't miss out"
-    - "limited availability"
+    Your BRAND VOICE REFERENCE (in your backstory) lists banned words. For email, also
+    avoid corporate-blast openers and their close variants: "I hope this email finds you
+    well", "I am pleased to share", "given your investment profile", "I wanted to bring to
+    your attention", "a rare opportunity", "limited availability".
 
-    SUBJECT LINE EXAMPLES:
-    BAD: "Exclusive Luxury Property — Sindhu Bhavan Road" (generic, sounds like spam)
-    BAD: "A Rare Opportunity in Ahmedabad" (vague, overused phrase)
-    GOOD: "A 5BHK on Sindhu Bhavan Road — before it goes wider"
-    GOOD: "Thought of you when I saw this one"
+    SUBJECT LINE — match the feel, write your own:
+    - WRONG: a generic listing label or an overused phrase ("Exclusive Luxury Property",
+      "A Rare Opportunity") — reads like spam, says nothing.
+    - RIGHT: either one concrete detail from {product} that hints at early access, OR a
+      short personal line that sounds like one advisor thinking of one person. Curiosity
+      without clickbait.
 
-    BODY OPENING EXAMPLES:
-    BAD: "I am pleased to bring to your attention a rare property that aligns with
-    your investment profile and lifestyle aspirations."
-    GOOD: "There's a 5BHK on Sindhu Bhavan Road that's not been listed anywhere yet.
-    I think it's worth 20 minutes of your time."
+    BODY OPENING — match the feel, write your own:
+    - WRONG: "I am pleased to bring to your attention a rare property that aligns with your
+      investment profile and lifestyle aspirations." (mail-merge, no real information)
+    - RIGHT: lead with one true, specific thing about THIS property (from {product}) that
+      the reader hasn't heard, then make the case for 20 minutes of their attention.
 
     NEVER INVENT: Only use property details present in {product}.
     No fabricated statistics, appreciation percentages, or inventory claims.
@@ -247,8 +245,16 @@ evaluate_copy:
        Would a ₹7Cr+ buyer feel seen, or feel sold to?
        Penalise: "Trusted by celebrities", "Book Now", "Get Quote", "Limited availability".
 
+    AUTOMATIC FLAG — regardless of scores, immediately flag any variant that:
+    - Contains the property name (e.g. "Anamika Heights", "ABC Heights") — Pikorua never
+      names the developer's project in paid ads; it routes enquiries through itself.
+    - Contains an invented number or statistic not present in {product} — unit counts,
+      floor counts, appreciation percentages, occupancy figures, etc.
+    These are disqualifying errors. Flag them with "HARD FAIL" so the rewriter knows
+    the issue is structural, not stylistic.
+
     Scoring: 1–5 = failing, 6–7 = acceptable, 8–9 = strong, 10 = rare/exceptional.
-    A variant scores below 6 on ANY dimension = FLAG FOR REWRITE.
+    A variant scores below 6 on ANY dimension OR triggers an AUTOMATIC FLAG = FLAG FOR REWRITE.
 
     For each flagged variant give ONE specific, actionable failure reason.
     Example: "Variant 3 — Specificity 4/10: 'Where luxury meets lifestyle' could describe
@@ -289,9 +295,22 @@ rewrite_flagged:
     Maximum 2 rewrite attempts per variant — if you cannot improve the score,
     note the difficulty and leave the original with a warning.
 
+    REWRITE QUALITY BAR — the rewrite must be better than the original, not safer:
+    - Do NOT compress the original into a vague fragment (chopping it to "[Place]. Elevated."
+      is worse, not better — it loses the specificity that gave it any chance).
+    - Do NOT strip out the property detail that made the original specific.
+    - A rewrite that could describe any property in India is an automatic failure.
+    - Diagnose why the original failed, then apply a DIFFERENT creative technique from the
+      write_meta_ads list (number as statement, place as identity, contrast, fragment
+      sequence, reversal, restraint as scarcity) — build the line yourself, do not reuse
+      any example wording.
+    - The rewrite must score higher than the original on Brand Voice AND Luxury Signal.
+
     Apply the same rules as write_meta_ads:
     - Headline ≤ 30 characters, body ≤ 125 characters
-    - No invented facts, no banned words
+    - No invented facts, no invented numbers, no unit counts
+    - NEVER use the property name — reference by address, size, or type only
+    - No banned words
     - Specific to {product} and {city}
     - One clear emotional angle per variant
 
@@ -356,8 +375,10 @@ generate_banner_prompts:
     - Specify the visual scene anchored in {property_type}, {city}, and {locality}
     - Specify a colour palette that suits a luxury Indian real estate brand (avoid white-on-white
       or generic blues — think warm stone, teak, deep navy, champagne, or terracotta)
-    - Include a text overlay instruction with the headline to be embedded in the image
-      (use the best-performing headline from write_meta_ads or rewrite_flagged)
+    - Include a text overlay instruction with the headline to be embedded in the image.
+      Use the final headline for THAT variant (from rewrite_flagged if the variant was rewritten,
+      otherwise from write_meta_ads): Prompt 1 uses Variant 1's headline, Prompt 2 uses
+      Variant 2's headline, Prompt 3 uses Variant 3's headline.
     - Specify typography style: elegant serif (e.g. Garamond, Bodoni) at a specific
       placement (e.g. "bottom-left third", "centred with breathing room")
     - Specify lighting: golden hour, overcast diffuse, dusk, or specific time of day
@@ -373,16 +394,19 @@ generate_banner_prompts:
     Property type: {property_type}
     Price: ₹{price_cr} Cr
   expected_output: >
-    Three numbered Ideogram prompts, each labelled with its intended emotional angle
-    (matching the Meta ad variants from write_meta_ads):
+    Three numbered Ideogram prompts. Each is labelled with its variant number and angle,
+    and embeds that variant's headline as the text overlay:
 
-      Prompt 1 — [angle]:
+      Prompt 1 — Variant 1 — [angle from write_meta_ads]:
+      Headline overlay: "[Variant 1 final headline]"
       "[Full Ideogram prompt]"
 
-      Prompt 2 — [angle]:
+      Prompt 2 — Variant 2 — [angle from write_meta_ads]:
+      Headline overlay: "[Variant 2 final headline]"
       "[Full Ideogram prompt]"
 
-      Prompt 3 — [angle]:
+      Prompt 3 — Variant 3 — [angle from write_meta_ads]:
+      Headline overlay: "[Variant 3 final headline]"
       "[Full Ideogram prompt]"
 
     Each prompt is 60–120 words. No invented facts about the property beyond what's

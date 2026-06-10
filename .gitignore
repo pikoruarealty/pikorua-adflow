@@ -8,3 +8,4 @@ logs/*.log
 *.pyc
 venv/
 .venv/
+CLIENT_REQUIREMENTS.md

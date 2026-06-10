@@ -15,6 +15,9 @@ class AudienceCrew:
     agents_config = "config/agents.yaml"
     tasks_config = "config/tasks.yaml"
 
+    def __init__(self, skip_trends: bool = False):
+        self._skip_trends = skip_trends
+
     @agent
     def persona_researcher(self) -> Agent:
         return Agent(
@@ -68,9 +71,17 @@ class AudienceCrew:
 
     @crew
     def crew(self) -> Crew:
+        tasks = [
+            self.research_persona(),
+            self.scout_competitors(),
+            self.analyse_crm_leads(),
+            self.build_targeting_brief(),
+        ]
+        if not self._skip_trends:
+            tasks.append(self.analyse_trends())
         return Crew(
             agents=self.agents,
-            tasks=self.tasks,
+            tasks=tasks,
             process=Process.sequential,
             verbose=True,
         )

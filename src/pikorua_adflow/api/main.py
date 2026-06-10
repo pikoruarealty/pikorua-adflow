@@ -137,18 +137,31 @@ def _run_pipeline(run_id: str, brief: CampaignBrief):
 
     _runs[run_id]["status"] = "running_stage1"
 
+    # Trend hooks are stable for hours — skip the web-search task if the file is
+    # younger than TREND_TTL_SECONDS and reuse the cached result instead.
+    TREND_TTL_SECONDS = 8 * 3600
+    trend_hooks_path = outputs_dir / "trend_hooks.md"
+    trend_age = (
+        datetime.now().timestamp() - trend_hooks_path.stat().st_mtime
+        if trend_hooks_path.exists() else float("inf")
+    )
+    use_cached_trends = trend_age < TREND_TTL_SECONDS
+
     audience_output = None
     try:
-        audience_result = AudienceCrew().crew().kickoff(inputs=inputs)
+        audience_result = AudienceCrew(skip_trends=use_cached_trends).crew().kickoff(inputs=inputs)
         audience_output = str(audience_result)
-        inputs["persona"] = audience_output
-        inputs["trends"] = "See persona output above for extracted trend hooks."
+        # Cap persona at 1500 chars — the copywriter needs the insight, not a wall of text.
+        inputs["persona"] = audience_output[:1500]
         # Load targeting brief from file if the agent wrote it; fall back to crew output
-        targeting_path = Path(__file__).parent.parent.parent.parent / "outputs" / "targeting_brief.md"
+        targeting_path = outputs_dir / "targeting_brief.md"
         if targeting_path.exists():
-            inputs["targeting"] = targeting_path.read_text(encoding="utf-8")
+            inputs["targeting"] = targeting_path.read_text(encoding="utf-8")[:1200]
         else:
-            inputs["targeting"] = audience_output
+            inputs["targeting"] = audience_output[:1200]
+        # Pass actual trend hooks to content crew — read from file (fresh or cached)
+        if trend_hooks_path.exists():
+            inputs["trends"] = trend_hooks_path.read_text(encoding="utf-8")[:800]
         import time; time.sleep(8)  # brief pause to let RPM window reset before Stage 2 burst
         _runs[run_id]["status"] = "running_stage2"
     except Exception as exc:
@@ -293,6 +306,18 @@ def get_results(run_id: str):
     replicate_token = os.getenv("REPLICATE_API_TOKEN", "")
     together_key    = os.getenv("TOGETHER_API_KEY", "")
 
+    # Determine which variants to pre-check: top 2–3 PASS by avg score
+    already_selected = run.get("selected_variants", [])
+    if already_selected:
+        default_selected = set(already_selected)
+    else:
+        pass_variants = [v for v in variants if v.get("status") == "PASS"]
+        pass_variants.sort(
+            key=lambda v: sum(v.get("scores", {}).values()) / max(len(v.get("scores", {})), 1),
+            reverse=True,
+        )
+        default_selected = {v["variant"] for v in pass_variants[:3]}
+
     # Build variant cards HTML
     variant_cards_html = ""
     for v in variants:
@@ -361,6 +386,15 @@ def get_results(run_id: str):
           style="background:none;border:1px solid #e0dbd0;padding:3px 10px;font-size:0.72rem;
           color:#8a7d6e;cursor:pointer;border-radius:2px;margin-top:6px;">Copy</button>"""
 
+        checked = "checked" if num in default_selected else ""
+        select_checkbox = f"""
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#5a5040;
+            cursor:pointer;margin-top:6px;user-select:none;">
+            <input type="checkbox" id="sel-{num}" value="{num}" {checked}
+              style="width:14px;height:14px;accent-color:#2a4030;cursor:pointer;">
+            Launch
+          </label>"""
+
         variant_cards_html += f"""
         <div style="background:#fff;border:1px solid {card_border};border-radius:4px;padding:20px;margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
@@ -371,6 +405,7 @@ def get_results(run_id: str):
             <div style="text-align:right;">
               <span style="background:{status_bg};color:{status_colour};padding:2px 10px;border-radius:2px;font-size:0.72rem;letter-spacing:0.06em;">{status}</span>
               <div style="margin-top:4px;">{avg_html}</div>
+              {select_checkbox}
             </div>
           </div>
           {copy_html}
@@ -417,6 +452,30 @@ def get_results(run_id: str):
 
     scorecard_summary = run.get("copy_scorecard_summary", "")
     folder_short = str(review_folder).split("pending_review")[-1].lstrip("/\\")
+
+    if run.get("approved"):
+        sel = run.get("selected_variants", [])
+        sel_label = ", ".join(f"Variant {v}" for v in sel) if sel else "all variants"
+        approve_bar_html = (
+            f'<div style="margin-top:8px;padding:10px 14px;background:#f2faf5;'
+            f'border:1px solid #c8e6d4;border-radius:4px;font-size:0.8rem;color:#2a4030;">'
+            f'&#10003; Approved — {_esc(sel_label)} stored in memory.</div>'
+        )
+    else:
+        approve_bar_html = f"""
+    <div id="approve-bar" style="display:flex;align-items:center;gap:16px;margin-top:8px;
+      padding:14px 16px;background:#f2faf5;border:1px solid #c8e6d4;border-radius:4px;">
+      <div style="flex:1;font-size:0.8rem;color:#3a3028;">
+        Check the variants you want to launch, then approve.
+        <span style="color:#8a7d6e;">(Budget splits across selected — top 2–3 recommended.)</span>
+      </div>
+      <button id="approve-selected-btn" onclick="approveSelected('{run_id}')"
+        style="background:#2a4030;color:#f7f5f0;border:none;padding:7px 18px;
+        font-size:0.82rem;cursor:pointer;border-radius:2px;white-space:nowrap;">
+        Approve Selected
+      </button>
+    </div>
+    <div id="approve-status" style="font-size:0.8rem;color:#5a5040;margin-top:6px;min-height:1.2em;"></div>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -465,6 +524,7 @@ def get_results(run_id: str):
   <div id="tab-meta" class="panel active">
     <h2>Meta Ad Variants — Scorecard</h2>
     {variant_cards_html if variant_cards_html else '<p style="color:#8a7d6e;font-size:0.85rem;">No scorecard data found.</p>'}
+    {approve_bar_html}
   </div>
 
   <div id="tab-other" class="panel">
@@ -520,6 +580,44 @@ def get_results(run_id: str):
         n.style.opacity = 1;
         setTimeout(() => n.style.opacity = 0, 1600);
       }});
+    }}
+    async function approveSelected(runId) {{
+      const checkboxes = document.querySelectorAll('input[id^="sel-"]');
+      const selected = Array.from(checkboxes)
+        .filter(cb => cb.checked)
+        .map(cb => parseInt(cb.value));
+      if (selected.length === 0) {{
+        document.getElementById('approve-status').textContent = 'Select at least one variant before approving.';
+        return;
+      }}
+      const btn = document.getElementById('approve-selected-btn');
+      const status = document.getElementById('approve-status');
+      btn.disabled = true;
+      btn.textContent = 'Storing…';
+      status.textContent = '';
+      try {{
+        const res = await fetch('/approve/' + runId, {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify({{selected_variants: selected}}),
+        }});
+        const data = await res.json();
+        if (res.ok) {{
+          document.getElementById('approve-bar').style.display = 'none';
+          status.style.color = '#2a4030';
+          status.textContent = '✓ Approved — Variant ' + selected.join(', ') + ' stored in memory.';
+        }} else {{
+          btn.disabled = false;
+          btn.textContent = 'Approve Selected';
+          status.style.color = '#8a2020';
+          status.textContent = 'Error: ' + (data.detail || 'Unknown error');
+        }}
+      }} catch(e) {{
+        btn.disabled = false;
+        btn.textContent = 'Approve Selected';
+        status.style.color = '#8a2020';
+        status.textContent = 'Request failed: ' + e.message;
+      }}
     }}
     async function generateImages(runId) {{
       const btn = document.getElementById('gen-btn');
@@ -1010,10 +1108,10 @@ def serve_image(run_id: str, filename: str):
 
 
 @app.post("/approve/{run_id}")
-def approve_run(run_id: str):
+def approve_run(run_id: str, req: ApproveRequest = None):
     """
     Mark a completed run as approved and store it in Qdrant vector memory.
-    Only works for runs with status 'complete' that have a review folder.
+    req.selected_variants: variant numbers chosen for launch (empty = approve all).
     """
     if run_id not in _runs:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
@@ -1023,6 +1121,8 @@ def approve_run(run_id: str):
         raise HTTPException(status_code=400, detail="Only completed runs can be approved.")
     if not run.get("review_folder"):
         raise HTTPException(status_code=400, detail="No review folder found for this run.")
+
+    selected = (req.selected_variants if req else []) or []
 
     from pikorua_adflow.tools.memory_tool import approve_and_store
     review_folder = Path(run["review_folder"])
@@ -1034,12 +1134,62 @@ def approve_run(run_id: str):
     )
 
     _runs[run_id]["approved"] = True
+    _runs[run_id]["selected_variants"] = selected  # [] means all
     _save_runs()
-    return {"status": "approved", "run_id": run_id, "message": message}
+    return {"status": "approved", "run_id": run_id, "message": message, "selected_variants": selected}
+
+
+@app.delete("/run/{run_id}")
+def delete_run(run_id: str):
+    """Remove a run from the registry. Blocked for runs that are currently in progress."""
+    if run_id not in _runs:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
+    status = _runs[run_id].get("status", "")
+    if status.startswith("running_") or status == "queued":
+        raise HTTPException(status_code=400, detail="Cannot delete a run that is currently in progress.")
+    del _runs[run_id]
+    _save_runs()
+    return {"status": "deleted", "run_id": run_id}
+
+
+@app.post("/rerun/{run_id}")
+def rerun_campaign(run_id: str):
+    """Re-queue a failed run using its original brief."""
+    if run_id not in _runs:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
+    run = _runs[run_id]
+    if run.get("status") != "failed":
+        raise HTTPException(status_code=400, detail="Only failed runs can be re-run.")
+
+    brief_data = run.get("brief", {})
+    brief = CampaignBrief(**brief_data)
+
+    new_run_id = str(uuid.uuid4())[:8]
+    _runs[new_run_id] = {
+        "status": "queued",
+        "brief": brief_data,
+        "created_at": datetime.utcnow().isoformat(),
+        "review_folder": None,
+        "rerun_of": run_id,
+    }
+    _save_runs()
+
+    thread = threading.Thread(target=_run_pipeline, args=(new_run_id, brief), daemon=True)
+    thread.start()
+
+    return {"status": "queued", "run_id": new_run_id, "rerun_of": run_id}
+
+
+class ApproveRequest(BaseModel):
+    selected_variants: list[int] = Field(
+        default=[],
+        description="Variant numbers selected for launch (e.g. [1,3]). Empty list = approve all.",
+    )
 
 
 class CRMAudienceRequest(BaseModel):
     min_stage: str = Field("site_visit", description="Minimum funnel stage to include: contacted, site_visit, negotiating, converted")
+    target_countries: list[str] = Field(["IN"], description="ISO-2 country codes for lookalike. Use ['AE','US','SG'] for NRI audiences.")
 
 
 @app.post("/upload-crm-audience")
@@ -1059,7 +1209,11 @@ def upload_crm_audience(req: CRMAudienceRequest):
         raise HTTPException(status_code=503, detail="META_AD_ACCOUNT_ID not set in .env.")
 
     from pikorua_adflow.tools.meta_audience_tool import upload_crm_lookalike
-    result = upload_crm_lookalike(ad_account_id=ad_account_id, min_stage=req.min_stage)
+    result = upload_crm_lookalike(
+        ad_account_id=ad_account_id,
+        min_stage=req.min_stage,
+        target_countries=req.target_countries,
+    )
 
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
@@ -1110,8 +1264,25 @@ def list_runs():
                     f'style="background:#2a4030;color:#f7f5f0;border:none;padding:4px 12px;'
                     f'font-size:0.78rem;cursor:pointer;border-radius:2px;">Approve</button>'
                 )
+        rerun_cell = ""
+        if run.get("status") == "failed":
+            rerun_cell = (
+                f'<button onclick="rerunCampaign(\'{run_id}\')" id="rerun-{run_id}" '
+                f'style="background:#5a4030;color:#f7f5f0;border:none;padding:4px 12px;'
+                f'font-size:0.78rem;cursor:pointer;border-radius:2px;">Re-run</button>'
+            )
+        status_val = run.get("status", "")
+        is_running = status_val.startswith("running_") or status_val == "queued"
+        delete_cell = "" if is_running else (
+            f'<button onclick="deleteRun(\'{run_id}\')" '
+            f'title="Delete run" '
+            f'style="background:none;border:none;color:#c0a898;font-size:1rem;'
+            f'cursor:pointer;padding:2px 6px;line-height:1;" '
+            f'onmouseover="this.style.color=\'#8a2020\'" '
+            f'onmouseout="this.style.color=\'#c0a898\'">✕</button>'
+        )
         run_rows += f"""
-        <tr>
+        <tr id="row-{run_id}">
           <td style="padding:10px 12px;font-family:monospace;font-size:0.82rem;">{run_id}</td>
           <td style="padding:10px 12px;font-size:0.85rem;">
             {brief.get('property_name','—')}<br>
@@ -1126,9 +1297,11 @@ def list_runs():
             {folder_html}
           </td>
           <td style="padding:10px 12px;">{approve_cell}</td>
+          <td style="padding:10px 12px;">{rerun_cell}</td>
           <td style="padding:10px 12px;">
             {'<a href="/results/' + run_id + '" style="font-size:0.8rem;">View →</a>' if run.get("status") == "complete" else ""}
           </td>
+          <td style="padding:10px 6px;text-align:center;">{delete_cell}</td>
         </tr>"""
 
     html = f"""<!DOCTYPE html>
@@ -1149,7 +1322,7 @@ def list_runs():
 </head><body>
   <div class="logo">Pikorua Realty</div>
   <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1.5rem;">
-    <h1 style="margin:0;">Campaign Runs <span style="font-size:0.85rem;color:#8a7d6e;">— this session only</span></h1>
+    <h1 style="margin:0;">Campaign Runs</h1>
     <div>
       <button id="crm-global" onclick="uploadCRMLookalike()"
         style="background:#1a3050;color:#f7f5f0;border:none;padding:5px 14px;font-size:0.78rem;cursor:pointer;border-radius:2px;">
@@ -1160,7 +1333,7 @@ def list_runs():
   </div>
   <table>
     <thead><tr>
-      <th>Run ID</th><th>Property</th><th>Status</th><th>Started</th><th>Scorecard / Output</th><th>Memory</th><th>Detail</th>
+      <th>Run ID</th><th>Property</th><th>Status</th><th>Started</th><th>Scorecard / Output</th><th>Memory</th><th>Re-run</th><th>Detail</th><th></th>
     </tr></thead>
     <tbody>{run_rows if run_rows else '<tr><td colspan="5" style="padding:16px;color:#8a7d6e;">No runs yet this session.</td></tr>'}</tbody>
   </table>
@@ -1168,6 +1341,30 @@ def list_runs():
     <a href="/portal">&#8592; Launch new campaign</a>
   </p>
   <script>
+    async function rerunCampaign(runId) {{
+      const btn = document.getElementById('rerun-' + runId);
+      btn.disabled = true;
+      btn.textContent = 'Queuing...';
+      try {{
+        const res = await fetch('/rerun/' + runId, {{method: 'POST'}});
+        const data = await res.json();
+        if (res.ok) {{
+          btn.replaceWith(Object.assign(document.createElement('span'), {{
+            textContent: `↪ Re-run ${{data.run_id}}`,
+            style: 'font-size:0.78rem;color:#5a4030;'
+          }}));
+          setTimeout(() => location.reload(), 800);
+        }} else {{
+          btn.disabled = false;
+          btn.textContent = 'Re-run';
+          alert('Error: ' + (data.detail || 'Unknown error'));
+        }}
+      }} catch(e) {{
+        btn.disabled = false;
+        btn.textContent = 'Re-run';
+        alert('Request failed: ' + e.message);
+      }}
+    }}
     async function approveRun(runId) {{
       const btn = document.getElementById('approve-' + runId);
       btn.disabled = true;
@@ -1188,6 +1385,21 @@ def list_runs():
       }} catch(e) {{
         btn.disabled = false;
         btn.textContent = 'Approve';
+        alert('Request failed: ' + e.message);
+      }}
+    }}
+    async function deleteRun(runId) {{
+      if (!confirm('Delete run ' + runId + '? This removes it from the list (files on disk are kept).')) return;
+      try {{
+        const res = await fetch('/run/' + runId, {{method: 'DELETE'}});
+        if (res.ok) {{
+          const row = document.getElementById('row-' + runId);
+          if (row) row.remove();
+        }} else {{
+          const data = await res.json();
+          alert('Error: ' + (data.detail || 'Unknown error'));
+        }}
+      }} catch(e) {{
         alert('Request failed: ' + e.message);
       }}
     }}

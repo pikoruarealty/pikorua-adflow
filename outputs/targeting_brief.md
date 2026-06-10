@@ -1,80 +1,71 @@
-# Targeting Brief: Pikorua Luxury Ahmedabad (₹10 Cr+ Segment)
+# Targeting Brief: Ultra-Luxury Apartment (Ahmedabad)
 
-This brief is designed for the Ad Ops team to execute high-intent lead generation campaigns for ultra-luxury residential assets.
+This brief is designed for the performance marketing team to deploy high-intent, HNI-focused campaigns for a ₹3–6 Cr luxury real estate project in Ahmedabad.
 
 ---
 
 ### 1. Geo-Targeting
-*Targeting strategy: Focus on established HNI residential hubs and the commercial corridors where the industrial wealth of Ahmedabad resides.*
+Focusing on the "Power Corridor" (SBR/Ambli/Bodakdev) and established elite residential pockets.
 
-| Locality Name | Pincode | Note |
+| Locality Name | Pincode | Status |
 | :--- | :--- | :--- |
-| **Sindhu Bhavan Road / Bodakdev** | **380054** | Primary luxury corridor |
-| **Vastrapur / Lake Vicinity** | **380052** | High-end lake-front influence |
-| **Ambawadi / Gulbai Tekra** | **380015** | Traditional Elite/Legacy wealth |
-| **Navrangpura / C.G. Road** | **380009** | Central Business/Elite residential |
-| **Science City Area** | **382421** | Emerging vertical luxury hub |
-| **Bopal** | **380058** | Premium apartment density |
-| **Shela** | **382424** | Luxury villa/high-rise catchments |
-| **Satellite** | **380015** | Established HNI cluster |
-| **Thaltej** | **380059** | Premium connectivity zone |
-| **Sardar Patel Ring Road (West)** | **380060** | Proximate growth corridor |
+| Bodakdev (Core) | 380054 | Verified |
+| Bodakdev (SBR Expansion) | 380059 | Verified |
+| Ambli | 380058 | Verified |
+| Vastrapur | 380015 | Verified |
+| Bopal (Premium Pockets) | 380058 | Verified |
+| Satellite | 380015 | Verified |
+| Navrangpura | 380009 | Verified |
+| Gulbai Tekra/University | 380009 | Verified |
+| Gandhinagar (Sector 7, 8, 9) | 382007 | Verified |
+| Thaltej | 380059 | Verified |
 
 ---
 
 ### 2. Demographics
-*   **Age:** 40–60 (Primary decision-makers/patriarchs).
-*   **Annual Household Income:** Top 10% (Targeting behaviour: "High-value goods shoppers" acts as a proxy for income in regions where household income is not tracked natively).
-*   **Gender:** All. *Reasoning: In Ahmedabad's HNI circles, the patriarch makes the financial commitment, but the spouse is the primary influencer regarding interior aesthetics, Vastu-compliance, and community status.*
-*   **NRI Segment:** **Yes.** Target: **UAE (Dubai/Abu Dhabi), USA (California/Texas/New Jersey), UK (London), Singapore.** *Focus on these hubs due to the strong industrial/trade link between Gujarat and these regions.*
+*   **Age Range:** 38–58 (Primary earners and family heads).
+*   **Household Income:** Top 5–10% of India (Meta HHI targeting unavailable; use proxy behaviors).
+*   **Gender:** All (The "Family Committee" decision-making model requires messaging to appeal to both the business-owner husband and the decision-influencing spouse).
+*   **NRI Segment:** **Yes.** Focus on: UAE (Dubai/Abu Dhabi), USA (California, New York, Texas), UK (London), and Singapore. Target via Meta "Living in" location settings and LinkedIn geographic filters.
 
 ---
 
 ### 3. Professional Targeting
-*Use these segments on LinkedIn and Meta (where available) to capture the industrialist persona.*
+*Targeting on LinkedIn and Meta/Google employer filters.*
 
-*   **Job Titles:** CEOs, Managing Directors (MD), CFOs, COOs, Partners (Law/CA firms), President, Director.
-*   **Industries:** Pharmaceuticals, Chemicals/Petrochemicals, Textiles, Solar Energy/Renewables, Real Estate Developers, FMCG, Logistics.
-*   **Seniority:** Owner, CXO, VP.
-*   **Platforms:** LinkedIn (Primary for professional validation), Meta (For lifestyle/aspirational targeting).
-
----
-
-### 4. Meta Ads Targeting Segments
-*Note: Under the "Housing" special ad category, age and gender targeting are locked to default settings (18+, All). Focus on Interests and Exclusions.*
-
-*   **Interests:**
-    *   *Real Estate:* Luxury real estate, Property investment, Gated community, Home design, Interior design.
-    *   *Lifestyle:* Golf (Ahmedabad Gymkhana/Karnavati Club proxies), Business class travel, Luxury goods, Premium automobiles (Audi, Mercedes-Benz, BMW, Porsche), Wealth management.
-*   **Behaviours:**
-    *   Frequent international travellers, Small business owners, Facebook Payments users (High-value), Luxury shoppers.
-*   **Critical Setup:** Implement a **Lead Form Qualifier**: "Are you looking for a property valued at ₹8 Cr+?" (Yes/No). This prevents wastage from lower-ticket searchers.
+*   **C-Suite & Founders:** CEO, MD, Founder, Promoter, Managing Partner.
+*   **Target Industries:** Pharmaceuticals (API/Formulations), Textiles/Garments, Chemicals, Real Estate Development, Diamond/Jewellery, FMCG.
+*   **Senior Professionals:** Partners at CA/Law Firms, Investment Bankers, Regional Directors of MNCs.
+*   **NRI Profiles:** IT Directors/VPs (US/UK), Finance/Banking Professionals (UAE/Singapore).
+*   **LinkedIn Strategy:** Use "Company Size: 200–500+" and "Seniority: CXO/VP/Owner" to filter high-net-worth professionals.
 
 ---
 
-### 5. Google Ads Targeting
-*Strategy: Intent-driven search campaign aimed at high-budget property seekers.*
+### 4. Meta Ads Targeting
+*Note: Due to the `Housing` Special Ad Category, precise age/gender/zip code targeting is restricted. We will use **Broad Targeting with high-intent Creative & Lead Form Qualification** to achieve the desired demographic.*
 
-**Target Keywords (Exact & Phrase Match):**
-1. "Luxury 4 BHK apartments Ahmedabad"
-2. "Buy premium flat Sindhu Bhavan Road"
-3. "Ultra luxury property Ahmedabad"
-4. "Ready to move luxury flats Ahmedabad"
-5. "Best residential projects Ahmedabad"
-6. "Investment in luxury real estate Ahmedabad"
-7. "Property near Narmada Canal Ahmedabad"
-8. "4 BHK villa for sale Ahmedabad"
-9. "High end apartments Ahmedabad"
-10. "Luxury gated community Ahmedabad"
+*   **Interests:** Luxury real estate, Investment property, Golf, Private banking, Wealth management, Business class travel, Luxury automobiles (Mercedes-Benz, BMW, Audi, Porsche, Jaguar).
+*   **Behaviours:** 
+    *   "Small business owners" (Primary)
+    *   "Frequent international travelers"
+    *   "Facebook payments users (high activity)"
+*   **Creative Strategy:** Use "Structural Integrity" and "Legacy/Investment" messaging to appeal to business owners.
+*   **Mandatory Lead Filter:** Add a custom question: *"What is your expected investment budget?"* — set the lowest option as *₹4 Cr+*. This forces manual self-qualification and suppresses lower-tier leads.
 
-**Negative Keywords:**
-*   "Cheap", "Under 1 crore", "Rental", "Affordable", "Low budget", "Studio flat".
+---
 
-**In-Market Audiences:**
-*   In-Market for Residential Properties (Luxury).
-*   In-Market for Real Estate Investing.
-*   In-Market for Interior Design & Home Decor.
-
-**Bidding Strategy:** 
-*   **Goal:** Lead Generation.
-*   **Recommended Strategy:** **Maximize Conversions with a Target CPA (tCPA).** (If conversion data is limited initially, start with *Maximize Conversions* to train the algorithm, then pivot to *Target CPA* once 20–30 high-quality leads are acquired).
+### 5. Google Ads
+*   **Keywords (Phrase & Exact):**
+    *   "Ultra-luxury apartments in Ahmedabad"
+    *   "4BHK luxury flats Sindhu Bhavan Road"
+    *   "Investment property Ahmedabad HNI"
+    *   "New luxury residential project Ambli"
+    *   "Premium ready-to-move flats Ahmedabad"
+    *   "High-end real estate Ahmedabad"
+    *   "Luxury apartments with amenities Ahmedabad"
+    *   "Top builders in Ahmedabad"
+    *   "Property for sale near Rajpath Club"
+    *   "Investment in Ahmedabad real estate"
+*   **Negative Keywords:** "Cheap", "Affordable", "Budget", "Under 1 crore", "Low-cost", "Rental", "Pg".
+*   **In-Market Audiences:** Luxury Real Estate, Real Estate Investment, HNI (Affluent segments), Frequent Business Travelers.
+*   **Bidding Strategy:** **Target CPA (tCPA)** for lead generation. Once sufficient conversion history exists (30+ leads/month), pivot to **Maximize Conversions** with a strict bid cap if the lead quality fluctuates.
