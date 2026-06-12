@@ -9,3 +9,9 @@ logs/*.log
 venv/
 .venv/
 CLIENT_REQUIREMENTS.md
+
+# Project context media — reference images and logos; not needed in repo
+project_context/ad_images_examples/
+project_context/*.jpeg
+project_context/*.jpg
+project_context/*.png

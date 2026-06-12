@@ -136,24 +136,23 @@ def _is_nri(row: dict, col: dict) -> bool:
 
 def analyse(crm_path: pathlib.Path = _CRM_PATH) -> str:
     """
-    Parse CRM export and return a markdown insights summary string.
-    Also writes to outputs/crm_insights.md.
-    Returns no-data string if file missing or unreadable.
+    Parse CRM leads (Supabase if configured, else CSV) and return a markdown
+    insights summary string. Also writes to outputs/crm_insights.md.
+    Returns a no-data string if no source is available.
     """
-    if not crm_path.exists():
-        return "No CRM data available — crm_export.csv not found in project_context/."
+    from pikorua_adflow.utils import crm_source
 
     try:
-        rows = _load_csv(crm_path)
+        rows, source_label = crm_source.fetch_rows(crm_path)
     except Exception as exc:
-        return f"CRM data could not be parsed ({exc}) — running without lead history."
+        return f"CRM data could not be loaded ({exc}) — running without lead history."
 
     if not rows:
-        return "CRM file found but contains no data rows."
+        return "No CRM data available — neither Supabase nor crm_export.csv returned leads."
 
     col = _resolve_columns(list(rows[0].keys()))
     insights = _build_insights(rows, col)
-    md = _format_markdown(insights, total=len(rows), col=col)
+    md = _format_markdown(insights, total=len(rows), col=col, source_label=source_label)
 
     _OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     _OUT_PATH.write_text(md, encoding="utf-8")
@@ -298,7 +297,7 @@ def _build_insights(rows: list[dict], col: dict) -> dict:
     }
 
 
-def _format_markdown(insights: dict, total: int, col: dict) -> str:
+def _format_markdown(insights: dict, total: int, col: dict, source_label: str = "CRM export") -> str:
     clean = insights["clean"]
     junk = insights["junk_count"]
     nri = insights["nri_count"]
@@ -306,7 +305,7 @@ def _format_markdown(insights: dict, total: int, col: dict) -> str:
 
     lines = [
         "# CRM Lead Intelligence",
-        f"*Based on {total} total leads from project_context/crm_export.csv*",
+        f"*Based on {total} total leads from {source_label}*",
         f"*Clean leads (excl. junk/test entries): {clean} | Junk filtered: {junk}*",
         "",
     ]

@@ -15,11 +15,14 @@ class ContentCrew:
         # Creative tasks need a stronger model than the mechanical default (flash-lite).
         # CREATIVE_MODEL is a free, higher-capability model (Groq qwen3-32b by default);
         # swap to an OpenRouter/frontier model in production via .env.
-        creative_model = os.getenv("CREATIVE_MODEL", "groq/qwen/qwen3-32b")
+        creative_model = os.getenv("CREATIVE_MODEL", "gemini/gemini-3.5-flash")
+        default_model = os.getenv("MODEL", "gemini/gemini-3.1-flash-lite")
         # Copywriter: high temperature → variety across the 5 variants.
-        self._creative_llm = LLM(model=creative_model, temperature=0.9)
+        self._creative_llm = LLM(model=creative_model, temperature=0.9, max_retries=5)
         # Evaluator: low temperature → consistent, repeatable scoring.
-        self._evaluator_llm = LLM(model=creative_model, temperature=0.3)
+        self._evaluator_llm = LLM(model=creative_model, temperature=0.3, max_retries=5)
+        # Mechanical agents (ad_ops, visual_prompter) use the default model.
+        self._default_llm = LLM(model=default_model, max_retries=5)
 
     def _with_brand_voice(self, base: str) -> str:
         if self._brand_voice:
@@ -36,7 +39,7 @@ class ContentCrew:
     def ad_ops_manager(self) -> Agent:
         cfg = dict(self.agents_config["ad_ops_manager"])
         cfg["backstory"] = self._with_brand_voice(cfg["backstory"])
-        return Agent(config=cfg, verbose=True)
+        return Agent(config=cfg, verbose=True, llm=self._default_llm)
 
     @agent
     def copy_evaluator(self) -> Agent:
@@ -46,7 +49,7 @@ class ContentCrew:
 
     @agent
     def visual_prompter(self) -> Agent:
-        return Agent(config=self.agents_config["visual_prompter"], verbose=True)
+        return Agent(config=self.agents_config["visual_prompter"], verbose=True, llm=self._default_llm)
 
     @task
     def write_meta_ads(self) -> Task:

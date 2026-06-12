@@ -1,4 +1,5 @@
-from crewai import Agent, Crew, Process, Task
+import os
+from crewai import Agent, Crew, LLM, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 
 from pikorua_adflow.tools.search_tool import search_tool
@@ -17,12 +18,15 @@ class AudienceCrew:
 
     def __init__(self, skip_trends: bool = False):
         self._skip_trends = skip_trends
+        default_model = os.getenv("MODEL", "gemini/gemini-3.1-flash-lite")
+        self._llm = LLM(model=default_model, max_retries=5)
 
     @agent
     def persona_researcher(self) -> Agent:
         return Agent(
             config=self.agents_config["persona_researcher"],
             verbose=True,
+            llm=self._llm,
         )
 
     @agent
@@ -31,6 +35,7 @@ class AudienceCrew:
             config=self.agents_config["competitor_scout"],
             tools=[search_tool],
             verbose=True,
+            llm=self._llm,
         )
 
     @agent
@@ -39,6 +44,7 @@ class AudienceCrew:
             config=self.agents_config["trend_analyst"],
             tools=[search_tool],
             verbose=True,
+            llm=self._llm,
         )
 
     @agent
@@ -47,6 +53,7 @@ class AudienceCrew:
             config=self.agents_config["targeting_researcher"],
             tools=[search_tool],
             verbose=True,
+            llm=self._llm,
         )
 
     @task

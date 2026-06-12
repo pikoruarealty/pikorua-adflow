@@ -1,8 +1,7 @@
 # Pikorua Realty — Brand Voice Document
 
-> **Status:** Updated June 2026. Based on live Meta ad creatives reviewed directly.
-> Sections marked [CONFIRM] still need Jitendra's sign-off before treating as final.
-> All other sections are grounded in observed ad copy and brand positioning.
+> **Status:** Updated June 2026. Confirmed by Jitendra. Based on live Meta ad creatives reviewed directly.
+> All sections are final and grounded in observed ad copy and brand positioning.
 
 ---
 
@@ -109,14 +108,13 @@ Use these or words in their register:
 - earned
 - relationship
 - advisory / advisor
-- bespoke [CONFIRM — may be overused in client's view]
 - architectural excellence
 - elevated
 - intentional
 
 ---
 
-## Register calibration — how an approved headline FEELS [CONFIRM with client]
+## Register calibration — how an approved headline FEELS
 
 > **These are not a menu. Do not reuse any line below verbatim or as a fill-in-the-blank
 > template.** They exist to show the *register* — the calm, one-complete-thought feel of a
@@ -140,7 +138,7 @@ Direction: calm, specific, one complete thought. Never a riddle, never a questio
 8. "India has been waiting for you to come home." — NRI homecoming, no financial hook needed
 
 **General Pikorua voice:**
-9. "Two paths. One address." — nods to Māori double-twist, relationship angle [CONFIRM — may be too abstract]
+9. "Two paths. One address." — nods to Māori double-twist, relationship angle
 10. "A home your portfolio won't forget." — investment frame, not transactional
 
 ---

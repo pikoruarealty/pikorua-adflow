@@ -117,5 +117,590 @@
     "rerun_of": "8f1f14b4",
     "copy_scorecard_summary": "5/5 variants passed. 0 flagged for rewrite.",
     "approved": true
+  },
+  "53ef8b78": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Prestige Heights 3BHK",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 30000,
+      "city": "Ahmedabad",
+      "locality": "Sindhu Bhavan Road",
+      "property_type": "3BHK luxury apartment",
+      "price_cr": "3.2",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, UK",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE"
+    },
+    "created_at": "2026-06-10T12:56:38.437493",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-10_18-30-10",
+    "copy_scorecard_summary": "**Note:** All variants avoid disqualifying errors (property name in ad copy, invented stats). No HNIs/NRIs will be embarrassed by these. Rewrite flagged variants to meet character limits and tighten specificity.",
+    "meta_ads": [
+      {
+        "dry_run": true,
+        "variant": 1,
+        "would_create": {
+          "image": null,
+          "campaign": {
+            "name": "Prestige Heights 3BHK \u2014 V1",
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "status": "PAUSED"
+          },
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "India (country-level)",
+            "age_min": 28,
+            "age_max": 65
+          },
+          "creative": {
+            "headline": "\"Bungalows vs. a quiet command\"",
+            "body": "\"Older wealth builds bungalows. Ahmedabad\u2019s newer elite command high-rises at \u20b93.2 Cr. Pikorua offers curated access to a life unburdened by maintenance.\"",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      },
+      {
+        "dry_run": true,
+        "variant": 2,
+        "would_create": {
+          "image": null,
+          "campaign": {
+            "name": "Prestige Heights 3BHK \u2014 V2",
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "status": "PAUSED"
+          },
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "India (country-level)",
+            "age_min": 28,
+            "age_max": 65
+          },
+          "creative": {
+            "headline": "\"Sindhu Bhavan Road. A name ascending.\" [**30 chars**]",
+            "body": "\"For decades, the city\u2019s most discerning have chosen this corridor. A 3BHK where legacy and modernity share a skyline. Speak with Jitendra directly.\" [**95 chars**]",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      },
+      {
+        "dry_run": true,
+        "variant": 3,
+        "would_create": {
+          "image": null,
+          "campaign": {
+            "name": "Prestige Heights 3BHK \u2014 V3",
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "status": "PAUSED"
+          },
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "India (country-level)",
+            "age_min": 28,
+            "age_max": 65
+          },
+          "creative": {
+            "headline": "\"3BHK. A private threshold to Thaltej.\"",
+            "body": "\"Steps from Ahmedabad\u2019s commercial spine, but removed from the noise. Pikorua invites you to view a home where privacy and prestige coexist.\"",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      },
+      {
+        "dry_run": true,
+        "variant": 4,
+        "would_create": {
+          "image": null,
+          "campaign": {
+            "name": "Prestige Heights 3BHK \u2014 V4",
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "status": "PAUSED"
+          },
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "India (country-level)",
+            "age_min": 28,
+            "age_max": 65
+          },
+          "creative": {
+            "headline": "\"Fewer than 10 units remain.\"",
+            "body": "\"A home designed for multigenerational living, not just square footage. On Sindhu Bhavan Road. Pikorua presents by invitation only.\"",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      },
+      {
+        "dry_run": true,
+        "variant": 5,
+        "would_create": {
+          "image": null,
+          "campaign": {
+            "name": "Prestige Heights 3BHK \u2014 V5",
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "status": "PAUSED"
+          },
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "India (country-level)",
+            "age_min": 28,
+            "age_max": 65
+          },
+          "creative": {
+            "headline": "\"India\u2019s pulse. A return, no pretense.\" [**30 chars**]",
+            "body": "\"For those who moved forward globally but keep Ahmedabad close. A 3BHK where the city\u2019s energy meets understated luxury. Let\u2019s align yours.\" [**100 chars**]",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      }
+    ]
+  },
+  "2edee47e": {
+    "status": "failed",
+    "brief": {
+      "property_name": "Sky Residences",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 30000,
+      "city": "Ahmedabad",
+      "locality": "Sindhu Bhavan Road",
+      "property_type": "4BHK apartment",
+      "price_cr": "3.2",
+      "standout_feature": "",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, US",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE"
+    },
+    "created_at": "2026-06-10T13:20:26.240321",
+    "review_folder": null,
+    "stage1_warning": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 10, model: gemini-2.5-flash-lite\\nPlease retry in 48.17774673s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerMinutePerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model': 'gemini-2.5-flash-lite'}, 'quotaValue': '10'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '48s'}]}}",
+    "error": "Missing required template variable 'Template variable 'daily_budget_inr' not found in inputs dictionary' in description"
+  },
+  "0546bd14": {
+    "status": "failed",
+    "brief": {
+      "property_name": "Sky Residences",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 30000,
+      "city": "Ahmedabad",
+      "locality": "Sindhu Bhavan Road",
+      "property_type": "4BHK apartment",
+      "price_cr": "3.2",
+      "standout_feature": "",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, US",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE"
+    },
+    "created_at": "2026-06-11T06:04:53.163087",
+    "review_folder": null,
+    "error": "Server restarted while run was in progress."
+  },
+  "f7dac135": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Sky Residences",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 30000,
+      "city": "Ahmedabad",
+      "locality": "Sindhu Bhavan Road",
+      "property_type": "4BHK apartment",
+      "price_cr": "3.2",
+      "standout_feature": "",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, US",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE"
+    },
+    "created_at": "2026-06-11T07:02:19.171406",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-11_12-50-10",
+    "copy_scorecard_summary": "4/5 variants passed. 1 flagged for rewrite: Variant 3.",
+    "approved": true,
+    "selected_variants": [
+      1,
+      2,
+      5
+    ]
+  },
+  "099bdff4": {
+    "status": "failed",
+    "brief": {
+      "property_name": "Ikebana Heights, 5 bhk",
+      "platform": "Meta Ads + Google Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 75000,
+      "city": "Ahmedabad",
+      "locality": "Sindhubhavan Road",
+      "property_type": "Pent House",
+      "price_cr": "13",
+      "standout_feature": "8500 sqft",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE"
+    },
+    "created_at": "2026-06-11T09:00:35.967564",
+    "review_folder": null,
+    "error": "Missing required template variable 'Template variable 'company_name' not found in inputs dictionary' in description"
+  },
+  "3b547613": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Ikebana Heights, 5 bhk",
+      "platform": "Meta Ads + Google Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 75000,
+      "city": "Ahmedabad",
+      "locality": "Sindhubhavan Road",
+      "property_type": "Pent House",
+      "price_cr": "13",
+      "standout_feature": "8500 sqft",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE"
+    },
+    "created_at": "2026-06-11T09:38:05.167678",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-11_15-27-57",
+    "rerun_of": "ed7dd130",
+    "copy_scorecard_summary": "**5/5 variants passed. 0 flagged for rewrite: Variants [None].**",
+    "approved": true,
+    "selected_variants": [
+      1,
+      2,
+      3
+    ],
+    "meta_ads": [
+      {
+        "dry_run": true,
+        "variant": 1,
+        "would_create": {
+          "image": null,
+          "campaign": {
+            "name": "Ikebana Heights, 5 bhk \u2014 V1",
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "status": "PAUSED"
+          },
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "India (country-level)",
+            "age_min": 28,
+            "age_max": 65
+          },
+          "creative": {
+            "headline": "An 8,500 sq ft legacy.",
+            "body": "A five-bedroom penthouse built for generations to gather on Sindhu Bhavan Road. Explore the plans with Pikorua.",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      },
+      {
+        "dry_run": true,
+        "variant": 2,
+        "would_create": {
+          "image": null,
+          "campaign": {
+            "name": "Ikebana Heights, 5 bhk \u2014 V2",
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "status": "PAUSED"
+          },
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "India (country-level)",
+            "age_min": 28,
+            "age_max": 65
+          },
+          "creative": {
+            "headline": "Sindhu Bhavan Road, elevated.",
+            "body": "Five bedrooms, sky-high views, and absolute privacy. Request details on this 13 Crore penthouse from Pikorua.",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      },
+      {
+        "dry_run": true,
+        "variant": 3,
+        "would_create": {
+          "image": null,
+          "campaign": {
+            "name": "Ikebana Heights, 5 bhk \u2014 V3",
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "status": "PAUSED"
+          },
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "India (country-level)",
+            "age_min": 28,
+            "age_max": 65
+          },
+          "creative": {
+            "headline": "Bungalow scale, sky privacy.",
+            "body": "This 13 Crore penthouse offers 8,500 square feet of single-level security. Enquire with Pikorua.",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      }
+    ]
+  },
+  "dfd04dc4": {
+    "status": "failed",
+    "brief": {
+      "property_name": "Swati Senor, 4-5 bhk",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 60000,
+      "city": "Ahmedabad",
+      "locality": "Thaltej",
+      "property_type": "Ultra luxury apartment",
+      "price_cr": "10",
+      "standout_feature": "infinity pool",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, USA, Singapore, Australia",
+      "campaign_duration_days": 35,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE",
+      "company_name": ""
+    },
+    "created_at": "2026-06-11T12:04:11.316642",
+    "review_folder": null,
+    "rerun_of": "73312be8",
+    "stage1_warning": "Error code: 402 - {'error': {'message': 'This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 4351. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account', 'code': 402, 'metadata': {'provider_name': None, 'previous_errors': [{'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 4351. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account'}]}}, 'user_id': 'user_3ElTkAKtZcnmAyabH0lJHEPvvcN'}",
+    "error": "Error code: 402 - {'error': {'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 174. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account', 'code': 402, 'metadata': {'provider_name': None, 'previous_errors': [{'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 174. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account'}, {'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 174. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account'}, {'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 174. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account'}, {'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 174. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account'}, {'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 174. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account'}]}}, 'user_id': 'user_3ElTkAKtZcnmAyabH0lJHEPvvcN'}"
+  },
+  "23062641": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Swati Senor, 4-5 bhk",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 60000,
+      "city": "Ahmedabad",
+      "locality": "Thaltej",
+      "property_type": "Ultra luxury apartment",
+      "price_cr": "10",
+      "standout_feature": "infinity pool",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, USA, Singapore, Australia",
+      "campaign_duration_days": 35,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE",
+      "company_name": ""
+    },
+    "created_at": "2026-06-11T12:10:46.740420",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-11_17-44-51",
+    "rerun_of": "dfd04dc4",
+    "copy_scorecard_summary": "**5/5 variants passed. 0 flagged for rewrite.**"
+  },
+  "92c5c7cc": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Ikebana Heights, 5 bhk",
+      "platform": "Meta Ads + Google Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 75000,
+      "city": "Ahmedabad",
+      "locality": "Sindhubhavan Road",
+      "property_type": "Pent House",
+      "price_cr": "13",
+      "standout_feature": "8500 sqft",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE"
+    },
+    "created_at": "2026-06-11T12:17:12.888236",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-11_17-51-30",
+    "rerun_of": "099bdff4",
+    "copy_scorecard_summary": "**4/5 variants passed. 1 flagged for rewrite: Variant 5.**",
+    "approved": true,
+    "selected_variants": [
+      1,
+      2,
+      3
+    ]
+  },
+  "4fc4288c": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Anamika Heights, 4 and 5 bhk, 3300, 4200 and 6100 sqft",
+      "platform": "Meta Ads + Google Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 60000,
+      "city": "Ahmedabad",
+      "locality": "off sindhubhavan road",
+      "property_type": "Luxury Apartment",
+      "price_cr": "3-6",
+      "standout_feature": "",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, USA, Singapore, Australia",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE",
+      "company_name": ""
+    },
+    "created_at": "2026-06-11T13:16:22.147463",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-11_18-51-00",
+    "copy_scorecard_summary": "**4/5 variants passed. 1 flagged for rewrite: Variant 3.**",
+    "approved": true,
+    "selected_variants": [
+      1,
+      5
+    ],
+    "meta_ads": [],
+    "meta_deploy_errors": [
+      {
+        "variant": 1,
+        "error": "POST act_3667032946771559/adsets failed [400]: {\"error\":{\"message\":\"Invalid parameter\",\"type\":\"OAuthException\",\"code\":100,\"error_subcode\":1870227,\"is_transient\":false,\"error_user_title\":\"Advantage audience flag required\",\"error_user_msg\":\"To create your ad set, you need to enable or disable the Advantage audience feature. This can be done by setting the advantage_audience flag to either 1 or 0 within the targeting_automation field in the targeting spec.\",\"fbtrace_id\":\"ArS6z8RgUWTxVDYW7NXKtPj\"}}"
+      },
+      {
+        "variant": 2,
+        "error": "POST act_3667032946771559/adsets failed [400]: {\"error\":{\"message\":\"Invalid parameter\",\"type\":\"OAuthException\",\"code\":100,\"error_subcode\":1870227,\"is_transient\":false,\"error_user_title\":\"Advantage audience flag required\",\"error_user_msg\":\"To create your ad set, you need to enable or disable the Advantage audience feature. This can be done by setting the advantage_audience flag to either 1 or 0 within the targeting_automation field in the targeting spec.\",\"fbtrace_id\":\"A9fHroDuZZIIkgVnCTNDED_\"}}"
+      },
+      {
+        "variant": 5,
+        "error": "POST act_3667032946771559/adsets failed [400]: {\"error\":{\"message\":\"Invalid parameter\",\"type\":\"OAuthException\",\"code\":100,\"error_subcode\":1870227,\"is_transient\":false,\"error_user_title\":\"Advantage audience flag required\",\"error_user_msg\":\"To create your ad set, you need to enable or disable the Advantage audience feature. This can be done by setting the advantage_audience flag to either 1 or 0 within the targeting_automation field in the targeting spec.\",\"fbtrace_id\":\"AgiB-PqqTUsNu6j2KwHjsa2\"}}"
+      }
+    ]
+  },
+  "3a30be33": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Eminents",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 50000,
+      "city": "Ahmedabad",
+      "locality": "Thaltej",
+      "property_type": "4-5 bhk",
+      "price_cr": "3-6.5",
+      "standout_feature": "Club Class Amenities",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, USA, Singapore, Australia",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE",
+      "company_name": ""
+    },
+    "created_at": "2026-06-12T11:11:30.918220+00:00",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-12_16-45-44",
+    "copy_scorecard_summary": "**3/5 variants passed. 2 flagged for rewrite: Variants 2 and 4.**",
+    "approved": true,
+    "selected_variants": [
+      2,
+      3
+    ],
+    "meta_ads": [
+      {
+        "variant": 2,
+        "campaign_id": "6999191966897",
+        "adset_id": "6999192451297",
+        "creative_id": "1044779354603850",
+        "ad_id": "6999193343897",
+        "image_hash": "40acff9d0f8c2ab60c7568218e26e5a4",
+        "dry_run": false
+      },
+      {
+        "variant": 3,
+        "campaign_id": "6999194011697",
+        "adset_id": "6999194318897",
+        "creative_id": "975855868670350",
+        "ad_id": "6999194650497",
+        "image_hash": "21b58365a98d955b970dc158712ed6d7",
+        "dry_run": false
+      }
+    ]
   }
 }

@@ -1,5 +1,5 @@
 # CRM Lead Intelligence
-*Based on 123 total leads from project_context/crm_export.csv*
+*Based on 123 total leads from CSV (crm_export.csv, 123 leads)*
 *Clean leads (excl. junk/test entries): 113 | Junk filtered: 10*
 
 ## Budget Distribution (clean leads)

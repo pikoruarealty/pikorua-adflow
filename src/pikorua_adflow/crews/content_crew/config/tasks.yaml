@@ -8,7 +8,9 @@ write_meta_ads:
     - Headline: 30 characters or fewer. A complete, confident thought — not a riddle,
       not a question, not generic filler ("Luxury Living", "Premium Homes").
     - Body: 125 characters or fewer. Maximum 2 sentences, each doing one job — do not
-      stack clauses. End with a soft invitation or Pikorua's name, never a hard sell.
+      stack clauses. End with a soft invitation, never a hard sell. Whether you may
+      name the firm is governed entirely by the COMPANY NAME RULE below — never default
+      to naming a brand.
     - No two variants may open with the same word or share a sentence shape.
 
     STEP 1 — FIND 5 HOOKS IN THE BRIEF, NOT IN A CATEGORY LIST.
@@ -19,15 +21,37 @@ write_meta_ads:
     equally well for a different property in the same city, discard it and find a better one.
     The test: read only the headline. Would you click? If not, rewrite.
 
+    THIN-BRIEF FALLBACK — if the property has no standout feature.
+    Some briefs list no architectural feature, no view, no club, no signature amenity.
+    When that happens, do NOT invent one and do NOT retreat to safe luxury clichés
+    ("Where luxury meets lifestyle", "Elevated living"). Build specificity from the
+    material you DO have: the exact address/micro-locality, the price bracket and what
+    that bracket signals about the buyer, the configuration (e.g. 4BHK), the property
+    type, and the persona's stated motivation (return to India, portfolio, family,
+    discretion). A precise address + a precisely-named buyer motivation is specific.
+    An invented feature is a HARD FAIL. Specificity must come from real facts only —
+    never from a fabricated inventory count, floor number, scarcity figure, or amenity.
+
     STEP 2 — WRITE ONE VARIANT PER HOOK.
     Each variant pursues one of those 5 hooks. Use a different creative move per variant:
-    - Number as statement: a raw measurement opens, then the second line reframes it as
-      a position, not a quantity. (A watch brand turns "300 metres" into status.)
+    - Number as statement: ONE number states a fact; the lines that follow reframe it as
+      a life position, not a count. (A watch brand: "300 metres." → "The depth most men
+      never reach." The number is the door; the reframe is the room.)
+      ANTI-EXAMPLE — do NOT do this: "Four bedrooms. Five bedrooms." That is a spec list,
+      not a number statement. Listing two configurations is interchangeable with any floor
+      plan brochure. Choose ONE number, then make the reader feel what it means.
     - Place as identity: name only the location and stop. Trust the address to carry weight.
       (A hotel says only "Park Avenue" and lets the reader supply the prestige.)
     - Contrast: name what the category does, then name what this property does instead.
       The gap between them is the headline. (A car brand: faster vs. quieter.)
     - Fragment sequence: short, rhythmic pieces accumulate to a single decision.
+      HARD LIMIT on this technique: never close a fragment sequence with a
+      single-word possessive or declarative claim — "Yours.", "Home.", "Claimed.",
+      "Done.", "Earned." These feel like a hard sell wearing the costume of restraint.
+      End on a property truth, not a claim of ownership.
+      SECOND HARD LIMIT: a fragment sequence is NOT a spec list. "Four bedrooms.
+      Five bedrooms. Sindhu Bhavan Road." lists facts — it does not accumulate to a
+      decision. Each fragment must advance the thought, not add another data point.
     - Reversal: deny the literal thing the buyer thinks they're buying, offer something larger.
     - Restraint as scarcity: imply rarity through what you do NOT say.
     If two variants share the same sentence shape, rewrite the weaker one.
@@ -51,9 +75,33 @@ write_meta_ads:
     exist for register calibration only — they are not a phrase bank. Every line must have
     been written for THIS specific property.
 
-    TWO HARD RULES (evaluator auto-fails these):
+    COMPANY NAME RULE — the company name for this run is: "{company_name}"
+    - If that value is NON-BLANK: you may end one variant's body with a soft invitation
+      that names it once — e.g. "Talk to {company_name}." Keep it understated, one mention
+      maximum across the whole body.
+    - If that value is BLANK (empty quotes above): the copy is unbranded. The words
+      "Pikorua"/"PIKORUA" — and ANY other company, firm, or brand name — MUST NOT appear
+      anywhere in any variant: not as a sign-off, not mid-sentence, not as a label. Your
+      backstory describes HOW the firm writes (its voice), NOT a name you are licensed to
+      print. End bodies on the property thought or a soft invitation with no brand at all.
+    Never invent a company name.
+
+    BRAND NAME CAPS: only relevant when the value above is non-blank AND equals "Pikorua"
+    (any casing) — then always write it "PIKORUA" (all capitals). If the value is blank,
+    this rule does not apply because no brand name appears at all.
+
+    FINAL CHECK before output: re-read all 5 bodies. If "{company_name}" is blank and the
+    word "Pikorua" (or any brand name) appears anywhere, delete it and re-end that line.
+
+    THREE HARD RULES (evaluator auto-fails these):
+    - Never invent a scarcity or urgency claim. "Fewer than 10 units remain",
+      "Only 3 homes left", "Just 12 residences", "Final 5 floors", "Limited units" —
+      these are fabricated inventory counts and are a HARD FAIL regardless of how
+      plausible they sound. Scarcity is implied through what you do NOT say, never
+      through a number you invented. This rule applies before you write a single word.
     - Never name the property/project. Reference by address, size, type only.
-    - Never invent a number — no unit counts, floor counts, percentages, occupancy rates.
+    - Never invent any other number — no floor counts, percentages, occupancy rates,
+      appreciation figures, or price-per-sqft unless present in {product}.
 
     Buyer context: {target_audience}
     Persona insight: {persona}
@@ -83,15 +131,26 @@ write_google_ads:
       (an address, size, or price tier). A headline that only repeats what the buyer
       typed into search ("Premium Homes Ahmedabad") wastes the slot — it is interchangeable
       with every competitor.
-    - One headline should name Pikorua, to build brand recall.
+    - If {company_name} is provided (non-blank): one headline should name {company_name}
+      to build brand recall. If {company_name} is blank: use that slot for an additional
+      property detail or benefit instead — do not invent a brand name.
 
     DESCRIPTION RULES:
     - Each description does a different job — do not repeat the headline or each other.
-    - Description 1: what makes this property, or Pikorua's access to it, specific.
+    - Description 1: what makes this property specific — a detail only an insider would know
+      (configuration, exact price tier, locality). If {company_name} is non-blank, you may
+      reference {company_name}'s access or curation; if blank, describe the property advantage
+      without naming any company.
     - Description 2: a soft invitation, not a command (no "Book Now" / "Get Quote").
 
+    BRAND NAME CAPS: When {company_name} is "Pikorua" (or any casing), always write it as
+    "PIKORUA" (all capitals) in output copy. Never "Pikorua" or "pikorua".
+
+    NEVER NAME THE PROPERTY: Do not use the developer's project name or title in any copy
+    line. Reference by address, configuration, price, or type only.
+
     The test for every line: could a competitor paste it under their own listing unchanged?
-    If yes, it is too generic — add the detail only Pikorua has.
+    If yes, it is too generic — add the detail only an insider to this property would have.
 
     NEVER INVENT: Only use details present in {product}, {city}, {price_cr}.
     No fabricated statistics, appreciation figures, or inventory claims.
@@ -103,28 +162,33 @@ write_google_ads:
     {persona}
   expected_output: >
     Formatted as:
-      Headline 1: ... [X chars]
-      Headline 2: ... [X chars]
-      Headline 3: ... [X chars]
-      Description 1: ... [X chars]
-      Description 2: ... [X chars]
-    With character counts noted after each line in brackets.
-    Each line serves a distinct purpose — noted in one word after the count (e.g. [28 chars — address]).
+      Headline 1: ...
+      Headline 2: ...
+      Headline 3: ...
+      Description 1: ...
+      Description 2: ...
+    Plain text only — no markdown bold or asterisks. No character counts in brackets.
   agent: campaign_copywriter
 
 write_whatsapp_script:
   description: >
     Write a WhatsApp Business message template for {product}.
 
-    Context: Pikorua is a luxury real estate consultancy. Jitendra is sending this
-    to a client he already knows. Pikorua has sourced this property and is giving
-    the client early access before it gets wider attention.
+    Context: A luxury real estate consultancy is sending this to a client they already
+    know. The consultancy has sourced this property and is giving the client early
+    access before it gets wider attention.
+    Company name for this run: {company_name} (use this if non-blank; if blank, refer
+    to the consultancy as "we" and sign off with the sender's name only — do not
+    invent or assume a company name).
 
     The message must follow this structure:
     1. Greeting (use [Name] as placeholder — warm, not "Dear Sir/Madam")
     2. Hook (one sentence about the specific property — only use details from {product};
-       must be intriguing and specific, not generic — make the recipient stop scrolling)
-    3. Offer statement (Pikorua has arranged access; frame it as a privilege, not a pitch)
+       must be intriguing and specific, not generic — make the recipient stop scrolling.
+       NEVER use the property's project name — reference by city/locality, configuration,
+       price tier, or type only)
+    3. Offer statement (if {company_name} is non-blank: "{company_name} has arranged access";
+       if blank: "we have arranged access" — frame it as a privilege, not a pitch)
     4. CTA (soft, relationship-driven — "Would you like a private walkthrough?")
     5. Opt-out line (required: "Reply STOP to unsubscribe")
 
@@ -142,10 +206,16 @@ write_whatsapp_script:
     - WRONG feel: "I am reaching out because a property that aligns with your vision for
       the next chapter has come to our attention." (a form letter wearing a tie)
     - RIGHT feel: Jitendra texts a contact he respects — one specific true detail about
-      the property (from {product}), a signal that Pikorua found it for them, and a natural
-      reason to reply. Warm, brief, no invented facts.
+      the property (from {product}), a signal that the sender found it for them, and a
+      natural reason to reply. Warm, brief, no invented facts.
     Build your own message from {product}. Do not lift an example address or phrasing —
     if it isn't in {product}, it doesn't go in the message.
+
+    NEVER NAME THE PROPERTY: Never use the project name or developer's title in the message.
+    Reference by city/locality, configuration, price, or type only — never by project name.
+
+    BRAND NAME CAPS: When {company_name} is "Pikorua" (or any casing), always write it as
+    "PIKORUA" (all capitals) in the message. Never "Pikorua" or "pikorua".
 
     NEVER INVENT: Do not add details not present in {product} — no invented
     floor numbers, inventory counts, percentage returns, or market statistics.
@@ -158,25 +228,30 @@ write_whatsapp_script:
   expected_output: >
     The complete WhatsApp message with each section labelled:
     Greeting / Hook / Offer / CTA / Opt-out.
-    Total word count noted at the end. No invented facts.
+    Plain text only — no markdown bold or asterisks. No character or word counts. No invented facts.
   agent: campaign_copywriter
 
 write_email:
   description: >
     Write a single email for {product} targeting {target_audience}.
 
-    Context: Pikorua is a luxury real estate consultancy. Jitendra is writing to a
-    prospect or known client. The email should feel like a note from an advisor who
-    thought of this person specifically when he heard about the property — not a
-    blast email.
+    Context: A luxury real estate consultancy is writing to a prospect or known client.
+    The email should feel like a note from an advisor who thought of this person
+    specifically when he heard about the property — not a blast email.
+    Company name for this run: {company_name} (use this if non-blank when signing off
+    or referencing the firm; if blank, sign off with only the sender's name — do not
+    invent or assume a company name).
 
     Requirements:
     - Subject line: 50 characters or fewer — specific, creates curiosity, no clickbait
     - Preview text: 90 characters or fewer — extends the subject's intrigue, not a repeat
     - Body: 100–130 words. Three short paragraphs:
         1. One sentence that earns attention — specific to {product}, not generic;
-           open with something the reader hasn't heard before
-        2. Two sentences: what the property is and why Pikorua is the right guide to it
+           open with something the reader hasn't heard before. NEVER use the project name
+           — reference by address, configuration, price tier, or type only.
+        2. Two sentences: what the property is and why the firm is uniquely positioned to
+           guide the reader to it. If {company_name} is non-blank, name them; if blank,
+           use "we" or "our team" — do not invent or assume a company name.
         3. One soft CTA — an invitation to connect, not a form fill or "Book Now"
     - Sign off as Jitendra
     - Tone: a trusted advisor's note, not a newsletter; reads like it was written for
@@ -200,6 +275,12 @@ write_email:
     - RIGHT: lead with one true, specific thing about THIS property (from {product}) that
       the reader hasn't heard, then make the case for 20 minutes of their attention.
 
+    NEVER NAME THE PROPERTY: Never use the project name or developer's title anywhere in
+    the email. Reference by address, configuration, price tier, or property type only.
+
+    BRAND NAME CAPS: When {company_name} is "Pikorua" (or any casing), always write it as
+    "PIKORUA" (all capitals) in the email. Never "Pikorua" or "pikorua".
+
     NEVER INVENT: Only use property details present in {product}.
     No fabricated statistics, appreciation percentages, or inventory claims.
 
@@ -210,11 +291,11 @@ write_email:
     {trends}
   expected_output: >
     Formatted as:
-      Subject: ... [X chars]
-      Preview: ... [X chars]
+      Subject: ...
+      Preview: ...
       ---
       [Email body — 3 short paragraphs, signed Jitendra]
-    Word count noted at the end.
+    Plain text only — no markdown bold or asterisks. No character or word counts appended.
   agent: campaign_copywriter
 
 evaluate_copy:
@@ -223,12 +304,15 @@ evaluate_copy:
     Score each variant on four dimensions, each out of 10:
 
     1. BRAND VOICE COMPLIANCE
-       Does it sound like Pikorua — calm, specific, understated luxury?
+       Does it sound like the brand voice — calm, specific, understated luxury?
        Or does it sound generic, loud, or template-driven?
        Your BRAND VOICE REFERENCE (loaded into your backstory) contains the full banned
        words list, approved headline examples, and rejected examples. Use it as your
        primary scoring rubric for this dimension — do not score from memory alone.
        Penalise any word or pattern listed in the "Words and phrases we NEVER use" section.
+       Penalise headlines that are pure spec lists — "Four bedrooms. Five bedrooms." reads
+       like a floor-plan brochure, not an ad. A real number-statement technique uses ONE
+       number and then reframes it; a real fragment sequence builds to a decision, not a list.
 
     2. PLATFORM FIT
        Is the headline within 30 characters? Body within 125 characters?
@@ -246,10 +330,23 @@ evaluate_copy:
        Penalise: "Trusted by celebrities", "Book Now", "Get Quote", "Limited availability".
 
     AUTOMATIC FLAG — regardless of scores, immediately flag any variant that:
-    - Contains the property name (e.g. "Anamika Heights", "ABC Heights") — Pikorua never
-      names the developer's project in paid ads; it routes enquiries through itself.
-    - Contains an invented number or statistic not present in {product} — unit counts,
-      floor counts, appreciation percentages, occupancy figures, etc.
+    - Contains the property name (e.g. "Anamika Heights", "ABC Heights") — the
+      consultancy never names the developer's project in paid ads.
+    - Contains an invented scarcity or urgency claim — "Fewer than 10 units remain",
+      "Only 3 homes left", "Just 12 residences", "Final 5 floors", "Limited units",
+      "Available for a limited time". These are HARD FAILS. Fabricated counts are not
+      "scarcity signals" — they are falsehoods. If the number does not appear verbatim
+      in {product}, it is invented. Flag immediately, do not score the rest.
+    - Contains any other invented number not in {product} — floor counts, appreciation
+      percentages, occupancy figures, price-per-sqft, market statistics.
+    - Uses the wrong property type. {product} specifies the property type (e.g. apartment,
+      villa, penthouse, commercial office). If the copy calls it a different type
+      (e.g. "bungalow" when the brief says "apartment") that is a factual error and
+      a HARD FAIL — misrepresenting the property type destroys buyer trust.
+    - Names a company/brand when this run is unbranded. The company name for this run is:
+      "{company_name}". If that value is BLANK and a variant contains "Pikorua"/"PIKORUA"
+      or any other company/firm/brand name, that is a HARD FAIL — the run is unbranded and
+      no brand name may appear. (If the value is non-blank, naming it is allowed.)
     These are disqualifying errors. Flag them with "HARD FAIL" so the rewriter knows
     the issue is structural, not stylistic.
 
@@ -262,6 +359,7 @@ evaluate_copy:
 
     Context for scoring:
     Product: {product}
+    Property type (must match copy exactly): {property_type}
     City: {city}
     Persona: {persona}
   expected_output: >
@@ -337,17 +435,14 @@ format_for_api:
     valid Meta Ads API JSON payload for {product}.
 
     Required fields:
-    - Campaign: name, objective (LEAD_GENERATION), status (PAUSED),
-      special_ad_categories: ["HOUSING"]
-    - Ad set: name, daily_budget, targeting block structured as follows:
+    - Campaign: name, objective (OUTCOME_LEADS), status (PAUSED),
+      special_ad_categories: [] (empty — HOUSING restriction is US/EU only, India is exempt)
+    - Ad set: name, daily_budget ({daily_budget_inr} INR), targeting block structured as follows:
         - geo_locations: use pincodes and cities from the targeting brief below
-          (HOUSING policy restricts radius targeting — use geo_locations with cities array)
         - age_min / age_max: from demographic targeting in the brief
-        - Note: special_ad_category HOUSING prohibits targeting by gender, zip radius,
-          or detailed demographic filters — use only city/region and interest targeting
         - interests: use the Meta interest segments listed in the targeting brief
         - behaviours: use the behavioural segments from the targeting brief
-    - Ad creative: headline, body, call_to_action
+    - Ad creative: headline, body, call_to_action (use "{cta}" for every ad — do not invent other CTA values)
 
     Targeting brief (use this to populate geo, demographic, and interest fields):
     {targeting}
@@ -369,48 +464,132 @@ format_for_api:
 
 generate_banner_prompts:
   description: >
-    Generate 3 Ideogram 3 image prompts for text-in-image ad banners for {product}.
+    Generate 3 Ideogram 3 image prompts for {product} that will serve as
+    scroll-stopping Meta ad banners. These must read like editorial luxury
+    photography — not AI renders. Before writing each prompt ask yourself:
+    "Could this pass for a spread in Architectural Digest India?" If not, revise.
 
-    Each prompt must:
-    - Specify the visual scene anchored in {property_type}, {city}, and {locality}
-    - Specify a colour palette that suits a luxury Indian real estate brand (avoid white-on-white
-      or generic blues — think warm stone, teak, deep navy, champagne, or terracotta)
-    - Include a text overlay instruction with the headline to be embedded in the image.
-      Use the final headline for THAT variant (from rewrite_flagged if the variant was rewritten,
-      otherwise from write_meta_ads): Prompt 1 uses Variant 1's headline, Prompt 2 uses
-      Variant 2's headline, Prompt 3 uses Variant 3's headline.
-    - Specify typography style: elegant serif (e.g. Garamond, Bodoni) at a specific
-      placement (e.g. "bottom-left third", "centred with breathing room")
-    - Specify lighting: golden hour, overcast diffuse, dusk, or specific time of day
-    - Specify shot type: wide establishing, detail close-up, aerial, interior vignette
-    - End with: "Photorealistic. 1200x628px. High detail. No watermarks."
+    ── PHOTOREALISM TECHNIQUES (required in every prompt) ──────────────────
+    - Camera + lens: always specify a camera body and lens.
+      Good choices: "Sony A7R V, 35mm f/1.8, ISO 400", "Hasselblad H6D, 45mm
+      f/2.8", "Leica SL2, 50mm f/2 Summicron". This single instruction is the
+      most powerful signal to Ideogram to produce photography, not a render.
+    - Depth of field: specify aperture; make something in foreground or
+      background softly out of focus — perfect edge-to-edge sharpness is the
+      primary tell of a CGI render.
+    - Light quality (not just type): "warm 2700K tungsten seeping through
+      ivory gauze curtains", "raking late-afternoon sun at 12 degrees casting
+      long diagonal shadow bands across honed limestone floor", "overcast
+      diffuse grey-white sky through full-height glazing, no harsh shadows".
+    - Material micro-detail: name the exact finish and a physical property of
+      the material. Examples: "Calacatta marble slab with natural charcoal
+      veining", "brushed brass pull handle showing the faintest finger-trace
+      patina", "engineered oak floor in herringbone, 4mm gap between boards",
+      "polished concrete counter with aggregate visible at edge".
+    - Natural imperfection: add one of — "slight lens flare at the window
+      frame edge", "fine dust particles suspended in a slant of afternoon
+      light", "soft chromatic aberration at extreme corners", "barely visible
+      natural grain in shadows". Real photographs have these; CGI renders do
+      not.
+    - Asymmetry: never describe a centred, symmetrical composition. Specify
+      an off-axis camera angle: "camera positioned 30% left of centre",
+      "slight upward tilt of 5 degrees from hip height", "looking toward the
+      north-facing window at a 40-degree angle to the wall".
 
-    NEVER use generic descriptors alone: not just "luxury", "modern", "beautiful".
-    Every adjective must be paired with a specific visual reference.
+    ── SHOT TYPE HIERARCHY (choose in this order) ──────────────────────────
+    1. INTERIOR POV LOOKING OUTWARD — camera stands inside the luxury space;
+       floor-to-ceiling glazing fills the right third of the frame; beyond
+       the glass a green {city} neighbourhood or hazy amber sky. Interior
+       foreground is sharp (a side table, a chair arm, a plant), background
+       drops to soft bokeh. The viewer is already inside — they feel it.
+    2. HUMAN LIFESTYLE MOMENT — a figure from behind only (never face-forward,
+       never posed, never dead-centre). Scale: figure occupies no more than
+       20% of frame height. Examples: a woman seated on a deep balcony
+       parapet wall holding a mug, both hands visible; a couple at a wide
+       dining table in evening light, heads slightly turned toward each other;
+       a man standing at full-height glass, hands in pockets, city beyond.
+       This is the strongest aspiration signal — Pikorua's reference images
+       confirm it. Prioritise this for at least one of the three prompts.
+    3. INTERIOR DETAIL HERO — a single architectural element that signals
+       exceptional quality without naming the project: a double-height
+       living room with a bespoke multi-arm pendant, a kitchen with full-slab
+       stone backsplash in book-matched marble, a master bathroom with a
+       free-standing soaking tub in a honed marble alcove, a private study
+       with floor-to-ceiling teak bookshelves.
+
+    NEVER USE — these produce AI-obvious, interchangeable images:
+    - Full CGI building exterior with perfect blue sky and centred facade
+    - Swimming pools unless {product} explicitly mentions one
+    - Tropical palm trees (not authentic to Ahmedabad)
+    - Perfect bilateral symmetry in any shot
+    - Chandeliers as the hero subject (looks like a showroom, not a home)
+
+    ── TEXT OVERLAY DESIGN ─────────────────────────────────────────────────
+    The headline and info must feel part of the image, not stamped on top.
+    Use ONE of these two approaches — specify which:
+
+    A. TOP GRADIENT BAR: a semi-transparent dark overlay occupying the top
+       22% of the frame. Headline text in Cormorant Garamond or Didot-style
+       serif, white, sentence case (not ALL CAPS), 72–88pt equivalent, wide
+       letter-spacing (+0.08em). Below the headline: one smaller line in
+       regular weight — locality name + price (e.g. "Sindhu Bhavan Road  ·
+       ₹13 Cr") at 32pt. Nothing else.
+
+    B. LOWER-LEFT DARK PANEL: a dark-tinted rectangle in the lower-left
+       corner (occupying roughly 30% width × 18% height of frame). Headline
+       in the same elegant white serif. One info line below in lighter weight.
+
+    Colour palette for text zones: #1a1a1a at 72% opacity for the overlay,
+    white (#FAFAFA) for text, warm gold (#C9A84C) only as an accent dash or
+    thin rule — never as a headline colour. No yellow, no black bars, no
+    exclamation marks anywhere.
+
+    COMPANY NAME IN IMAGE:
+    If {company_name} is non-blank: add the brand text "{company_name}" at
+    the bottom-right corner — same Cormorant Garamond serif, white, 20pt
+    equivalent, 55% opacity. If {company_name} is "Pikorua" (any casing),
+    render it as "PIKORUA". If {company_name} is blank: no brand name at all.
+
+    ── COLOUR PALETTE ──────────────────────────────────────────────────────
+    Warm cream, teak, champagne, warm stone, muted sage green. Accent: brushed
+    gold sparingly. Avoid: pure white, cold blues, neon tones, bright red.
+
+    ── WHAT KILLS LUXURY ADS (never produce these) ─────────────────────────
+    - Solid black horizontal bars with bold yellow/gold text = cheap builder ad
+    - "POSSESSION SOON !!" energy anywhere in the image
+    - Perfect CGI blue-sky renders with tropical pools
+    - More than 3 text elements in the frame
+    - Generic stock-photo interiors with identical cream sofas and no character
+
+    ── PER-PROMPT CHECKLIST ────────────────────────────────────────────────
+    Each prompt must contain all of: shot type + camera + lens + aperture +
+    lighting quality + colour temperature + 3 material micro-details + one
+    imperfection detail + text overlay spec (approach + content) + brand mark
+    instruction. End every prompt with: "Editorial luxury real estate
+    photography, India. 1200x628px. Photorealistic — not rendered. Subtle
+    natural lens imperfections. No watermarks."
 
     Property: {product}
-    City: {city}
-    Locality: {locality}
-    Property type: {property_type}
+    City: {city}  |  Locality: {locality}  |  Type: {property_type}
     Price: ₹{price_cr} Cr
+    Headline sources: Prompt 1 → Variant 1 final headline, Prompt 2 → Variant 2,
+    Prompt 3 → Variant 3 (use rewritten version where available).
   expected_output: >
-    Three numbered Ideogram prompts. Each is labelled with its variant number and angle,
-    and embeds that variant's headline as the text overlay:
+    Three numbered Ideogram prompts, each labelled with variant and angle:
 
-      Prompt 1 — Variant 1 — [angle from write_meta_ads]:
+      Prompt 1 — Variant 1 — [angle]:
       Headline overlay: "[Variant 1 final headline]"
-      "[Full Ideogram prompt]"
+      "[Full Ideogram prompt — 90–150 words, specific in every detail]"
 
-      Prompt 2 — Variant 2 — [angle from write_meta_ads]:
+      Prompt 2 — Variant 2 — [angle]:
       Headline overlay: "[Variant 2 final headline]"
       "[Full Ideogram prompt]"
 
-      Prompt 3 — Variant 3 — [angle from write_meta_ads]:
+      Prompt 3 — Variant 3 — [angle]:
       Headline overlay: "[Variant 3 final headline]"
       "[Full Ideogram prompt]"
 
-    Each prompt is 60–120 words. No invented facts about the property beyond what's
-    in {product}. Saved to outputs/visual_brief.md.
+    No invented property facts. Saved to outputs/visual_brief.md.
   agent: visual_prompter
   output_file: outputs/visual_brief.md
   context:
@@ -419,40 +598,76 @@ generate_banner_prompts:
 
 generate_render_prompts:
   description: >
-    Generate 2 Flux 2 Pro prompts for photorealistic architectural renders of {product}.
+    Generate 2 Flux 2 Pro prompts for text-free lifestyle images of {product}.
+    These are used for retargeting and brand awareness creatives. Apply the same
+    photorealism discipline as generate_banner_prompts: camera spec, depth of
+    field, material micro-detail, natural imperfection, asymmetric composition.
 
-    Prompt 1 — Exterior render:
-    - Show the building facade or entrance from a compelling angle
-    - Specify architectural style consistent with {property_type} and {locality}
-    - Specify time of day and lighting (evening golden hour preferred for luxury)
-    - Include landscaping details appropriate to Ahmedabad's climate (not tropical palms)
-    - Specify camera angle: street-level, slight elevation, or courtyard view
+    Prompt 4 — ARRIVAL / APPROACH SHOT (not a building facade render):
+    Do NOT generate a symmetrical building exterior — CGI facades look identical
+    across every property ad in India and signal "AI-generated" instantly.
+    Instead, show the ARRIVAL EXPERIENCE:
+    - The landscaped driveway entrance or motor court at golden hour, with
+      mature Ashoka or Champa trees lining a stone-paved path
+    - OR: the lobby forecourt seen from outside — glass canopy, stone cladding
+      at the entry threshold, a valet stand in soft background focus
+    - OR: the private lift lobby interior — marble floor, brushed brass call
+      button, a tall vase of white Anthuriums on a plinth
+    - Camera: Leica Q3, 28mm f/2.0, slight upward tilt from waist height,
+      natural vignette, film grain at ISO 800
+    - Lighting: warm 4500K golden hour, long shadow bands across the paving,
+      light catching suspended dust or pollen in the air
+    - One human cue in far background (soft focus): a figure approaching the
+      entrance, or a parked dark sedan with open door, driver in distance
+    - Material specificity: name the stone type at the entrance (Kota stone,
+      Jaisalmer sandstone, grey granite), specify the plant species
+    - Natural imperfection: "light flare at the edge of the glass canopy",
+      "slight motion blur on a falling leaf"
+    - End with: "Architectural lifestyle photography, India. 1200x628px. 4K.
+      No text overlays. Photorealistic — not rendered. Natural film grain.
+      No watermarks."
 
-    Prompt 2 — Interior/lifestyle render:
-    - Show the primary living space or signature feature of a {property_type}
-    - Specify materials: flooring (marble, engineered wood), walls, ceiling height cues
-    - Specify furniture style (understated contemporary, not ornate)
-    - Include natural light source: floor-to-ceiling windows, diffuse afternoon light
-    - One human element is allowed (a figure in the background, not centre-frame)
+    Prompt 5 — INTERIOR SIGNATURE MOMENT:
+    - The primary living space of a {property_type}, showing depth: a sharp
+      foreground element (side table with a single object — orchid, open book,
+      water glass), mid-ground furniture, and a soft-bokeh city or sky view
+      through full-height glazing in the background
+    - Asymmetric angle: camera positioned off-centre (30–40% from the left
+      wall), looking diagonally into the room — never straight at the sofa
+    - Lived-in detail (pick one): a folded newspaper on an armrest, a half-
+      full water glass on the side table, an orchid on the kitchen counter,
+      a reading lamp switched on in daylight — signals a home, not a showroom
+    - Materials: specify all of — flooring type and finish (honed Calacatta
+      marble, wide-plank engineered walnut), one wall treatment (smoked oak
+      panels, smooth plaster in warm greige), ceiling detail (exposed concrete
+      soffit, cove-lit dropped ceiling)
+    - Furniture: understated contemporary — no ornate carved legs, no
+      chandelier as hero; a low-profile sectional in natural linen, a slim
+      dining table in raw walnut, a Noguchi-style coffee table
+    - Lighting: late-afternoon raking light at 15 degrees through west-facing
+      full-height glass, casting long diagonal light bands across the floor;
+      a single floor lamp creating a warm pool in the reading corner
+    - Camera: Sony A7R V, 24mm f/2.8, focus at 2.5m, background drops to
+      natural bokeh; ISO 640, slight warm colour grade (+200K)
+    - Natural imperfection: "dust suspended in the diagonal light band",
+      "soft lens breathing at extreme edge of the 24mm"
+    - End with: "Interior lifestyle photography, India. 1200x628px. 4K.
+      No text overlays. Photorealistic — not rendered. Natural grain. No
+      watermarks."
 
-    Both prompts must:
-    - Be specific enough to produce a render indistinguishable from a real photograph
-    - Avoid clichés: no infinity pools unless {product} mentions one, no Bollywood-style opulence
-    - End with: "Architectural photography. 4K. Sharp focus. No text overlays."
-
-    Property: {product}
-    City: {city}, India
-    Property type: {property_type}
+    Property: {product}  |  City: {city}, India  |  Type: {property_type}
+    Locality: {locality}
+    Only use features present in {product} — do not invent amenities.
   expected_output: >
     Two Flux 2 Pro prompts appended to outputs/visual_brief.md:
 
-      Prompt 4 — Exterior render:
-      "[Full Flux prompt]"
+      Prompt 4 — Arrival/Approach:
+      "[Full Flux prompt — 100–160 words, specific in every detail]"
 
-      Prompt 5 — Interior/lifestyle render:
-      "[Full Flux prompt]"
+      Prompt 5 — Interior Signature Moment:
+      "[Full Flux prompt — 100–160 words]"
 
-    Each prompt is 60–100 words. Photorealistic and specific — no generic luxury tropes.
+    No invented property facts. No generic luxury tropes.
   agent: visual_prompter
   output_file: outputs/render_prompts.md
   context:
