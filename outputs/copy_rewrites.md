@@ -1,45 +1,29 @@
-# Copy Rewrites — Pikorua Realty
-## Property: Eminents, 4–5 BHK, Thaltej, Ahmedabad | ₹3–6.5 Cr | Club Class Amenities
+# Rewrite Report — Variant 2
+
+## Diagnosis before writing
+
+Variant 2 failed on two counts:
+
+1. **Platform Fit (body 132 chars, limit 125):** The closing line — "It is a decision about how the rest of your life should feel." — is the emotional payload of the entire variant. At 132 characters, Meta truncates the body mid-sentence, destroying precisely the line that justified the headline. The fix is not to compress the idea into a fragment — it is to find a shorter construction that carries the same emotional weight.
+
+2. **Specificity (6/10):** The property's single most differentiating fact — 8,500 sq ft — appears nowhere in this variant. The headline and body together could describe any 5 BHK penthouse on any road in any Indian city. That is a fundamental specificity failure for a ₹13 Cr property where scale is the lead differentiator.
+
+**Original creative technique:** Reversal — deny the literal thing (no floor above), offer something larger (a life decision).
+
+**Why the original failed:** The reversal technique was correctly chosen, but the execution let the body drift from the property into generic philosophical territory. "How the rest of your life should feel" is a line that belongs in a luxury watch campaign. It earns nothing specific to this penthouse, this address, or this scale.
+
+**Different technique applied for rewrite:** **Contrast** — state what this property is not (a purchase), then anchor the contrast in a real, specific fact (8,500 sq ft, Sindhu Bhavan Road) so the abstraction has ground beneath it. The reframe must be earned by the specificity, not floating above it.
 
 ---
 
 ## Variant 2 — REWRITE [attempt 1]
 
-**Original:**
-Headline: From ₹3 Cr, Thaltej. *(21 chars)*
-Body: A 4-5 BHK with club class amenities — the kind of address that tends to look different in three years. *(102 chars)*
+**Headline:** No floor above. No compromise. [30 chars]
 
-**Diagnosis:** The headline opened on a low-anchor price — precisely the "starting from [X]" construction the brand voice prohibits. A ₹6.5 Cr buyer reads "From ₹3 Cr" as a developer portal, not a curated advisory. The body's financial instinct (implied appreciation) was the right register but the time horizon ("three years") was ungrounded. Technique applied: **restraint as scarcity** — name what the market cannot easily replicate, let the financial signal surface through the metro context (a real, sourced fact from the brief) without inventing a number.
+**Body:** This is not a purchase. It is 8,500 sq ft on Sindhu Bhavan Road — and the decision that belongs at the top. [109 chars]
 
-**Headline:** Thaltej, before the metro. [26 chars]
-**Body:** A 4-5 BHK with club class amenities on an address Ahmedabad has already decided it wants. Enquire privately. [109 chars]
-
-**Fix applied:** Replaced the low-anchor price opener with a factual market signal — metro connectivity approval is sourced in the persona context, so "before the metro" is grounded, not invented. The financial implication is present for the literate buyer without a price anchor or fabricated time horizon. "An address Ahmedabad has already decided it wants" carries the appreciation signal through city-level demand language rather than a developer claim.
+**Fix applied:** Restored the 8,500 sq ft and Sindhu Bhavan Road specifics (resolves the 6/10 specificity score); trimmed body from 132 to 109 characters (resolves the platform fit failure); replaced the drifting philosophical close ("how the rest of your life should feel") with a grounded contrast — the abstraction ("not a purchase") is now anchored immediately by a real fact, so the reframe is earned rather than asserted. The reversal technique is retained in the headline; the body switches to contrast to give the abstraction something solid to stand on.
 
 ---
 
-## Variant 4 — REWRITE [attempt 1]
-
-**Original:**
-Headline: Five bedrooms. Thaltej. *(23 chars)*
-Body: The club amenities are inside. The address is the kind Ahmedabad families hold for a generation. *(97 chars)*
-
-**Diagnosis:** The headline was a two-noun spec list — bedroom count plus location, with no reframe between them. The brand voice reference is explicit: this reads as a floor-plan brochure. The body, however, is the strongest legacy line in the batch and must be preserved. Technique applied: **place as identity with a legacy reframe** — make Thaltej the subject of a statement about what it means to hold this address, not a coordinate appended to a bedroom count. The headline should earn the body, not undercut it.
-
-**Headline:** Thaltej holds its own. [22 chars]
-**Body:** The club amenities are inside. The address is the kind Ahmedabad families hold for a generation. [97 chars]
-
-**Fix applied:** Replaced the spec-list headline ("Five bedrooms. Thaltej.") with a single complete statement about the address itself. "Thaltej holds its own." works on two registers simultaneously — the micro-market's enduring value, and the quiet confidence of a family that has chosen it. It earns the body's legacy line rather than contradicting it with a transactional opener. Body is preserved verbatim as instructed; it was the strongest element in the original.
-
----
-
-## Final Rewrite Summary
-
-| Variant | Status | Headline | Body |
-|---|---|---|---|
-| V2 — REWRITE 1 | ✅ Submitted | Thaltej, before the metro. [26 chars] | A 4-5 BHK with club class amenities on an address Ahmedabad has already decided it wants. Enquire privately. [109 chars] |
-| V4 — REWRITE 1 | ✅ Submitted | Thaltej holds its own. [22 chars] | The club amenities are inside. The address is the kind Ahmedabad families hold for a generation. [97 chars] |
-
----
-
-*Saved to outputs/copy_rewrites.md*
+*Saved to: outputs/copy_rewrites.md*

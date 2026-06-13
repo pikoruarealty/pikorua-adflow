@@ -9,6 +9,8 @@ Then open: http://localhost:8000  (redirects to portal form)
 Or POST directly to: http://localhost:8000/launch-campaign
 """
 
+import os
+import re
 import sys
 import uuid
 import threading
@@ -564,6 +566,75 @@ def brand_css():
 
 _LOGO_DIR = Path(__file__).parent.parent.parent.parent / "project_context" / "ad_images_examples"
 
+# Uploaded brand logo — composited onto generated images bottom-right.
+# Stored as-is (usually PNG with transparency). Shared across all runs.
+_BRAND_LOGO_PATH = Path("outputs") / "brand_logo.png"
+
+
+@app.post("/brand-logo")
+async def upload_brand_logo(request: Request):
+    """Store a brand logo (PNG/JPG/WebP) to be composited onto generated images."""
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=400, detail="No image data received.")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Logo too large (max 8 MB).")
+    if not (data[:4] == b"\x89PNG" or data[:3] == b"\xff\xd8\xff"
+            or data[:4] in (b"RIFF", b"WEBP") or data[:4] == b"\x89PNG"):
+        raise HTTPException(status_code=400, detail="File must be PNG, JPG, or WebP.")
+    _BRAND_LOGO_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # Convert to RGBA PNG so we always have an alpha channel for compositing.
+    from PIL import Image as _PILImage
+    import io
+    img = _PILImage.open(io.BytesIO(data)).convert("RGBA")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    _BRAND_LOGO_PATH.write_bytes(buf.getvalue())
+    return {"ok": True, "width": img.width, "height": img.height}
+
+
+@app.get("/brand-logo")
+def get_brand_logo():
+    """Return the stored brand logo, or 404 if none uploaded yet."""
+    if not _BRAND_LOGO_PATH.exists():
+        raise HTTPException(status_code=404, detail="No brand logo uploaded yet.")
+    return Response(content=_BRAND_LOGO_PATH.read_bytes(), media_type="image/png")
+
+
+@app.delete("/brand-logo")
+def delete_brand_logo():
+    """Remove the brand logo (images generated after this will have no logo)."""
+    if _BRAND_LOGO_PATH.exists():
+        _BRAND_LOGO_PATH.unlink()
+    return {"ok": True}
+
+
+@app.post("/apply-logo/{run_id}")
+def apply_logo_to_run(run_id: str):
+    """Composite the brand logo onto all images already on disk for this run."""
+    if not _BRAND_LOGO_PATH.exists():
+        raise HTTPException(status_code=400, detail="No brand logo uploaded yet.")
+    run = _require_complete(run_id)
+    images_dir = Path(run["review_folder"]) / "images"
+    if not images_dir.exists():
+        return {"ok": True, "count": 0}
+    count = 0
+    for img_path in sorted(images_dir.glob("image_*.png")):
+        try:
+            # Back up the clean version if not already done so user can revert.
+            backup_dir = images_dir / ".logo_backup"
+            backup_dir.mkdir(exist_ok=True)
+            backup = backup_dir / img_path.name
+            if not backup.exists():
+                import shutil as _shutil
+                _shutil.copy2(img_path, backup)
+            _composite_logo(img_path, _BRAND_LOGO_PATH)
+            count += 1
+        except Exception:
+            pass
+    return {"ok": True, "count": count}
+
+
 @app.get("/logo/light")
 def logo_light():
     p = _LOGO_DIR / "without Sparkle Logo.png"
@@ -676,12 +747,15 @@ def get_results(run_id: str):
     if already_selected:
         default_selected = set(already_selected)
     else:
-        pass_variants = [v for v in variants if v.get("status") == "PASS"]
-        pass_variants.sort(
+        # Candidates = clean passes PLUS variants that were flagged but auto-rewritten
+        # (their displayed copy is the corrected version, so they're launch-eligible too).
+        candidates = [v for v in variants
+                      if v.get("status") == "PASS" or (v.get("status") == "FLAG" and v.get("rewrite"))]
+        candidates.sort(
             key=lambda v: sum(v.get("scores", {}).values()) / max(len(v.get("scores", {})), 1),
             reverse=True,
         )
-        default_selected = {v["variant"] for v in pass_variants[:3]}
+        default_selected = {v["variant"] for v in candidates[:3]}
 
     # Effective Meta copy folds in user edits, rewrites, added & deleted versions.
     eff_meta = _effective_meta(review_folder)
@@ -702,18 +776,29 @@ def get_results(run_id: str):
         status = info.get("status")            # PASS / FLAG / None (added)
         scores = info.get("scores", {})
         flag_reason = info.get("flag_reason", "")
+        # A flagged variant that was auto-rewritten now shows the corrected copy.
+        # Present it as "Revised" (amber), not a bare red FLAG, so good copy that
+        # was already fixed doesn't look rejected.
+        revised = status == "FLAG" and bool(info.get("rewrite"))
         headline = emc.get("headline", "")
         body = emc.get("body", "")
 
-        if status == "FLAG":
+        if revised:
+            status_colour, status_bg = "var(--gold-deep)", "var(--gold-soft)"
+            card_border = "rgba(176,141,87,0.30)"
+            status_label = "REVISED"
+        elif status == "FLAG":
             status_colour, status_bg = "var(--danger)", "var(--danger-soft)"
             card_border = "rgba(178,59,46,0.22)"
+            status_label = "FLAG"
         elif status == "PASS":
             status_colour, status_bg = "var(--ok)", "var(--ok-soft)"
             card_border = "rgba(46,87,64,0.22)"
+            status_label = "PASS"
         else:                                  # user-added — no AI score
             status_colour, status_bg = "var(--ink-soft)", "var(--paper-warm)"
             card_border = "var(--line)"
+            status_label = None
 
         score_bars = ""
         avg_score = None
@@ -737,8 +822,8 @@ def get_results(run_id: str):
 
         avg_html = f'<span style="font-size:1.1rem;font-weight:bold;color:var(--ink);">{avg_score}/10</span>' if avg_score else ""
         status_badge = (f'<span style="background:{status_bg};color:{status_colour};padding:2px 10px;'
-                        f'border-radius:2px;font-size:0.72rem;letter-spacing:0.06em;">{status}</span>'
-                        if status else
+                        f'border-radius:2px;font-size:0.72rem;letter-spacing:0.06em;">{status_label}</span>'
+                        if status_label else
                         '<span style="background:var(--paper-warm);color:var(--ink-soft);padding:2px 10px;'
                         'border-radius:2px;font-size:0.72rem;letter-spacing:0.06em;">CUSTOM</span>')
         edited_badge = (f'<span id="editbadge-{num}" style="display:{"inline-block" if edited else "none"};'
@@ -746,7 +831,12 @@ def get_results(run_id: str):
                         'font-size:0.66rem;letter-spacing:0.05em;margin-left:6px;">EDITED</span>')
 
         flag_html = ""
-        if status == "FLAG":
+        if revised:
+            flag_html = (f'<div style="background:var(--gold-soft);border-left:3px solid var(--gold-deep);'
+                         f'padding:8px 12px;margin:10px 0;font-size:0.8rem;color:var(--gold-deep);">'
+                         f'<strong>Auto-revised</strong> &mdash; originally flagged ({_esc(flag_reason)}). '
+                         f'The copy shown below is the corrected version.</div>')
+        elif status == "FLAG":
             flag_html = f'<div style="background:var(--danger-soft);border-left:3px solid var(--danger);padding:8px 12px;margin:10px 0;font-size:0.8rem;color:var(--danger);"><strong>FLAG</strong> &mdash; {_esc(flag_reason)}</div>'
 
         # ── VIEW mode (default) — shows current effective copy ──
@@ -780,18 +870,52 @@ def get_results(run_id: str):
               </div>
             </div>"""
 
-        # ── Image control (upload / revert your own image) ──
-        has_img = (review_folder / "images" / f"image_{num}.png").exists()
-        img_preview = (f'<img id="thumb-{num}" src="/image/{run_id}/image_{num}.png" '
-                       f'style="width:100%;max-width:220px;border-radius:6px;border:1px solid var(--line);display:block;margin-bottom:8px;">'
-                       if has_img else
-                       f'<div id="thumb-{num}" style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">No image yet — generate one in the Images tab, or upload your own.</div>')
+        # ── Image control (pick any generated image, upload, or revert) ──
+        # Resolved order: user's explicit assignment → image_{num}.png → nothing
+        assigned_img_num = edits_overlay.get("meta", {}).get(str(num), {}).get("image_num")
+        if assigned_img_num is None and (images_dir / f"image_{num}.png").exists():
+            assigned_img_num = num
+        has_img = assigned_img_num is not None
+        img_preview = (
+            f'<img id="thumb-{num}" src="/image/{run_id}/image_{assigned_img_num}.png" '
+            f'style="width:100%;max-width:240px;border-radius:6px;border:1px solid var(--line);'
+            f'display:block;margin-bottom:8px;cursor:zoom-in;" '
+            f'onclick="openLightbox(\'/image/{run_id}/image_{assigned_img_num}.png\', \'Version {num}\')">'
+            if has_img else
+            f'<div id="thumb-{num}" style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">'
+            f'No image — generate in the Images tab or upload your own.</div>'
+        )
+        # Dropdown listing all generated images so any can be assigned to this variant
+        img_options = '<option value="">— None / upload your own —</option>'
+        for fname in existing_images:
+            try:
+                img_n = int(fname[len("image_"):-len(".png")])
+            except ValueError:
+                continue
+            sel = "selected" if img_n == assigned_img_num else ""
+            label = f"Image {img_n}"
+            if img_n <= len(image_prompts):
+                ptitle = image_prompts[img_n - 1][0][:35]
+                label = f"Image {img_n} — {ptitle}"
+            img_options += f'<option value="{img_n}" {sel}>{_esc(label)}</option>'
+        img_select_html = (
+            f'<div style="margin-bottom:10px;">'
+            f'<label style="font-size:0.78rem;color:var(--ink-soft);display:block;margin-bottom:4px;">Use generated image</label>'
+            f'<select id="imgsel-{num}" onchange="assignImage(\'{run_id}\',{num},this.value)" '
+            f'style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;'
+            f'background:var(--paper);color:var(--ink);font-size:0.8rem;max-width:280px;">'
+            f'{img_options}</select></div>'
+            if existing_images else
+            '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">'
+            'No generated images yet — go to the Images tab to create some.</div>'
+        )
         image_block = f"""
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">
               <div class="eyebrow" style="margin-bottom:8px;">Image</div>
               {img_preview}
+              {img_select_html}
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <label class="mini-btn" style="cursor:pointer;">Upload your own
+                <label class="mini-btn" style="cursor:pointer;display:inline-flex;align-items:center;">Upload your own
                   <input type="file" accept="image/*" style="display:none;"
                     onchange="uploadImage('{run_id}',{num},this)">
                 </label>
@@ -953,6 +1077,8 @@ def get_results(run_id: str):
     {f'<span class="dot">·</span><strong style="color:var(--green-mid);">{_esc(scorecard_summary)}</strong>' if scorecard_summary else ""}
   </div>
 
+  {_build_logo_section_html(run_id)}
+
   <div class="tab-bar">
     <button class="tab active" onclick="showTab('meta')">Facebook &amp; Instagram ads</button>
     <button class="tab" onclick="showTab('other')">Google · WhatsApp · Email</button>
@@ -980,7 +1106,7 @@ def get_results(run_id: str):
     <p class="section-sub">
       We create a set of ad images for you — social banners with text, plus clean lifestyle shots.
     </p>
-    {_build_visuals_html(run_id, image_prompts, existing_images, ideogram_key, replicate_token, together_key)}
+    {_build_visuals_html(run_id, image_prompts, existing_images, ideogram_key, replicate_token, together_key, images_dir)}
   </div>
 
   <div id="tab-audience" class="panel">
@@ -1155,6 +1281,35 @@ def get_results(run_id: str):
       }} else if (status) {{ status.style.color = 'var(--danger)'; status.textContent = 'Revert failed.'; }}
     }}
 
+    // ── Image assignment — pick any generated image for a variant ──
+    async function assignImage(runId, variantNum, imageNumStr) {{
+      const imageNum = imageNumStr ? parseInt(imageNumStr) : null;
+      const status = document.getElementById('imgstatus-' + variantNum);
+      try {{
+        const res = await fetch('/assign-image/' + runId + '/' + variantNum, {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify({{image_num: imageNum}})
+        }});
+        if (!res.ok) throw new Error(await res.text());
+        // Swap the thumbnail immediately without a page reload
+        const thumbEl = document.getElementById('thumb-' + variantNum);
+        if (thumbEl) {{
+          if (imageNum) {{
+            thumbEl.outerHTML = `<img id="thumb-${{variantNum}}" src="/image/${{runId}}/image_${{imageNum}}.png"
+              style="width:100%;max-width:240px;border-radius:6px;border:1px solid var(--line);
+              display:block;margin-bottom:8px;cursor:zoom-in;"
+              onclick="openLightbox('/image/${{runId}}/image_${{imageNum}}.png','Version ${{variantNum}}')">`;
+          }} else {{
+            thumbEl.outerHTML = `<div id="thumb-${{variantNum}}" style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">No image assigned.</div>`;
+          }}
+        }}
+        if (status) {{ status.style.color = 'var(--green)'; status.textContent = imageNum ? 'Image assigned.' : 'Cleared.'; setTimeout(()=>{{if(status)status.textContent='';}},2000); }}
+      }} catch(e) {{
+        if (status) {{ status.style.color = 'var(--danger)'; status.textContent = 'Error: ' + e.message; }}
+      }}
+    }}
+
     // ── Image upload / revert per version ──
     async function uploadImage(runId, num, input) {{
       const file = input.files[0];
@@ -1229,12 +1384,12 @@ def get_results(run_id: str):
           const apiErrors = data.errors || [];
           const dryCount = deployed.filter(r => r.dry_run).length;
           const okCount  = deployed.filter(r => !r.dry_run).length;
-          // Surface API errors — they were previously silently swallowed
+          // Nothing published — reload so the detailed, plain-English error
+          // banner (with "you can fix this" / "saved to developer log" tags) shows.
           if (deployed.length === 0 && apiErrors.length > 0) {{
-            btn.disabled = false;
-            btn.textContent = 'Preview & publish';
-            const errText = apiErrors.map(e => 'V' + e.variant + ': ' + e.error).join(' | ');
-            if (status) {{ status.style.color = 'var(--danger)'; status.textContent = 'Meta API error — ' + errText; }}
+            if (status) {{ status.style.color = 'var(--danger)'; status.textContent = 'Couldn\\'t publish — see details below.'; }}
+            sessionStorage.setItem('activeTab', 'deploy');
+            setTimeout(() => window.location.reload(), 700);
             return;
           }}
           const label = dryCount > 0
@@ -1254,14 +1409,174 @@ def get_results(run_id: str):
         if (status) {{ status.style.color = 'var(--danger)'; status.textContent = 'Request failed: ' + e.message; }}
       }}
     }}
+    async function uploadBrandLogo(input) {{
+      const file = input.files[0];
+      if (!file) return;
+      const status = document.getElementById('logo-status') || document.getElementById('gen-status');
+      if (status) status.textContent = 'Uploading…';
+      try {{
+        const res = await fetch('/brand-logo', {{
+          method: 'POST',
+          headers: {{'Content-Type': file.type || 'image/png'}},
+          body: file
+        }});
+        const data = await res.json();
+        if (res.ok) {{
+          window.location.reload();
+        }} else {{
+          if (status) status.textContent = 'Upload failed: ' + (data.detail || 'unknown error');
+        }}
+      }} catch(e) {{
+        if (status) status.textContent = 'Upload failed: ' + e.message;
+      }}
+    }}
+
+    async function removeBrandLogo() {{
+      const status = document.getElementById('logo-status') || document.getElementById('gen-status');
+      try {{
+        await fetch('/brand-logo', {{method: 'DELETE'}});
+        window.location.reload();
+      }} catch(e) {{
+        if (status) status.textContent = 'Remove failed: ' + e.message;
+      }}
+    }}
+
+    async function applyLogoToImages(runId) {{
+      const status = document.getElementById('logo-status');
+      if (status) status.textContent = 'Applying logo…';
+      try {{
+        const res = await fetch('/apply-logo/' + runId, {{method: 'POST'}});
+        const data = await res.json();
+        if (res.ok) {{
+          if (status) status.textContent = 'Logo applied to ' + data.count + ' image(s). Reloading…';
+          setTimeout(() => window.location.reload(), 1200);
+        }} else {{
+          if (status) status.textContent = 'Failed: ' + (data.detail || 'unknown error');
+        }}
+      }} catch(e) {{
+        if (status) status.textContent = 'Failed: ' + e.message;
+      }}
+    }}
+
+    async function revertLogo(runId, promptNum) {{
+      const status = document.getElementById('gen-status');
+      status.textContent = 'Reverting…';
+      try {{
+        const res = await fetch('/revert-logo/' + runId + '/' + promptNum, {{method: 'POST'}});
+        const data = await res.json();
+        if (res.ok) {{
+          sessionStorage.setItem('activeTab', 'visuals');
+          window.location.reload();
+        }} else {{
+          status.textContent = 'Revert failed: ' + (data.detail || 'unknown error');
+        }}
+      }} catch(e) {{
+        status.textContent = 'Revert failed: ' + e.message;
+      }}
+    }}
+
+    function imgSelectAll(on) {{
+      document.querySelectorAll('.img-row .img-sel').forEach(cb => {{
+        cb.checked = on;
+        imgCheckChanged(cb);
+      }});
+    }}
+
+    function imgCheckChanged(cb) {{
+      const row = cb.closest('.img-row');
+      const hasImg = row.dataset.hasImg === '1';
+      const replaceRow = row.querySelector('.img-replace-row');
+      if (replaceRow) {{
+        replaceRow.style.display = cb.checked ? 'flex' : 'none';
+      }}
+    }}
+
+    function revertPrompt(btn) {{
+      const ta = btn.closest('details').querySelector('.img-prompt-edit');
+      ta.value = ta.dataset.original;
+      btn.closest('details').querySelector('.img-edited-badge').style.display = 'none';
+    }}
+
+    function openLightbox(src, caption) {{
+      let box = document.getElementById('img-lightbox');
+      if (!box) {{
+        box = document.createElement('div');
+        box.id = 'img-lightbox';
+        box.onclick = closeLightbox;
+        box.style.cssText = 'position:fixed;inset:0;background:rgba(20,18,16,0.88);z-index:9999;'
+          + 'display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out;padding:24px;';
+        box.innerHTML = '<img id="img-lightbox-img" style="max-width:92vw;max-height:82vh;'
+          + 'border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.5);">'
+          + '<div id="img-lightbox-cap" style="color:#f2ece4;font-size:0.9rem;margin-top:14px;text-align:center;"></div>'
+          + '<a id="img-lightbox-open" target="_blank" rel="noopener" onclick="event.stopPropagation();" '
+          + 'style="color:#d9c4a3;font-size:0.82rem;margin-top:8px;text-decoration:underline;cursor:pointer;">'
+          + 'Open in new tab</a>';
+        document.body.appendChild(box);
+      }}
+      document.getElementById('img-lightbox-img').src = src;
+      document.getElementById('img-lightbox-cap').textContent = caption || '';
+      document.getElementById('img-lightbox-open').href = src;
+      box.style.display = 'flex';
+    }}
+    function closeLightbox() {{
+      const box = document.getElementById('img-lightbox');
+      if (box) box.style.display = 'none';
+    }}
+    document.addEventListener('keydown', e => {{ if (e.key === 'Escape') closeLightbox(); }});
+
+    // On load: initialise replace/keep visibility for rows that start checked.
+    document.querySelectorAll('.img-row .img-sel').forEach(cb => imgCheckChanged(cb));
+
+    // Mark textarea as edited when user changes it.
+    document.addEventListener('input', e => {{
+      if (!e.target.classList.contains('img-prompt-edit')) return;
+      const ta = e.target;
+      const badge = ta.closest('details').querySelector('.img-edited-badge');
+      if (badge) badge.style.display = ta.value !== ta.dataset.original ? 'inline' : 'none';
+    }});
+
     async function generateImages(runId) {{
       const btn = document.getElementById('gen-btn');
       const status = document.getElementById('gen-status');
+
+      // Collect ticked prompts. For existing images the action radio decides:
+      // replace → overwrite image_N.png; new_version → save alongside as image_N_vK.png; skip → skip.
+      const prompts = [];
+      const alongside = [];
+      const speeds = {{}};
+      const ratios = {{}};
+      const custom_prompts = {{}};
+      document.querySelectorAll('.img-row').forEach(row => {{
+        const n = parseInt(row.dataset.prompt, 10);
+        if (!row.querySelector('.img-sel').checked) return;
+        const actionRadio = row.querySelector('.img-action:checked');
+        const action = actionRadio ? actionRadio.value : 'replace';
+        if (action === 'new_version') {{
+          alongside.push(n);
+        }} else {{
+          prompts.push(n);
+        }}
+        speeds[n] = row.querySelector('.img-speed').value;
+        ratios[n] = row.querySelector('.img-ratio').value;
+        const ta = row.querySelector('.img-prompt-edit');
+        if (ta && ta.value !== ta.dataset.original) {{
+          custom_prompts[n] = ta.value;
+        }}
+      }});
+      if (!prompts.length && !alongside.length) {{
+        status.textContent = 'Tick at least one image to create, or switch a "Skip" to Replace or New version.';
+        return;
+      }}
+
       btn.disabled = true;
       btn.textContent = 'Generating… (this may take 1–2 minutes)';
       status.textContent = '';
       try {{
-        const res = await fetch('/generate-images/' + runId, {{method: 'POST'}});
+        const res = await fetch('/generate-images/' + runId, {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify({{prompts, alongside, speeds, ratios, custom_prompts}})
+        }});
         const data = await res.json();
         if (res.ok) {{
           const ok = data.generated.filter(r => r.status === 'generated').length;
@@ -1273,18 +1588,18 @@ def get_results(run_id: str):
             setTimeout(() => window.location.reload(), 1200);
           }} else {{
             btn.disabled = false;
-            btn.textContent = 'Generate Images';
+            btn.textContent = 'Create selected';
             const errDetails = data.errors.map(e => 'Prompt ' + e.prompt + ': ' + e.error).join(' | ');
             status.textContent = 'No images generated.' + (errDetails ? ' ' + errDetails : '');
           }}
         }} else {{
           btn.disabled = false;
-          btn.textContent = 'Generate Images';
+          btn.textContent = 'Create selected';
           status.textContent = 'Error: ' + (data.detail || 'Unknown error');
         }}
       }} catch(e) {{
         btn.disabled = false;
-        btn.textContent = 'Generate Images';
+        btn.textContent = 'Create selected';
         status.textContent = 'Request failed: ' + e.message;
       }}
     }}
@@ -1367,10 +1682,41 @@ def _parse_ad_copy(text: str) -> dict:
     if not result["meta"]:
         result["meta"] = _meta_from_format_json(chunks.get("format", ""))
 
-    result["google"] = chunks.get("google", "")
+    result["google"] = _clean_google_copy(chunks.get("google", ""))
     result["whatsapp"] = chunks.get("whatsapp", "")
     result["email"] = chunks.get("email", "")
     return result
+
+
+def _clean_google_copy(text: str) -> str:
+    """The Google-ads agent sometimes 'shows its work' — selection notes and the
+    iterative character-count trimming passes — instead of just the final answer.
+    Extract only the final 3 headlines + 2 descriptions.
+
+    The final answer writes each line as 'Headline 1: ...' (colon immediately after
+    the number); the working notes use 'Headline 1 — concrete detail: ...' (a dash
+    first), so a colon-immediate match skips the chatter. We take the LAST match per
+    index in case the model restates them. If nothing matches, return the raw text
+    so a differently-formatted response is never silently blanked."""
+    if not text:
+        return text
+    import re
+
+    def pick(label: str, n: int) -> list:
+        out = []
+        for k in range(1, n + 1):
+            matches = re.findall(rf'(?im)^\s*{label}\s+{k}\s*:\s*(.+?)\s*$', text)
+            if matches:
+                val = matches[-1].strip().strip('"').strip()
+                val = re.sub(r'\s*\(\s*\d+\s*chars?\s*\)\s*$', '', val).strip()
+                out.append(f"{label} {k}: {val}")
+        return out
+
+    heads = pick("Headline", 3)
+    descs = pick("Description", 2)
+    if heads and descs:
+        return "\n".join(heads + descs)
+    return text.strip()
 
 
 def _meta_from_prose(meta_body: str) -> dict:
@@ -1465,6 +1811,59 @@ def _save_edits(review_folder, edits: dict) -> None:
     )
 
 
+# ── Audience overlay ─────────────────────────────────────────────────────────
+# The ad-set targeting (city geo + age + interests/behaviours) is stored per run
+# in audience.json, mirroring the edits.json overlay pattern. It is auto-seeded
+# from a curated luxury-RE set the first time the Deploy tab is opened, then the
+# user can tweak it before publishing. Resolving names to Meta IDs happens once
+# (at seed time) so opening the tab repeatedly doesn't re-hit Meta.
+def _audience_path(review_folder) -> Path:
+    return Path(review_folder) / "audience.json"
+
+
+def _load_audience(review_folder) -> dict | None:
+    p = _audience_path(review_folder)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _save_audience(review_folder, audience: dict) -> None:
+    _audience_path(review_folder).write_text(
+        json.dumps(audience, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def _effective_audience(review_folder, brief: dict) -> dict:
+    """Saved audience if present, else resolve+seed the curated default once."""
+    saved = _load_audience(review_folder)
+    if saved is not None:
+        return saved
+    from pikorua_adflow.tools import meta_targeting as _mt
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    city = brief.get("city", "") or ""
+    try:
+        audience = _mt.build_default_audience(
+            city, token,
+            locality=brief.get("locality", ""),
+            nri_geographies=brief.get("nri_geographies", ""),
+        )
+    except Exception as exc:
+        # Resolver unavailable (no token / network) — seed an un-resolved shell so
+        # the panel still renders; deploy falls back to country-level India.
+        audience = {
+            "country": "IN", "city": "", "city_key": None, "region": "",
+            "radius_km": _mt.DEFAULT_RADIUS_KM,
+            "age_min": _mt.DEFAULT_AGE_MIN, "age_max": _mt.DEFAULT_AGE_MAX,
+            "interests": [], "behaviours": [], "resolve_error": str(exc),
+        }
+    _save_audience(review_folder, audience)
+    return audience
+
+
 def _base_meta(review_folder) -> dict[int, dict]:
     """The AI baseline Meta copy (ad_copy.md with rewrites merged), before user edits."""
     rf = Path(review_folder)
@@ -1514,6 +1913,11 @@ def _effective_meta(review_folder) -> dict[int, dict]:
         if e.get("added") and n not in deleted and n not in out:
             out[n] = {"headline": e.get("headline", ""), "body": e.get("body", ""),
                       "edited": True, "added": True}
+    # Strip LLM artefacts ([24 chars], **bold**, etc.) from AI-generated values only.
+    # User edits in the overlay are stored already-clean so this is safe to apply globally.
+    for entry in out.values():
+        entry["headline"] = _clean_copy(entry.get("headline", ""))
+        entry["body"] = _clean_copy(entry.get("body", ""))
     return dict(sorted(out.items()))
 
 
@@ -1700,6 +2104,42 @@ def revert_image(run_id: str, variant: int):
     return {"ok": True, "restored": False}
 
 
+@app.post("/revert-logo/{run_id}/{prompt_num}")
+def revert_logo(run_id: str, prompt_num: int):
+    """Restore the pre-logo original for a specific generated image."""
+    import shutil
+    run = _require_complete(run_id)
+    images = Path(run["review_folder"]) / "images"
+    target = images / f"image_{prompt_num}.png"
+    backup = images / ".logo_backup" / f"image_{prompt_num}.png"
+    if not backup.exists():
+        raise HTTPException(status_code=404, detail="No logo backup found for this image.")
+    shutil.copy2(backup, target)
+    backup.unlink()  # remove backup so the button disappears after revert
+    return {"ok": True}
+
+
+class _AssignImagePayload(BaseModel):
+    image_num: int | None = None
+
+
+@app.post("/assign-image/{run_id}/{variant_num}")
+def assign_image(run_id: str, variant_num: int, payload: _AssignImagePayload):
+    """Store which generated image to use for a given ad variant."""
+    run = _require_complete(run_id)
+    rf = Path(run["review_folder"])
+    edits = _load_edits(rf)
+    m = edits.setdefault("meta", {})
+    cur = m.get(str(variant_num), {})
+    if payload.image_num is not None:
+        cur["image_num"] = payload.image_num
+    else:
+        cur.pop("image_num", None)
+    m[str(variant_num)] = cur
+    _save_edits(rf, edits)
+    return {"ok": True}
+
+
 def _parse_image_prompts(text: str) -> list:
     """Parse visual_brief.md into list of (title, prompt_text) tuples."""
     import re
@@ -1714,10 +2154,16 @@ def _parse_image_prompts(text: str) -> list:
         # Extract title
         tm = re.match(r'(?:\d+\.\s+)?(?:\*\*)?Prompt\s+\d+\s*[—-]\s*([^:\*\n]+)', block)
         title = tm.group(1).strip().rstrip("*:") if tm else f"Prompt {len(prompts)+1}"
+        # Extract headline overlay if the brief specifies one (e.g. Headline overlay: "text")
+        hm = re.search(r'Headline\s+overlay\s*:\s*"([^"]+)"', block, re.I)
+        headline_overlay = hm.group(1).strip() if hm else None
         # Extract the quoted prompt text
         qm = re.search(r'"([^"]{40,})"', block, re.DOTALL)
         if qm:
-            prompts.append((title, qm.group(1)))
+            base = qm.group(1)
+            # Prepend headline as a structured tag so _sanitize_image_prompt can use it
+            text = f'[HEADLINE:"{headline_overlay}"] {base}' if headline_overlay else base
+            prompts.append((title, text))
         else:
             # Fallback: everything after the title line
             rest = re.sub(r'^[^\n]+\n', '', block, count=1).strip()
@@ -1745,12 +2191,16 @@ def _parse_scorecard(text: str) -> list:
             v["variant"] = int(m.group(1))
             v["angle"] = m.group(2).strip().rstrip('*').strip()
 
-        # Scores — handle "Brand Voice Compliance:** 9.5/10" and plain "Brand Voice: 9/10"
+        # Scores — format-agnostic. Matches the dimension name then the FIRST "X/10"
+        # on the SAME line, so it handles every layout the evaluator uses:
+        #   "Brand Voice: 9/10"  |  "Brand Voice Compliance:** 9.5/10"  |  "| Brand Voice | 7/10 |"
+        # Staying on one line avoids bleeding into the flag-reason line (e.g.
+        # "Status: FLAG — Specificity 6/10: ...") which appears later in the block.
         for dim, key in [
             ("Brand Voice", "brand_voice"), ("Platform Fit", "platform_fit"),
             ("Specificity", "specificity"), ("Luxury Signal", "luxury_signal")
         ]:
-            sm = re.search(rf'{dim}[^:]*:\s*\*{{0,2}}\s*(\d+(?:\.\d+)?)/10', block, re.IGNORECASE)
+            sm = re.search(rf'{re.escape(dim)}\b[^\n]*?(\d+(?:\.\d+)?)\s*/\s*10', block, re.IGNORECASE)
             if sm:
                 v["scores"][key] = round(float(sm.group(1)))
 
@@ -1798,75 +2248,415 @@ def _merge_rewrites(variants: list, rewrites_text: str) -> None:
                     }
 
 
+def _build_logo_section_html(run_id: str = "") -> str:
+    """Persistent brand-logo bar rendered above the tab bar — always visible."""
+    has_logo = _BRAND_LOGO_PATH.exists()
+    logo_preview = (
+        '<img src="/brand-logo" style="max-height:42px;max-width:140px;'
+        'object-fit:contain;border-radius:4px;" alt="Brand logo">'
+        if has_logo else ""
+    )
+    logo_action = (
+        '<button class="btn btn-ghost btn-sm" style="color:var(--danger);" '
+        'onclick="removeBrandLogo()">Remove</button>'
+        if has_logo else ""
+    )
+    apply_btn = (
+        f'<button class="btn btn-ghost btn-sm" onclick="applyLogoToImages(\'{run_id}\')" '
+        f'title="Stamp logo onto images already in this run">Apply to existing images</button>'
+        if has_logo and run_id else ""
+    )
+    logo_hint = ("Logo active — placed bottom-right on every generated image."
+                 if has_logo else "No logo uploaded yet.")
+    return f"""
+    <div style="background:var(--paper);border:1px solid var(--line);border-radius:10px;
+                padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <div style="font-size:0.82rem;font-weight:600;color:var(--ink);white-space:nowrap;">Brand logo</div>
+      <div style="display:flex;align-items:center;gap:10px;flex:1;">
+        {logo_preview}
+        <span style="font-size:0.8rem;color:var(--ink-soft);">{logo_hint}</span>
+        <span id="logo-status" style="font-size:0.78rem;color:var(--ink-soft);"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;">
+          {'Replace logo' if has_logo else 'Upload logo'}
+          <input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;"
+                 onchange="uploadBrandLogo(this)">
+        </label>
+        {apply_btn}
+        {logo_action}
+      </div>
+    </div>"""
+
+
 def _build_visuals_html(run_id: str, image_prompts: list, existing_images: list,
-                        ideogram_key: str, replicate_token: str, together_key: str = "") -> str:
+                        ideogram_key: str, replicate_token: str, together_key: str = "",
+                        images_dir: Path | None = None) -> str:
     """Build the full HTML for the visuals tab — images, generate button, prompts."""
-    import os
-    html = ""
 
     def _type_label(i):
         return "Social banner" if i <= 3 else "Lifestyle photo"
 
+    html = ""
+
     # Show already-generated images
+    logo_backup_dir = (images_dir / ".logo_backup") if images_dir else None
     if existing_images:
+        import re as _img_re
         html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:22px;">'
-        for i, fname in enumerate(existing_images, 1):
-            title = image_prompts[i - 1][0] if i <= len(image_prompts) else f"Image {i}"
+        for fname in existing_images:
+            _m = _img_re.match(r'image_(\d+)(?:_v(\d+))?\.png$', fname)
+            prompt_num = int(_m.group(1)) if _m else 0
+            version_num = int(_m.group(2)) if (_m and _m.group(2)) else None
+            title = image_prompts[prompt_num - 1][0] if 0 < prompt_num <= len(image_prompts) else fname
+            version_label = f" · v{version_num}" if version_num else ""
+            has_logo_backup = bool(
+                logo_backup_dir and (logo_backup_dir / fname).exists()
+            )
+            revert_btn = (
+                f'<button class="btn btn-ghost btn-sm" style="color:var(--ink-soft);" '
+                f'onclick="revertLogo(\'{run_id}\', {prompt_num})">Remove logo</button>'
+                if has_logo_backup else ""
+            )
             html += f"""
             <div style="background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);">
-              <img src="/image/{run_id}/{fname}" alt="{_esc(title)}"
-                   style="width:100%;display:block;border-bottom:1px solid var(--line);">
-              <div style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-size:0.8rem;color:var(--ink-soft);">{_esc(title)}</span>
-                <span class="badge badge-gold">{_type_label(i)}</span>
+              <img src="/image/{run_id}/{fname}" alt="{_esc(title)}" title="Click to view full size"
+                   onclick="openLightbox('/image/{run_id}/{fname}', this.alt)"
+                   style="width:100%;display:block;border-bottom:1px solid var(--line);cursor:zoom-in;">
+              <div style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+                <span style="font-size:0.8rem;color:var(--ink-soft);">{_esc(title)}{_esc(version_label)}</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  {revert_btn}
+                  <span class="badge badge-gold">{_type_label(prompt_num)}</span>
+                </div>
               </div>
             </div>"""
         html += "</div>"
 
     # Is an image service connected? (kept non-technical for the operator)
-    pollinations_token = os.getenv("POLLINATIONS_TOKEN", "")
-    backend_ready = bool(ideogram_key or replicate_token or together_key or pollinations_token)
+    backend_ready = bool(ideogram_key or replicate_token or together_key)
     if backend_ready:
-        backend_note = "We'll create your campaign images automatically — this usually takes a minute or two."
+        backend_note = ("Tick the images you want to create, pick a quality for each, then click "
+                        "Create selected. Higher quality takes a little longer.")
     else:
         backend_note = "Image creation isn't connected yet. Ask your developer to set up an image service."
 
-    missing = len(image_prompts) - len(existing_images)
-    if not existing_images:
-        btn_label = "Create images"
-    elif missing > 0:
-        btn_label = f"Create the rest ({missing} left)"
-    else:
-        btn_label = "Recreate all"
+    # Which prompt numbers already have a BASE image on disk (image_N.png only, not versioned).
+    import re as _pnum_re
+    existing_nums = set()
+    for fname in existing_images:
+        _bm = _pnum_re.fullmatch(r'image_(\d+)\.png', fname)
+        if _bm:
+            existing_nums.add(int(_bm.group(1)))
 
     btn_disabled = "" if backend_ready else "disabled"
+
+    if not image_prompts:
+        html += '<p style="color:var(--muted);font-size:0.9rem;">No image descriptions found for this campaign.</p>'
+        return html
+
+    # Per-image picker: checkbox (pre-ticked only for images not yet created) + a
+    # quality selector, with the full description tucked into a collapsible.
     html += f"""
-    <div style="margin-bottom:22px;">
-      <button id="gen-btn" class="btn" {btn_disabled} onclick="generateImages('{run_id}')">{btn_label}</button>
+    <div style="margin-bottom:14px;">
+      <button id="gen-btn" class="btn" {btn_disabled} onclick="generateImages('{run_id}')">Create selected</button>
+      <button class="btn btn-ghost btn-sm" style="margin-left:8px;" onclick="imgSelectAll(true)">Select all</button>
+      <button class="btn btn-ghost btn-sm" onclick="imgSelectAll(false)">Clear</button>
       <span id="gen-status" style="margin-left:12px;font-size:0.85rem;color:var(--ink-soft);"></span>
       <div style="margin-top:8px;font-size:0.82rem;color:var(--muted);">{backend_note}</div>
-    </div>"""
+    </div>
+    <div style="margin-bottom:22px;">"""
 
-    # Image descriptions — tucked away for anyone who wants the detail
-    if image_prompts:
-        html += '<details class="adv" style="margin-top:0.6rem;"><summary>See the image descriptions</summary><div style="margin-top:1rem;">'
-        for i, (ptitle, prompt_text) in enumerate(image_prompts, 1):
-            html += f"""
-            <div style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <span style="font-size:0.88rem;color:var(--ink);">Image {i} — {_esc(ptitle)}</span>
-                <span class="badge badge-muted">{_type_label(i)}</span>
-              </div>
-              <div style="font-size:0.82rem;color:var(--ink-soft);line-height:1.6;
-                background:var(--paper-warm);padding:10px;border-radius:8px;">{_esc(prompt_text.strip())}</div>
-              <button class="btn btn-ghost btn-sm" style="margin-top:8px;"
-                onclick="copyFromData(this)" data-copy="{_esc(prompt_text.strip())}">Copy description</button>
+    # Best-for-text QUALITY is the default; banners especially benefit.
+    speed_opts = (
+        '<option value="QUALITY" selected>Best quality (text-safe)</option>'
+        '<option value="DEFAULT">Balanced</option>'
+        '<option value="TURBO">Fastest</option>'
+    )
+    # 4:5 is Meta's recommended feed ratio; 1:1 is the versatile multi-placement square.
+    ratio_opts = (
+        '<option value="4x5" selected>4:5 — Feed (recommended)</option>'
+        '<option value="1x1">1:1 — Square</option>'
+        '<option value="16x9">16:9 — Wide</option>'
+        '<option value="9x16">9:16 — Story/Reel</option>'
+    )
+
+    for i, (ptitle, prompt_text) in enumerate(image_prompts, 1):
+        has_img = i in existing_nums
+        checked = "" if has_img else "checked"
+        esc_prompt = _esc(prompt_text.strip())
+        # Action picker: shown when an existing image is checked. Replace overwrites; New version
+        # saves alongside (image_N_v2.png etc); Skip does nothing for this prompt.
+        replace_confirm = ""
+        if has_img:
+            replace_confirm = f"""
+            <div class="img-replace-row" style="display:none;align-items:center;gap:8px;
+                 margin-top:8px;padding:8px 10px;background:var(--paper-warm);
+                 border:1px solid var(--line);border-radius:8px;font-size:0.82rem;color:var(--ink);">
+              <span>Already generated —</span>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+                <input type="radio" class="img-action" name="img-action-{i}" value="replace" checked
+                       style="cursor:pointer;"> Replace
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+                <input type="radio" class="img-action" name="img-action-{i}" value="new_version"
+                       style="cursor:pointer;"> New version
+              </label>
             </div>"""
-        html += "</div></details>"
-    else:
-        html += '<p style="color:var(--muted);font-size:0.9rem;">No image descriptions found for this campaign.</p>'
+        html += f"""
+        <div class="img-row" data-prompt="{i}" data-has-img="{'1' if has_img else '0'}"
+             style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1 1 240px;">
+              <input type="checkbox" class="img-sel" {checked}
+                     onchange="imgCheckChanged(this)"
+                     style="width:16px;height:16px;cursor:pointer;">
+              <span style="font-size:0.88rem;color:var(--ink);">Image {i} — {_esc(ptitle)}</span>
+            </label>
+            <span class="badge badge-gold">{_type_label(i)}</span>
+            {'<span class="badge badge-muted" style="margin-left:6px;">already created</span>' if has_img else ''}
+            <label style="font-size:0.8rem;color:var(--ink-soft);display:flex;align-items:center;gap:6px;">
+              Quality
+              <select class="img-speed"
+                style="padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font-size:0.8rem;">
+                {speed_opts}
+              </select>
+            </label>
+            <label style="font-size:0.8rem;color:var(--ink-soft);display:flex;align-items:center;gap:6px;">
+              Shape
+              <select class="img-ratio"
+                style="padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font-size:0.8rem;">
+                {ratio_opts}
+              </select>
+            </label>
+          </div>
+          {replace_confirm}
+          <details class="adv" style="margin-top:8px;">
+            <summary style="font-size:0.8rem;color:var(--ink-soft);cursor:pointer;">Edit image description</summary>
+            <div style="margin-top:8px;">
+              <textarea class="img-prompt-edit"
+                style="width:100%;box-sizing:border-box;min-height:110px;padding:10px;
+                       border:1px solid var(--line);border-radius:8px;
+                       background:var(--paper-warm);color:var(--ink);
+                       font-size:0.82rem;line-height:1.6;resize:vertical;
+                       font-family:inherit;"
+                data-original="{esc_prompt}">{esc_prompt}</textarea>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                <button class="btn btn-ghost btn-sm"
+                  onclick="revertPrompt(this)">Revert to original</button>
+                <button class="btn btn-ghost btn-sm"
+                  onclick="copyFromData(this)" data-copy="{esc_prompt}">Copy</button>
+                <span class="img-edited-badge" style="display:none;font-size:0.78rem;
+                      color:var(--gold);font-style:italic;">edited</span>
+              </div>
+            </div>
+          </details>
+        </div>"""
+    html += "</div>"
 
     return html
+
+
+_AUDIENCE_PANEL_JS = r"""
+<script>
+(function(){
+  const RUN_ID = "__RUN_ID__";
+  let AUD = __AUDIENCE_JSON__;
+
+  function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  function summary(){
+    let geo = AUD.city && AUD.city_key ? (AUD.city + " +" + (AUD.radius_km||25) + "km")
+              : "India (whole country)";
+    let bits = [geo, "Age " + (AUD.age_min||28) + "–" + (AUD.age_max||65)];
+    if ((AUD.interests||[]).length) bits.push(AUD.interests.length + " interest" + (AUD.interests.length!=1?"s":""));
+    if ((AUD.behaviours||[]).length) bits.push(AUD.behaviours.length + " behaviour" + (AUD.behaviours.length!=1?"s":""));
+    return bits.join(" · ");
+  }
+
+  function chips(kind){
+    const arr = AUD[kind] || [];
+    if (!arr.length) return '<span style="font-size:0.8rem;color:var(--muted);">None yet — add some below.</span>';
+    return arr.map((it,i) =>
+      '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--paper-warm);'
+      +'border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 12px;margin:0 6px 6px 0;'
+      +'font-size:0.8rem;color:var(--ink);">' + esc(it.name)
+      +'<button onclick="audRemove(\''+kind+'\','+i+')" title="Remove" '
+      +'style="border:none;background:var(--line);color:var(--ink-soft);border-radius:50%;width:18px;height:18px;'
+      +'line-height:1;cursor:pointer;font-size:0.75rem;">×</button></span>'
+    ).join("");
+  }
+
+  function nriChips(){
+    const arr = AUD.nri_countries||[];
+    let out = arr.map((c,i)=>
+      '<span style="display:inline-flex;align-items:center;gap:5px;background:var(--paper-warm);'
+      +'border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;margin:0 5px 5px 0;'
+      +'font-size:0.78rem;font-weight:600;color:var(--ink);letter-spacing:0.04em;">'+esc(c)
+      +'<button onclick="audRemoveCountry('+i+')" title="Remove" '
+      +'style="border:none;background:var(--line);color:var(--ink-soft);border-radius:50%;width:16px;height:16px;'
+      +'line-height:1;cursor:pointer;font-size:0.72rem;">×</button></span>'
+    ).join('');
+    out += '<span style="display:inline-flex;align-items:center;gap:4px;margin-top:2px;">'
+      +'<input id="aud-nri-input" maxlength="2" placeholder="+ ISO" '
+      +'style="width:48px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;'
+      +'background:var(--paper);color:var(--ink);font-size:0.78rem;text-transform:uppercase;" '
+      +'onkeydown="if(event.key===\'Enter\')audAddCountry()">'
+      +'<button onclick="audAddCountry()" style="border:1px solid var(--line);background:var(--paper-warm);'
+      +'color:var(--ink);border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">Add</button></span>';
+    return out;
+  }
+
+  function geoRow(){
+    if (AUD.city && AUD.city_key){
+      return '<div style="font-size:0.88rem;color:var(--ink);margin-bottom:4px;"><strong>'+esc(AUD.city)+'</strong>'
+        + (AUD.region? ', '+esc(AUD.region):'') + '</div>'
+        + '<label style="font-size:0.8rem;color:var(--ink-soft);">Radius around city: '
+        + '<input type="number" min="17" max="80" value="'+(AUD.radius_km||25)+'" '
+        + 'onchange="audField(\'radius_km\', parseInt(this.value)||25)" '
+        + 'style="width:64px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;'
+        + 'background:var(--paper);color:var(--ink);"> km</label>';
+    }
+    return '<div style="font-size:0.85rem;color:var(--warn);"><strong>India — whole country</strong> '
+      + '(no specific city resolved). Add a city below for tighter targeting.</div>';
+  }
+
+  window.audField = function(f, v){ AUD[f]=v; paint(true); };
+  window.audRemove = function(kind, i){ AUD[kind].splice(i,1); paint(); };
+  window.audRemoveCountry = function(i){ (AUD.nri_countries=AUD.nri_countries||[]).splice(i,1); paint(); };
+  window.audAddCountry = function(){
+    const el = document.getElementById('aud-nri-input');
+    const raw = (el.value||'').trim().toUpperCase();
+    if (raw.length===2){ AUD.nri_countries=AUD.nri_countries||[]; if(!AUD.nri_countries.includes(raw)) AUD.nri_countries.push(raw); el.value=''; paint(); }
+  };
+
+  window.audSearch = function(kind){
+    const q = document.getElementById('aud-q-'+kind).value.trim();
+    const box = document.getElementById('aud-res-'+kind);
+    if (q.length < 2){ box.innerHTML=''; return; }
+    const type = kind==='interests' ? 'interest' : (kind==='behaviours'?'behaviour':'city');
+    box.innerHTML = '<span style="font-size:0.78rem;color:var(--muted);">Searching…</span>';
+    fetch('/audience-search?type='+type+'&q='+encodeURIComponent(q))
+      .then(r=>r.json()).then(d=>{
+        const res = d.results||[];
+        if (!res.length){ box.innerHTML='<span style="font-size:0.78rem;color:var(--muted);">No matches.</span>'; return; }
+        box.innerHTML = res.map(x=>{
+          const id = kind==='cities'? x.key : x.id;
+          const payload = encodeURIComponent(JSON.stringify(kind==='cities'
+            ? {key:x.key, name:x.name, region:x.region||''}
+            : {id:String(x.id), name:x.name}));
+          return '<button onclick="audPick(\''+kind+'\',\''+payload+'\')" '
+            +'style="display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);'
+            +'background:var(--paper);color:var(--ink);padding:7px 10px;cursor:pointer;font-size:0.82rem;font-family:inherit;">'
+            + esc(x.name) + '</button>';
+        }).join("");
+      }).catch(()=>{ box.innerHTML='<span style="font-size:0.78rem;color:var(--danger);">Search failed.</span>'; });
+  };
+
+  window.audPick = function(kind, payload){
+    const it = JSON.parse(decodeURIComponent(payload));
+    if (kind==='cities'){ AUD.city=it.name; AUD.city_key=it.key; AUD.region=it.region||''; }
+    else {
+      AUD[kind] = AUD[kind]||[];
+      if (!AUD[kind].some(x=>String(x.id)===String(it.id))) AUD[kind].push(it);
+    }
+    document.getElementById('aud-q-'+kind).value='';
+    document.getElementById('aud-res-'+kind).innerHTML='';
+    paint();
+  };
+
+  window.audSave = function(){
+    const st = document.getElementById('aud-save-status');
+    st.textContent = 'Saving…';
+    AUD.age_min = parseInt(document.getElementById('aud-age-min').value)||28;
+    AUD.age_max = parseInt(document.getElementById('aud-age-max').value)||65;
+    const ed = document.getElementById('aud-end').value;
+    AUD.end_time = ed ? (ed + 'T23:59:00+0530') : '';
+    fetch('/audience/'+RUN_ID, {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(AUD)})
+      .then(r=>r.json()).then(d=>{ st.textContent='Saved ✓'; setTimeout(()=>st.textContent='',2000); })
+      .catch(()=>{ st.textContent='Save failed'; });
+  };
+
+  function searchRow(kind, label, ph){
+    return '<div style="margin-top:6px;"><div style="font-size:0.8rem;color:var(--ink-soft);margin-bottom:4px;">'+label+'</div>'
+      + '<div style="margin-bottom:6px;">'+chips(kind)+'</div>'
+      + '<div style="display:flex;gap:6px;">'
+      + '<input id="aud-q-'+kind+'" placeholder="'+ph+'" oninput="audSearch(\''+kind+'\')" '
+      + 'style="flex:1;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font-size:0.82rem;"></div>'
+      + '<div id="aud-res-'+kind+'" style="border:1px solid var(--line);border-top:none;border-radius:0 0 6px 6px;'
+      + 'max-height:160px;overflow:auto;"></div></div>';
+  }
+
+  function paint(skipInputs){
+    document.getElementById('aud-summary').textContent = summary();
+    document.getElementById('aud-geo').innerHTML = geoRow();
+    document.getElementById('aud-nri').innerHTML = nriChips();
+    document.getElementById('aud-int').innerHTML = searchRow('interests','Interests','Type to search Meta interests…');
+    document.getElementById('aud-beh').innerHTML = searchRow('behaviours','Behaviours','e.g. frequent travellers…');
+    document.getElementById('aud-city-search').innerHTML =
+      '<input id="aud-q-cities" placeholder="Change city…" oninput="audSearch(\'cities\')" '
+      + 'style="width:200px;margin-top:6px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font-size:0.82rem;">'
+      + '<div id="aud-res-cities" style="max-width:260px;border:1px solid var(--line);border-top:none;max-height:160px;overflow:auto;"></div>';
+  }
+
+  document.addEventListener('DOMContentLoaded', paint);
+  if (document.readyState !== 'loading') paint();
+})();
+</script>
+"""
+
+
+def _audience_panel_html(run_id: str, audience: dict) -> str:
+    """Editable Audience panel for the pre-deploy view (city geo, age, interests, behaviours)."""
+    import json as _json
+    age_lo = audience.get("age_min", 28)
+    age_hi = audience.get("age_max", 65)
+    end_val = (audience.get("end_time", "") or "")[:10]  # YYYY-MM-DD for the date input
+    shell = (
+        '<div style="background:var(--paper-warm);border:1px solid var(--line);border-radius:12px;'
+        'padding:18px 20px;margin-bottom:20px;">'
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">'
+        '<div><div class="eyebrow" style="margin-bottom:4px;">Who this reaches</div>'
+        '<div id="aud-summary" style="font-size:0.92rem;color:var(--ink);font-weight:600;"></div></div>'
+        '<div style="display:flex;align-items:center;gap:10px;">'
+        '<span id="aud-save-status" style="font-size:0.8rem;color:var(--green-mid);"></span>'
+        '<button class="btn btn-ghost" onclick="audSave()" style="white-space:nowrap;">Save audience</button>'
+        '</div></div>'
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px;">'
+        # left column: location + age
+        '<div>'
+        '<div class="eyebrow" style="margin-bottom:6px;">Location</div>'
+        '<div id="aud-geo"></div>'
+        '<div id="aud-city-search"></div>'
+        '<div class="eyebrow" style="margin:14px 0 4px;">NRI / overseas countries</div>'
+        '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:5px;">ISO-2 codes (AE, US, GB, SG…) — reach diaspora buyers</div>'
+        '<div id="aud-nri"></div>'
+        '<div class="eyebrow" style="margin:14px 0 6px;">Age</div>'
+        f'<input id="aud-age-min" type="number" min="18" max="65" value="{age_lo}" '
+        'style="width:60px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);"> '
+        '<span style="color:var(--muted);">to</span> '
+        f'<input id="aud-age-max" type="number" min="18" max="65" value="{age_hi}" '
+        'style="width:60px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);">'
+        '<div class="eyebrow" style="margin:14px 0 6px;">End date <span style="text-transform:none;color:var(--muted);">(optional)</span></div>'
+        f'<input id="aud-end" type="date" value="{end_val}" '
+        'style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);">'
+        '</div>'
+        # right column: interests + behaviours
+        '<div>'
+        '<div id="aud-int"></div>'
+        '<div id="aud-beh" style="margin-top:14px;"></div>'
+        '</div>'
+        '</div>'
+        '<div style="margin-top:12px;font-size:0.78rem;color:var(--muted);">'
+        'Edits are saved to this campaign. Ads also run on Instagram under your page handle.</div>'
+        '</div>'
+    )
+    script = (_AUDIENCE_PANEL_JS
+              .replace("__RUN_ID__", run_id)
+              .replace("__AUDIENCE_JSON__", _json.dumps(audience)))
+    return shell + script
 
 
 def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C901
@@ -1900,16 +2690,29 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
         c = meta_copy.get(v, {})
         return c.get("headline", ""), c.get("body", "")
 
+    def _effective_img_num(v):
+        """Return the image number to use for variant v (assigned > same-num > None)."""
+        if not rf:
+            return None
+        edits = _load_edits(rf)
+        assigned = edits.get("meta", {}).get(str(v), {}).get("image_num")
+        if assigned and (rf / "images" / f"image_{assigned}.png").exists():
+            return assigned
+        if (rf / "images" / f"image_{v}.png").exists():
+            return v
+        return None
+
     def _has_img(v):
-        return bool(rf and (rf / "images" / f"image_{v}.png").exists())
+        return _effective_img_num(v) is not None
 
     # Initials for page avatar (up to 2 words)
     _page_initials = "".join(w[0] for w in page_name.split()[:2]).upper() or "PR"
 
     def _ad_card(v, headline, body_text, badge_html, struct_html):
         """Render one Facebook-style ad mock-up card."""
-        if _has_img(v):
-            img = (f'<img src="/image/{run_id}/image_{v}.png" '
+        img_num = _effective_img_num(v)
+        if img_num is not None:
+            img = (f'<img src="/image/{run_id}/image_{img_num}.png" '
                    f'alt="Ad image variant {v}" '
                    f'style="width:100%;display:block;">')
         else:
@@ -1971,6 +2774,12 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
         selected = run.get("selected_variants") or sorted(meta_copy.keys())
         sel_str  = ", ".join(f"Version {v}" for v in selected) if selected else "none selected"
 
+        # Resolve + seed the editable audience (city geo + age + interests).
+        from pikorua_adflow.tools import meta_targeting as _mt
+        audience = _effective_audience(rf, brief) if rf else {}
+        aud_label = _mt.audience_summary(audience) if audience else "India · Age 28–65"
+        audience_panel = _audience_panel_html(run_id, audience) if rf else ""
+
         dry_note = ""
         if dry_run:
             dry_note = (
@@ -1985,16 +2794,28 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
         # silently re-renders this view with no explanation.
         err_note = ""
         if dep_errors:
-            rows = "".join(
-                f'<div style="margin-top:6px;"><strong>Version {_esc(str(e.get("variant","?")))}</strong>: '
-                f'{_esc(str(e.get("error","")))}</div>'
-                for e in dep_errors
-            )
+            def _err_row(e):
+                msg = str(e.get("error", "Something went wrong — see developer log."))
+                # If message still looks like raw JSON / API error, replace with generic
+                if msg.startswith("POST ") or msg.startswith("{"):
+                    msg = "Couldn't connect to Meta — the technical detail has been saved to the developer log."
+                if e.get("fixable"):
+                    action = ('<div style="margin-top:4px;font-size:0.8rem;color:var(--warn);">'
+                              '&#8594; You can fix this — adjust the setting and try again.</div>')
+                else:
+                    action = ('<div style="margin-top:4px;font-size:0.8rem;color:var(--ink-soft);">'
+                              '&#8594; Saved to developer log — no action needed from you.</div>')
+                return (f'<div style="margin-top:10px;padding:10px 12px;background:rgba(0,0,0,0.04);'
+                        f'border-radius:8px;">'
+                        f'<strong>Version {_esc(str(e.get("variant","?")))}</strong><br>'
+                        f'<span style="color:var(--ink);">{_esc(msg)}</span>'
+                        f'{action}</div>')
+            rows = "".join(_err_row(e) for e in dep_errors)
             err_note = (
-                '<div style="margin-bottom:16px;padding:12px 16px;background:var(--danger-soft);'
-                'border:1px solid #e6b3ab;border-radius:10px;font-size:0.82rem;color:var(--danger);">'
-                '<strong>Last publish attempt failed</strong> — nothing was created. '
-                'Details from Meta:' + rows + '</div>'
+                '<div style="margin-bottom:16px;padding:14px 16px;background:var(--danger-soft);'
+                'border:1px solid #e6b3ab;border-radius:10px;font-size:0.85rem;color:var(--danger);">'
+                '<strong>Last publish attempt didn\'t go through — nothing was created.</strong>'
+                + rows + '</div>'
             )
         dry_note = err_note + dry_note
 
@@ -2009,7 +2830,7 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
             f'<strong>{_esc(sel_str)}</strong>'
             f'<span style="color:var(--muted);margin-left:2px;"> &nbsp;&middot;&nbsp; '
             f'₹{budget}/day per ad &nbsp;&middot;&nbsp; Button: {_esc(cta_lbl)} '
-            f'&nbsp;&middot;&nbsp; Goal: collect enquiries &nbsp;&middot;&nbsp; India</span></div>'
+            f'&nbsp;&middot;&nbsp; Goal: collect enquiries</span></div>'
             f'<div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">'
             f'After enquiry, people see: {_esc(lp)}</div>'
             f'</div>'
@@ -2031,13 +2852,13 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
                 f'<div><strong>Ad</strong> &nbsp;{_esc(prop)} &#8212; V{v} &nbsp;&middot;&nbsp; '
                 f'collect enquiries &nbsp;&middot;&nbsp; <span class="badge badge-muted">starts paused</span></div>'
                 f'<div><strong>Audience</strong> &nbsp;₹{budget}/day &nbsp;&middot;&nbsp; '
-                f'India &nbsp;&middot;&nbsp; Age {age_lo}&#8211;{age_hi}</div>'
+                f'{_esc(aud_label)}</div>'
                 f'</div>'
             )
             badge = '<span style="font-size:0.74rem;color:var(--muted);font-style:italic;">Preview</span>'
             previews += _ad_card(v, h, b, badge, struct)
 
-        return dry_note + settings_bar + previews
+        return dry_note + audience_panel + settings_bar + previews
 
     # ── POST-DEPLOY view ─────────────────────────────────────────────────────
     if dry_run:
@@ -2054,6 +2875,21 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
             'border:1px solid #a9cbb4;border-radius:10px;font-size:0.85rem;color:var(--green);">'
             '&#10003;&nbsp;<strong>Your ads are set up on Facebook &amp; Instagram — and paused.</strong> '
             'They won\'t spend anything until you switch them on in Meta Ads Manager.</div>'
+        )
+
+    # Warn if Meta forced us to drop any locations that need a special declaration.
+    dropped_locs = run.get("meta_dropped_locations", [])
+    if dropped_locs and not dry_run:
+        locs = ", ".join(_esc(l) for l in dropped_locs)
+        top_note += (
+            '<div style="margin-bottom:16px;padding:12px 16px;background:var(--warn-soft);'
+            'border:1px solid #e6d28a;border-radius:10px;font-size:0.85rem;color:var(--warn);">'
+            f'<strong>Heads up — {locs} was removed from targeting.</strong> '
+            f'Meta requires a one-time regulatory declaration to advertise in '
+            f'{"these locations" if len(dropped_locs) > 1 else "this location"}, '
+            'which has to be done by hand. Your campaign was published to all other '
+            f'locations. To include {"them" if len(dropped_locs) > 1 else "it"}, make '
+            'the declaration in Meta Ads Manager and add the location to the ad set there.</div>'
         )
 
     cards = ""
@@ -2080,7 +2916,7 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
                 f'<div><strong>Ad</strong> &nbsp;{_esc(prop)} &#8212; V{v} &nbsp;&middot;&nbsp; '
                 f'collect enquiries &nbsp;&middot;&nbsp; <span class="badge badge-muted">starts paused</span></div>'
                 f'<div><strong>Audience</strong> &nbsp;₹{bgt}/day &nbsp;&middot;&nbsp; '
-                f'India &nbsp;&middot;&nbsp; Age {age_lo}&#8211;{age_hi}</div>'
+                f'{_esc(ad_info.get("geo") or "India")}</div>'
                 f'<div><strong>Button</strong> &nbsp;{_esc(cta_lbl)}</div>'
                 f'<div><strong>After enquiry</strong> &nbsp;{_esc(lp)}</div>'
                 f'</div>'
@@ -2107,135 +2943,291 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
 
     for err in dep_errors:
         v = err.get("variant", "?")
+        msg = str(err.get("error", "Something went wrong — see developer log."))
+        if msg.startswith("POST ") or msg.startswith("{"):
+            msg = "Couldn't connect to Meta — the technical detail has been saved to the developer log."
+        if err.get("fixable"):
+            hint = '<div style="margin-top:4px;font-size:0.8rem;color:var(--warn);">&#8594; You can fix this — adjust the setting and try again.</div>'
+        else:
+            hint = '<div style="margin-top:4px;font-size:0.8rem;color:var(--ink-soft);">&#8594; Saved to developer log — no action needed from you.</div>'
         cards += (
-            f'<div style="margin-bottom:16px;padding:12px 16px;background:var(--danger-soft);'
+            f'<div style="margin-bottom:16px;padding:14px 16px;background:var(--danger-soft);'
             f'border:1px solid #e6bdb6;border-radius:10px;font-size:0.85rem;color:var(--danger);">'
-            f'<strong>Version {v} couldn\'t be set up:</strong> {_esc(err.get("error",""))}</div>'
+            f'<strong>Version {v} couldn\'t be published.</strong><br>'
+            f'<span style="color:var(--ink);font-size:0.85rem;">{_esc(msg)}</span>'
+            f'{hint}</div>'
         )
 
     return top_note + cards
 
 
-def _call_pollinations(prompt: str) -> bytes:
-    """
-    Pollinations.ai — free, no API key needed.
-    Returns JPEG bytes. Good for dev; no text-in-image support.
-    """
-    import os, urllib.request, urllib.parse
-    token = os.getenv("POLLINATIONS_TOKEN", "")
-    url = (f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}"
-           f"?model=sana&width=1200&height=628&nologo=true")
-    if token:
-        url += f"&token={urllib.parse.quote(token)}"
-    # Pollinations now returns 403 to the default "Python-urllib/3.x" user agent
-    # (browser UA gets past that) and 402 Payment Required to anonymous requests —
-    # the free no-key tier was retired. A free token from auth.pollinations.ai is
-    # required; without one this raises and the UI surfaces the 402.
-    headers = {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
-        "Accept": "image/*",
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        return resp.read()
+_IDEOGRAM_SPEEDS = {"TURBO", "DEFAULT", "QUALITY"}
+# Ad-friendly ratios we expose. 4x5 = Meta feed (recommended), 1x1 = square
+# (multi-placement), 16x9 = wide/landscape. Values are Ideogram v3 aspect_ratio codes.
+_IDEOGRAM_RATIOS = {"4x5", "1x1", "16x9", "9x16"}
 
-def _call_ideogram(prompt: str, key: str) -> bytes:
-    """
-    Ideogram 3.0 API — production image backend. Best text-in-image rendering.
+# Two-mode prompt hygiene.  We let Ideogram bake in the ad TEXT (headline + a
+# locality/price line) on banners — that creative freedom is the point — but we
+# NEVER let it render the brand logo/wordmark (it can't spell "PIKORUA" and invents
+# "CHEDANA"-style gibberish), and we never let pixel-dimension or font-name/point-size
+# specs leak in (they fight the aspect ratio or get rendered as literal garbled text).
+#
+# _PROMPT_STRIP_COMMON is applied in BOTH modes: it kills logo/wordmark/brand-name
+# placement, pixel dims, 4K/8K, literal point sizes, and font-name references.
+_PROMPT_STRIP_COMMON = re.compile(
+    r"""(?ix)
+    \b\d{3,4}\s*[x×]\s*\d{3,4}\s*px?\b      # 1200x628px, 1080x1080
+    | \b\d+K\b                                 # 4K, 8K
+    | [^.]*\b(logo|wordmark|word\s*mark|brand\s*mark|emblem|monogram|watermark
+        |company\s*name|brand\s*text|brand\s*name|brand\s*logo|PIKORUA|PIKURUA
+        |include\s+(?:the\s+)?brand|add\s+(?:the\s+)?brand|brand\s+instruction
+        |brand\s+corner|brand\s+mark\s+instruction)\b[^.]*\.?
+    | [^.]*\b\d{1,3}\s*pt\b[^.]*\.?          # sentences with font size specs (32pt, 72pt, 88pt)
+    | [^.]*\b(Cormorant|Garamond|Didot|Helvetica|Futura|Bodoni|sans.serif|serif\s+at\s+\d)\b[^.]*\.?
+    """,
+    re.VERBOSE,
+)
 
-    Uses the v3 endpoint, which takes multipart/form-data (NOT the legacy JSON
-    /generate endpoint). Fields: prompt, aspect_ratio ("16x9"), rendering_speed
-    ("QUALITY" for best banner text). Response: data[0].url (temporary — download
-    immediately). Docs: developer.ideogram.ai/api-reference/api-reference/generate-v3
+# _PROMPT_STRIP_SCENE_EXTRA is applied ONLY to text-free scene prompts (4–5).  It
+# additionally removes any instruction to render words/prices/overlays at all.
+_PROMPT_STRIP_SCENE_EXTRA = re.compile(
+    r"""(?ix)
+    [^.]*\b(locality\s+(?:name|detail)|text\s+overlay|overlay\s+approach
+        |gradient[^.]*\bfor\s+text\b|detail\s+below|headline\s+and\s+\w+\s+detail
+        |info\s+line|price\s+(?:below|beneath)|font\s+name)\b[^.]*\.?
+    """,
+    re.VERBOSE,
+)
+
+# Appended to text-free scene prompts — forbids ALL invented text and brand marks.
+_PROMPT_GUARD_SCENE = (
+    " Do not render any company logo, brand wordmark, emblem, monogram, or watermark. "
+    "Do not invent brand names. Add no text, captions, labels, or signage unless "
+    "text is explicitly specified in this prompt."
+)
+
+_HEADLINE_PREFIX_RE = re.compile(r'^\[HEADLINE:"([^"]+)"\]\s*')
+
+
+def _composite_logo(image_path: Path, logo_path: Path) -> None:
     """
-    import urllib.request
-    boundary = "PikoruaIdeogramBoundary"
-    fields = {
-        "prompt": prompt,
-        "aspect_ratio": "16x9",
-        "rendering_speed": "QUALITY",
-    }
-    body = b""
-    for name, value in fields.items():
-        body += (
+    Place the brand logo in the bottom-right corner of the image at image_path.
+
+    Sizing: the logo is scaled so its longest side is 18% of the image's shortest
+    side, preserving aspect ratio exactly — no stretch, no crop.  A 6% padding gap
+    is kept from the right and bottom edges.  The image canvas and pixel dimensions
+    are never changed.
+    """
+    from PIL import Image as _PILImage
+    base = _PILImage.open(image_path).convert("RGBA")
+    logo = _PILImage.open(logo_path).convert("RGBA")
+
+    W, H = base.size
+    lw, lh = logo.size
+
+    # Target: logo longest side = 18% of the image's shortest dimension.
+    max_logo_px = int(min(W, H) * 0.18)
+    scale = max_logo_px / max(lw, lh)
+    new_lw = max(1, round(lw * scale))
+    new_lh = max(1, round(lh * scale))
+    logo = logo.resize((new_lw, new_lh), _PILImage.LANCZOS)
+
+    pad = int(min(W, H) * 0.02)   # 2% inset from each edge — snug corner
+    x = W - new_lw - pad
+    y = H - new_lh - pad
+
+    # Paste using the logo's own alpha as mask — no white box, no background.
+    base.paste(logo, (x, y), mask=logo)
+
+    # Save back as PNG to preserve the alpha pipeline; then convert to RGBA-free
+    # PNG if the source was opaque (keeps file size reasonable).
+    base = base.convert("RGB")   # final ad images are opaque
+    base.save(image_path, format="PNG")
+
+
+def _tidy_prompt(text: str) -> str:
+    """Collapse the empty-sentence debris left behind after regex stripping."""
+    text = re.sub(r"\s*\.(?:\s*\.)+", ".", text)
+    text = re.sub(r"\s+([.,])", r"\1", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
+
+
+def _sanitize_image_prompt(text: str, is_banner: bool = False,
+                           locality: str = "", price_cr: str = "") -> str:
+    """Clean a brief prompt before it reaches Ideogram.
+
+    Banner mode (is_banner=True): Ideogram composes the full ad — it bakes in the
+    headline AND a locality/price line as integrated typography.  We strip only the
+    things it can't handle (logo/wordmark, pixel dims, font names, point sizes) and
+    inject the exact text strings so spelling is anchored, while leaving the crew's
+    creative placement language intact.  The logo is composited by PIL afterward, so
+    we reserve the bottom-right corner as clean negative space.
+
+    Scene mode (is_banner=False): a pure text-free photograph (prompts 4–5) — strip
+    ALL text/overlay/brand instructions and forbid invented text entirely."""
+    m = _HEADLINE_PREFIX_RE.match(text or "")
+    headline = m.group(1).strip().rstrip(".") if m else None
+    body = _HEADLINE_PREFIX_RE.sub("", text or "")
+    cleaned = _PROMPT_STRIP_COMMON.sub("", body)
+
+    if not is_banner:
+        cleaned = _PROMPT_STRIP_SCENE_EXTRA.sub("", cleaned)
+        return _tidy_prompt(cleaned) + _PROMPT_GUARD_SCENE
+
+    cleaned = _tidy_prompt(cleaned)
+
+    # Build the secondary locality·price line Ideogram must render verbatim.
+    parts = [p for p in [(locality or "").strip(),
+                         (f"₹{price_cr} Cr" if price_cr else "")] if p]
+    secondary = "  ·  ".join(parts)
+
+    guard = (
+        ' Treat this as a finished, art-directed luxury advertisement: build the '
+        'photograph first, then lay refined editorial typography over it with real '
+        'negative space and hierarchy — never a cheap solid colour bar, never builder-ad '
+        'styling.')
+    if headline:
+        guard += (f' Render the headline "{headline}" as the dominant text element in an '
+                  f'elegant serif.')
+    if secondary:
+        guard += (f' Beneath it render a smaller secondary line reading exactly "{secondary}". '
+                  'This secondary line must be clearly legible — set it against a darker or '
+                  'higher-contrast part of the scene (a soft shadow, a deeper-toned surface) so '
+                  'it never washes out against a pale background; it should read at a glance, '
+                  'though it stays quieter than the headline.')
+    guard += (' Spell every word and number letter-for-letter, exactly as written. '
+              'Do NOT render any company logo, brand wordmark, emblem, monogram, watermark, '
+              'or brand name; keep the bottom-right corner clean, empty negative space so a '
+              'logo can be composited there afterward.')
+    return cleaned + guard
+
+def _call_ideogram_v3(prompt: str, key: str, speed: str = "QUALITY", aspect: str = "4x5") -> bytes:
+    """Ideogram v3 — multipart/form-data. Better photorealism for scene-only prompts."""
+    speed = speed.upper() if speed else "QUALITY"
+    if speed not in ("TURBO", "DEFAULT", "QUALITY"):
+        speed = "QUALITY"
+    # Ideogram v3 expects the bare "NxN" ratio (e.g. "4x5"), NOT the old "ASPECT_4_5"
+    # enum — sending the enum returns HTTP 400 and silently drops the prompt.
+    _V3_RATIOS = {"1x1", "4x5", "5x4", "16x9", "9x16", "2x3", "3x2", "3x4", "4x3"}
+    clean_aspect = (aspect or "4x5").lower().replace(":", "x")
+    aspect_code = clean_aspect if clean_aspect in _V3_RATIOS else "4x5"
+
+    import urllib.request, json, time
+    boundary = "IdeogramV3Boundary"
+    parts = []
+    for name, value in [("prompt", prompt), ("aspect_ratio", aspect_code), ("rendering_speed", speed)]:
+        parts.append(
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
             f"{value}\r\n"
-        ).encode("utf-8")
-    body += f"--{boundary}--\r\n".encode("utf-8")
+        )
+    parts.append(f"--{boundary}--\r\n")
+    body = "".join(parts).encode("utf-8")
 
     req = urllib.request.Request(
         "https://api.ideogram.ai/v1/ideogram-v3/generate",
         data=body,
+        headers={"Api-Key": key, "Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    data = None
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read())
+            break
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")
+            is_rate_limit = e.code == 429 or (e.code == 403 and "1010" in detail)
+            if is_rate_limit and attempt < 3:
+                time.sleep(5 * (attempt + 1))
+                continue
+            raise RuntimeError(f"Ideogram v3 request failed [{e.code}]: {detail}") from e
+
+    img_url = data["data"][0]["url"]
+    img_req = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(img_req, timeout=60) as img_resp:
+        return img_resp.read()
+
+
+def _call_ideogram(prompt: str, key: str, speed: str = "QUALITY", aspect: str = "4x5") -> bytes:
+    """
+    Ideogram 4.0 API — standard JSON payload.
+    Converts simple aspect ratio strings (e.g., '4x5', '16x9') to v4 resolution strings.
+    """
+    speed = speed.upper() if speed else "QUALITY"
+    
+    _RESOLUTION_MAP = {
+        "1x1": "2048x2048",
+        "4x5": "1792x2240",
+        "16x9": "2560x1440", 
+        "9x16": "1440x2560"   
+    }
+    clean_aspect = aspect.lower().replace(":", "x") if aspect else "4x5"
+    
+    # 2. Get the exact resolution string (fallback to "1024x1280" if not found)
+    resolution = _RESOLUTION_MAP.get(clean_aspect, "1024x1280")
+
+    # 3. Build v4 JSON payload
+    payload = {
+        "text_prompt": prompt,
+        "resolution": resolution,
+        "rendering_speed": speed,
+    }
+
+    import urllib.request
+    import json
+    import time
+    
+    body = json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.ideogram.ai/v1/ideogram-v4/generate",
+        data=body,
         headers={
             "Api-Key": key,
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Content-Type": "application/json",
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.loads(resp.read())
-    img_url = data["data"][0]["url"]
-    with urllib.request.urlopen(img_url, timeout=60) as img_resp:
-        return img_resp.read()
 
-
-def _call_replicate_flux(prompt: str, token: str) -> bytes:
-    """Replicate Flux 2 Pro — paid production option. Best photorealistic renders."""
-    import urllib.request, time
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "Prefer": "wait",
-    }
-    payload = json.dumps({
-        "input": {"prompt": prompt, "aspect_ratio": "16:9", "output_format": "png"}
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.replicate.com/v1/models/black-forest-labs/flux-pro/predictions",
-        data=payload,
-        headers=headers,
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        pred = json.loads(resp.read())
-
-    poll_url = pred.get("urls", {}).get("get") or f"https://api.replicate.com/v1/predictions/{pred['id']}"
-    for _ in range(60):
-        if pred.get("status") in ("succeeded", "failed", "canceled"):
+    # Retry logic with backoff
+    data = None
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read())
             break
-        time.sleep(3)
-        poll_req = urllib.request.Request(poll_url, headers={"Authorization": f"Bearer {token}"})
-        with urllib.request.urlopen(poll_req, timeout=30) as r:
-            pred = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")
+            is_rate_limit = e.code == 429 or (e.code == 403 and "1010" in detail)
+            if is_rate_limit and attempt < 3:
+                time.sleep(5 * (attempt + 1))
+                continue
+            raise RuntimeError(f"Ideogram image request failed [{e.code}]: {detail}") from e
 
-    if pred.get("status") != "succeeded":
-        raise RuntimeError(f"Replicate prediction failed: {pred.get('error', pred.get('status'))}")
+    img_url = data["data"][0]["url"]
 
-    output = pred["output"]
-    img_url = output if isinstance(output, str) else output[0]
-    with urllib.request.urlopen(img_url, timeout=60) as img_resp:
-        return img_resp.read()
-
+    # Download ephemeral image
+    img_req = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(img_req, timeout=60) as img_resp:
+            return img_resp.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")
+        raise RuntimeError(f"Ideogram image download failed [{e.code}]: {detail}") from e
 
 def _image_backend(i: int, ideogram_key: str, replicate_token: str,
                    together_key: str) -> tuple[str, str]:
     """
-    Return (backend_name, tier) for prompt index i (1-based).
+    Return (backend_name, tier) for prompt index i (1-based), or ("", "") if no
+    image service is connected.
 
     Ideogram 3 is the production backend and handles ALL prompts (it renders
     text-in-image banners AND photorealistic scenes). Replicate Flux is used for
-    the render prompts (4-5) only if a token is explicitly set. Together AI and
-    Pollinations remain as free fallbacks, but note both free image tiers are
-    currently gated (Pollinations 402, Gemini/Imagen free quota 0) — Ideogram is
-    the working path once IDEOGRAM_API_KEY is set.
-
-    gemini_key is accepted for signature stability but not used for selection:
-    Imagen/Gemini image gen requires a paid Google plan, so it is not an
-    auto-selected free backend.
+    the render prompts (4-5) only if a token is explicitly set. Together AI is an
+    optional fallback if its key is set.
     """
     if i > 3 and replicate_token:
         return "replicate", "paid"
@@ -2243,20 +3235,39 @@ def _image_backend(i: int, ideogram_key: str, replicate_token: str,
         return "ideogram", "paid"
     if together_key:
         return "together", "free"
-    return "pollinations", "free"
+    return "", ""
+
+
+class ImageGenReq(BaseModel):
+    prompts: list[int] | None = None          # which prompt numbers to (re)generate; None/empty = all
+    alongside: list[int] = Field(default_factory=list)  # generate new version WITHOUT overwriting existing
+    speed: str = "QUALITY"                     # fallback rendering speed (Ideogram only)
+    speeds: dict[int, str] = Field(default_factory=dict)  # per-prompt speed overrides, keyed by prompt number
+    ratio: str = "4x5"                         # fallback aspect ratio (Meta feed default)
+    ratios: dict[int, str] = Field(default_factory=dict)  # per-prompt aspect-ratio overrides
+    custom_prompts: dict[int, str] = Field(default_factory=dict)  # user-edited prompt text, keyed by prompt number
 
 
 @app.post("/generate-images/{run_id}")
-def generate_images(run_id: str):
+def generate_images(run_id: str, payload: ImageGenReq | None = None):
     """
-    Generate images for all 5 prompts in a completed run.
+    Generate images for a completed run.
+
+    Body (all optional): {prompts:[1,3], speed:"QUALITY", speeds:{1:"TURBO"}}.
+      - prompts: only these prompt numbers are generated (and force-overwritten,
+        since the operator explicitly asked for them). Omit/empty = all prompts,
+        skipping any that already exist.
+      - speed / speeds: Ideogram rendering speed — TURBO (fast/cheap), DEFAULT,
+        or QUALITY (best banner text). `speeds` overrides `speed` per prompt.
+
     Backend priority (per prompt):
-      1. Paid: Ideogram (1–3) / Replicate (4–5) — if keys set
-      2. Free: Together AI FLUX.1-schnell — if TOGETHER_API_KEY set
-      3. Free fallback: Pollinations.ai — no key needed, always available
-    Images saved to review_folder/images/image_N.png (or .jpg for Pollinations).
+      1. Ideogram 3.0 (all prompts) — primary, requires IDEOGRAM_API_KEY
+      2. Replicate Flux (render prompts 4–5) — if REPLICATE_API_TOKEN set
+      3. Together AI FLUX.1 — optional fallback if TOGETHER_API_KEY set
+    Images saved to review_folder/images/image_N.png.
     """
     import os
+    payload = payload or ImageGenReq()
     if run_id not in _runs:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
     run = _runs[run_id]
@@ -2280,29 +3291,137 @@ def generate_images(run_id: str):
     images_dir = review_folder / "images"
     images_dir.mkdir(exist_ok=True)
 
+    # Which prompts to act on. An explicit list means "(re)generate exactly these,
+    # overwriting" — the operator picked them on purpose. No list = all, but skip any
+    # image that already exists (the "create the rest" default).
+    alongside_set = {p for p in (payload.alongside or []) if 1 <= p <= len(image_prompts)}
+    selected = {p for p in (payload.prompts or []) if 1 <= p <= len(image_prompts)}
+    explicit = bool(selected)
+    if not explicit:
+        selected = set(range(1, len(image_prompts) + 1))
+
+    brief = run.get("brief", {})
+    locality  = brief.get("locality", "")
+    price_cr  = str(brief.get("price_cr", "")).strip()
+
+    import re as _re
     results = []
     errors = []
     for i, (_, prompt_text) in enumerate(image_prompts, 1):
-        out_path = images_dir / f"image_{i}.png"
-        if out_path.exists():
+        is_alongside = i in alongside_set
+        if i not in selected and not is_alongside:
+            continue
+        if is_alongside:
+            # Find next available versioned filename: image_N_v2.png, image_N_v3.png, …
+            k = 2
+            while (images_dir / f"image_{i}_v{k}.png").exists():
+                k += 1
+            out_path = images_dir / f"image_{i}_v{k}.png"
+        else:
+            out_path = images_dir / f"image_{i}.png"
+        if out_path.exists() and not explicit and not is_alongside:
             results.append({"prompt": i, "status": "already_exists", "file": str(out_path)})
             continue
         backend, _ = _image_backend(i, ideogram_key, replicate_token, together_key)
+        if not backend:
+            errors.append({"prompt": i, "backend": "none", "fixable": False,
+                           "error": "No image service is connected yet. Your developer needs to "
+                                    "add an Ideogram API key to generate images."})
+            continue
+        speed = payload.speeds.get(i) or payload.speed
+        aspect = payload.ratios.get(i) or payload.ratio
+        # Allow caller to supply a hand-edited prompt; default to the parsed brief text.
+        effective_prompt = payload.custom_prompts.get(i) or prompt_text
+        is_banner = effective_prompt.strip().startswith("[HEADLINE:")
+        sanitized = _sanitize_image_prompt(effective_prompt, is_banner, locality, price_cr)
         try:
-            if backend == "ideogram":
-                img_bytes = _call_ideogram(prompt_text, ideogram_key)
-            elif backend == "replicate":
-                img_bytes = _call_replicate_flux(prompt_text, replicate_token)
-            elif backend == "together":
-                img_bytes = _call_together_flux(prompt_text, together_key)
+            if is_banner and ideogram_key:
+                # v4 for text banners — better text rendering; DEFAULT = balanced quality
+                v4_speed = speed if speed in ("TURBO", "DEFAULT") else "DEFAULT"
+                img_bytes = _call_ideogram(sanitized, ideogram_key, v4_speed, aspect)
+            elif ideogram_key:
+                # v3 for pure scene/photo prompts — better photorealism, more natural
+                img_bytes = _call_ideogram_v3(sanitized, ideogram_key, speed, aspect)
             else:
-                img_bytes = _call_pollinations(prompt_text)
+                raise RuntimeError("No image service connected — add IDEOGRAM_API_KEY to .env")
             out_path.write_bytes(img_bytes)
+            # Banner text (headline + locality + price) is rendered by Ideogram as part
+            # of the composition — no PIL footer bar. We only composite the real logo,
+            # which Ideogram can't spell. The prompt reserves the bottom-right corner.
+            # Composite the brand logo bottom-right if one has been uploaded.
+            if _BRAND_LOGO_PATH.exists():
+                try:
+                    logo_backup_dir = out_path.parent / ".logo_backup"
+                    logo_backup_dir.mkdir(exist_ok=True)
+                    logo_backup = logo_backup_dir / out_path.name
+                    import shutil as _shutil
+                    _shutil.copy2(out_path, logo_backup)
+                    _composite_logo(out_path, _BRAND_LOGO_PATH)
+                except Exception:
+                    pass
             results.append({"prompt": i, "status": "generated", "backend": backend, "file": str(out_path)})
         except Exception as exc:
-            errors.append({"prompt": i, "backend": backend, "error": str(exc)})
+            from pikorua_adflow.tools.errors import explain_and_log
+            friendly = explain_and_log(f"Image generation — prompt {i} ({backend})", exc)
+            errors.append({"prompt": i, "backend": backend, "error": friendly["message"],
+                           "fixable": friendly["fixable"]})
 
     return {"run_id": run_id, "generated": results, "errors": errors}
+
+
+class AudienceSave(BaseModel):
+    city: str = ""
+    city_key: str | None = None
+    region: str = ""
+    country: str = "IN"
+    radius_km: int = 25
+    age_min: int = 28
+    age_max: int = 65
+    interests: list[dict] = Field(default_factory=list)   # [{id, name}]
+    behaviours: list[dict] = Field(default_factory=list)   # [{id, name}]
+    nri_countries: list[str] = Field(default_factory=list) # ISO-2 codes, e.g. ["AE","US","GB"]
+    end_time: str = ""                                     # ISO 8601, optional
+
+
+@app.get("/audience/{run_id}")
+def get_audience(run_id: str):
+    """Current ad-set audience for a run (seeds the curated default on first call)."""
+    run = _require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    audience = _effective_audience(review_folder, run.get("brief", {}))
+    from pikorua_adflow.tools import meta_targeting as _mt
+    return {"run_id": run_id, "audience": audience, "summary": _mt.audience_summary(audience)}
+
+
+@app.post("/audience/{run_id}")
+def save_audience(run_id: str, payload: AudienceSave):
+    """Persist the user-edited audience for a run."""
+    run = _require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    audience = payload.model_dump()
+    _save_audience(review_folder, audience)
+    from pikorua_adflow.tools import meta_targeting as _mt
+    return {"run_id": run_id, "audience": audience, "summary": _mt.audience_summary(audience)}
+
+
+@app.get("/audience-search")
+def audience_search(q: str, type: str = "interest"):
+    """Typeahead proxy to Meta's read-only Targeting Search (for the add-chip UI)."""
+    from pikorua_adflow.tools import meta_targeting as _mt
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        return {"results": [], "error": "META_ACCESS_TOKEN not set"}
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"results": []}
+    try:
+        if type == "city":
+            return {"results": _mt.search_cities(q, token)}
+        if type == "behaviour":
+            return {"results": _mt.search_behaviours(q, token)}
+        return {"results": _mt.search_interests(q, token)}
+    except Exception as exc:
+        return {"results": [], "error": str(exc)}
 
 
 @app.post("/deploy-to-meta/{run_id}")
@@ -2326,13 +3445,38 @@ def deploy_to_meta(run_id: str):
     if not selected:
         raise HTTPException(status_code=400, detail="No ad copy variants found in review folder.")
 
-    from pikorua_adflow.tools.meta_tool import deploy_ad
+    from pikorua_adflow.tools.meta_tool import deploy_ad, create_campaign
 
     campaign_name = brief.get("property_name", "Pikorua Campaign")
     city = brief.get("city", "India")
     landing_page_url = brief.get("landing_page_url", "https://pikorua.in/")
     daily_budget_inr = int(brief.get("daily_budget_inr", 1000))
     cta = brief.get("cta", "GET_QUOTE")
+
+    # Resolve the ad-set audience (city geo + age + interests/behaviours) once for
+    # all variants. Seeds the curated default if the user never opened the panel.
+    from pikorua_adflow.tools import meta_targeting as _mt
+    audience = _effective_audience(review_folder, brief)
+    targeting_spec = _mt.build_targeting_spec(audience)
+    audience_label = _mt.audience_summary(audience)
+    end_time = audience.get("end_time", "")
+
+    # Create one shared campaign for all variants (skipped in dry-run — deploy_ad handles that).
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    shared_campaign_id = ""
+    if not dry_run:
+        _token = os.getenv("META_ACCESS_TOKEN", "")
+        _account_id = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+        try:
+            shared_campaign_id = create_campaign(
+                campaign_name=campaign_name,
+                token=_token,
+                ad_account_id=_account_id,
+            )
+        except Exception as exc:
+            from pikorua_adflow.tools.errors import explain_and_log
+            friendly = explain_and_log("Meta deploy — create campaign", exc)
+            return {"run_id": run_id, "deployed": [], "errors": [{"variant": None, "error": friendly["message"], "fixable": friendly["fixable"]}], "dropped_locations": []}
 
     results = []
     errors = []
@@ -2341,8 +3485,14 @@ def deploy_to_meta(run_id: str):
         headline = copy.get("headline", "")
         body_text = copy.get("body", "")
 
-        image_path = review_folder / "images" / f"image_{variant_num}.png"
-        if not image_path.exists():
+        # Use the user-assigned image for this variant, falling back to image_{num}.png
+        _v_edits = _load_edits(review_folder).get("meta", {}).get(str(variant_num), {})
+        _assigned = _v_edits.get("image_num")
+        if _assigned and (review_folder / "images" / f"image_{_assigned}.png").exists():
+            image_path = review_folder / "images" / f"image_{_assigned}.png"
+        elif (review_folder / "images" / f"image_{variant_num}.png").exists():
+            image_path = review_folder / "images" / f"image_{variant_num}.png"
+        else:
             image_path = None
 
         try:
@@ -2356,10 +3506,26 @@ def deploy_to_meta(run_id: str):
                 landing_page_url=landing_page_url,
                 daily_budget_inr=daily_budget_inr,
                 cta=cta,
+                targeting_spec=targeting_spec,
+                audience_label=audience_label,
+                end_time=end_time,
+                campaign_id=shared_campaign_id,
             )
             results.append(result)
         except Exception as exc:
-            errors.append({"variant": variant_num, "error": str(exc)})
+            from pikorua_adflow.tools.errors import explain_and_log
+            friendly = explain_and_log(f"Meta deploy — variant {variant_num}", exc)
+            errors.append({"variant": variant_num, "error": friendly["message"],
+                           "fixable": friendly["fixable"]})
+
+    # All variants failed — clean up the shared campaign so nothing is left orphaned.
+    if shared_campaign_id and not results:
+        from pikorua_adflow.tools.meta_tool import _delete
+        _delete(shared_campaign_id, _token)
+
+    # Aggregate any locations Meta made us drop (e.g. Singapore's universal ads
+    # declaration) so the operator can re-add them in Ads Manager once declared.
+    dropped = sorted({loc for r in results for loc in r.get("dropped_locations", [])})
 
     # Only persist meta_ads when there are real results — an empty list would
     # cause the pre-deploy view to render again on reload, hiding the errors.
@@ -2367,9 +3533,14 @@ def deploy_to_meta(run_id: str):
         _runs[run_id]["meta_ads"] = results
     if errors:
         _runs[run_id]["meta_deploy_errors"] = errors
+    if dropped:
+        _runs[run_id]["meta_dropped_locations"] = dropped
+    else:
+        _runs[run_id].pop("meta_dropped_locations", None)
     _save_runs()
 
-    return {"run_id": run_id, "deployed": results, "errors": errors}
+    return {"run_id": run_id, "deployed": results, "errors": errors,
+            "dropped_locations": dropped}
 
 
 @app.get("/image/{run_id}/{filename}")
@@ -2381,13 +3552,14 @@ def serve_image(run_id: str, filename: str):
     run = _runs[run_id]
     if not run.get("review_folder"):
         raise HTTPException(status_code=404, detail="No review folder for this run.")
-    # Safety: only allow image_N.png filenames to prevent path traversal
-    if not re.fullmatch(r'image_\d+\.png', filename):
+    # Safety: only allow image_N.png and image_N_vK.png filenames to prevent path traversal
+    if not re.fullmatch(r'image_\d+(?:_v\d+)?\.png', filename):
         raise HTTPException(status_code=400, detail="Invalid filename.")
     img_path = Path(run["review_folder"]) / "images" / filename
     if not img_path.exists():
         raise HTTPException(status_code=404, detail="Image not found.")
-    return Response(content=img_path.read_bytes(), media_type="image/png")
+    return Response(content=img_path.read_bytes(), media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
 
 
 @app.post("/approve/{run_id}")

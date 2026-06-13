@@ -1,36 +1,36 @@
-```markdown
-# Competitor Ad Summaries for Luxury Real Estate in Ahmedabad
+# Competitor Report: Luxury Real Estate in Ahmedabad
 
-## Competitor 1
+## Competitor Ad Summaries
+
+### 1. Goyal & Co
 - **Brand Name:** Goyal & Co
-- **Headline / Main Message:** Riviera One - 4 & 5 BHK Ultra-Luxurious Apartments
-- **Emotional Angle Used:** Aspiration
-- **CTA Used:** "Explore More"
+- **Headline/Main Message:** "Riviera One - 4 & 5 BHK Ultra-Luxurious Apartments"
+- **Emotional Angle Used:** Aspiration (the ultimate expression of high-class luxury living)
+- **CTA Used:** "Discover More"
 
-## Competitor 2
+### 2. Adani Realty
 - **Brand Name:** Adani Realty
-- **Headline / Main Message:** Ambrosia. 4 BHK Ultra-Luxury Apartments.
-- **Emotional Angle Used:** Lifestyle
-- **CTA Used:** "Inquire Now"
+- **Headline/Main Message:** "Ambrosia. 4 BHK Ultra-Luxury Apartments starting from ₹2.49 Cr"
+- **Emotional Angle Used:** Investment Return (luxury at an affordable price)
+- **CTA Used:** "Explore Now"
 
-## Competitor 3
+### 3. Ratnaakar Group
 - **Brand Name:** Ratnaakar Group
-- **Headline / Main Message:** Luxury 5 BHK Flats In Ahmedabad
-- **Emotional Angle Used:** Family and Comfort
+- **Headline/Main Message:** "Luxury 5 BHK Flats In Ahmedabad"
+- **Emotional Angle Used:** Lifestyle (premium living in an upscale neighborhood)
 - **CTA Used:** "Get Details"
 
-## Competitor 4
+### 4. Arvind Smart Spaces
 - **Brand Name:** Arvind Smart Spaces
-- **Headline / Main Message:** Arvind Uplands | Luxury Villas in Ahmedabad
-- **Emotional Angle Used:** Investment Return
-- **CTA Used:** "Discover Today"
+- **Headline/Main Message:** "Explore a range of 4, 5 & 6 BHK luxury golf villas amidst lush greenery."
+- **Emotional Angle Used:** Lifestyle (luxury living with world-class amenities)
+- **CTA Used:** "Learn More"
 
-## Competitor 5
-- **Brand Name:** 99acres.com
-- **Headline / Main Message:** Luxury Apartments in Ahmedabad
-- **Emotional Angle Used:** FOMO (Fear of Missing Out)
-- **CTA Used:** "Browse Listings"
+### 5. UB Heritage
+- **Brand Name:** UB Heritage
+- **Headline/Main Message:** "Unveiling the Best 4 BHK Luxury Apartments and Plotted Homes in Ahmedabad."
+- **Emotional Angle Used:** Aspiration (luxurious living environment)
+- **CTA Used:** "View Listings"
 
-# Gap Analysis
-While many competitors focus on lifestyle, aspiration, and investment returns, few emphasize the complexities of legal processes and documentation concerns for buyers. Pikorua could differentiate by positioning itself as a trusted guide through the legal intricacies of luxury real estate transactions, thereby alleviating fears and frustrations that affluent buyers may face.
-```
+## Gap Analysis
+No competitor appears to be using the angle of "sustainable luxury living" or promoting eco-friendly aspects of luxury properties. Pikorua could differentiate itself by emphasizing this aspect, appealing to environmentally conscious buyers while maintaining a luxury lifestyle message.

@@ -1,19 +1,19 @@
 ```json
 {
-  "age_range": "35-50",
-  "net_worth": "₹20-50 Cr",
-  "primary_motivation": "Lifestyle and investment",
+  "age_range": "40-55",
+  "net_worth": "₹50 Cr - ₹200 Cr",
+  "primary_motivation": "Lifestyle and Investment",
   "pain_points": [
-    "Concerns over property appreciation and resale value",
-    "Complexity of legal processes and documentation"
+    "Concerns about the property value appreciation post-purchase due to market fluctuations.",
+    "Doubts regarding the credibility and reliability of the builder/real estate consultancy."
   ],
   "preferred_channels": [
     "WhatsApp",
     "Email",
-    "Phone calls",
-    "Instagram"
+    "Instagram",
+    "Phone Calls"
   ],
-  "decision_style": "Considered, often involving the family committee",
-  "trust_trigger": "Demonstrated market expertise and proven track record with similar clients"
+  "decision_style": "Considered, often involving family or financial advisors in the process.",
+  "trust_trigger": "Demonstrable track record of successful past transactions and transparent communication."
 }
 ```

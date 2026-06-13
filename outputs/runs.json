@@ -702,5 +702,389 @@
         "dry_run": false
       }
     ]
+  },
+  "88d95d8a": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Ikebana Heights",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 75000,
+      "city": "Ahmedabad",
+      "locality": "off sindhubhavan road",
+      "property_type": "4-5 bhk",
+      "price_cr": "13",
+      "standout_feature": "7300-8400 sqft, Club Class Amenities",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "UAE, USA, Singapore, Australia",
+      "campaign_duration_days": 45,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1500,
+      "cta": "GET_QUOTE",
+      "company_name": ""
+    },
+    "created_at": "2026-06-12T12:22:48.325159+00:00",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-12_17-57-34",
+    "copy_scorecard_summary": "**2/5 variants passed. 3 flagged for rewrite: Variants 1, 3, 5.**",
+    "approved": true,
+    "selected_variants": [
+      1,
+      2
+    ],
+    "meta_deploy_errors": [
+      {
+        "variant": 1,
+        "error": "POST act_207925274/adsets failed [400]: {\"error\":{\"message\":\"Invalid parameter\",\"type\":\"OAuthException\",\"code\":100,\"error_data\":\"{\\\"blame_field_specs\\\":[[\\\"compliance_section\\\"]]}\",\"error_subcode\":3858550,\"is_transient\":false,\"error_user_title\":\"No Singapore universal ads declaration\",\"error_user_msg\":\"Regional regulated categories value required: To publish ads that include locations in Singapore, use the following value for regional regulated categories: SINGAPORE_UNIVERSAL\",\"fbtrace_id\":\"Ajdzr32kpnpeTj2TmZcLiv8\"}}"
+      },
+      {
+        "variant": 2,
+        "error": "POST act_207925274/adsets failed [400]: {\"error\":{\"message\":\"Invalid parameter\",\"type\":\"OAuthException\",\"code\":100,\"error_data\":\"{\\\"blame_field_specs\\\":[[\\\"compliance_section\\\"]]}\",\"error_subcode\":3858550,\"is_transient\":false,\"error_user_title\":\"No Singapore universal ads declaration\",\"error_user_msg\":\"Regional regulated categories value required: To publish ads that include locations in Singapore, use the following value for regional regulated categories: SINGAPORE_UNIVERSAL\",\"fbtrace_id\":\"AwLiLDw-XRMRlqZPlM2HxlU\"}}"
+      }
+    ]
+  },
+  "5a90d293": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Anamika Heights, 4 and 5 bhk, 3300, 4200 and 6100 sqft",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 60000,
+      "city": "Ahmedabad",
+      "locality": "Sindhubhavan Road",
+      "property_type": "Ultra luxury apartment",
+      "price_cr": "3-6",
+      "standout_feature": "8500 sqft",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "US, Dubai",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE",
+      "company_name": ""
+    },
+    "created_at": "2026-06-13T09:09:20.181828+00:00",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-13_14-44-34",
+    "copy_scorecard_summary": "**2/5 variants passed. 3 flagged for rewrite: Variants 2, 3, 4.**",
+    "approved": true,
+    "selected_variants": [
+      1,
+      5
+    ],
+    "meta_deploy_errors": [
+      {
+        "variant": 1,
+        "error": "Something went wrong and we couldn't finish this step. The technical details have been saved to a log for your developer.",
+        "fixable": false
+      },
+      {
+        "variant": 5,
+        "error": "Something went wrong and we couldn't finish this step. The technical details have been saved to a log for your developer.",
+        "fixable": false
+      }
+    ]
+  },
+  "4bdb2b01": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Ikebana Heights, 5 bhk",
+      "platform": "Meta Ads + Google Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 75000,
+      "city": "Ahmedabad",
+      "locality": "Sindhubhavan Road",
+      "property_type": "Pent House",
+      "price_cr": "13",
+      "standout_feature": "8500 sqft",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1000,
+      "cta": "GET_QUOTE"
+    },
+    "created_at": "2026-06-13T11:32:34.529207+00:00",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-13_17-07-05",
+    "rerun_of": "099bdff4",
+    "copy_scorecard_summary": "**4/5 variants passed. 1 flagged for rewrite: Variant 2.**",
+    "approved": true,
+    "selected_variants": [
+      1,
+      2,
+      3
+    ],
+    "meta_deploy_errors": [
+      {
+        "variant": 1,
+        "error": "Something went wrong and we couldn't finish this step. The technical details have been saved to a log for your developer.",
+        "fixable": false
+      },
+      {
+        "variant": 2,
+        "error": "Something went wrong and we couldn't finish this step. The technical details have been saved to a log for your developer.",
+        "fixable": false
+      },
+      {
+        "variant": 3,
+        "error": "Something went wrong and we couldn't finish this step. The technical details have been saved to a log for your developer.",
+        "fixable": false
+      }
+    ],
+    "meta_ads": [
+      {
+        "dry_run": true,
+        "variant": 1,
+        "would_create": {
+          "image": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-13_17-07-05\\images\\image_5.png",
+          "campaign": "(would create) Ikebana Heights, 5 bhk",
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "Ahmedabad +25km \u00b7 Age 28\u201365 \u00b7 7 interests \u00b7 1 behaviour",
+            "age_min": 28,
+            "age_max": 65,
+            "targeting": {
+              "age_min": 28,
+              "age_max": 65,
+              "targeting_automation": {
+                "advantage_audience": 0
+              },
+              "geo_locations": {
+                "cities": [
+                  {
+                    "key": "1015741",
+                    "radius": 25,
+                    "distance_unit": "kilometer"
+                  }
+                ]
+              },
+              "flexible_spec": [
+                {
+                  "interests": [
+                    {
+                      "id": "6007828099136",
+                      "name": "Luxury goods (retail)"
+                    },
+                    {
+                      "id": "6003446239080",
+                      "name": "Property investing (investing)"
+                    },
+                    {
+                      "id": "6003484864669",
+                      "name": "Wealth management (banking)"
+                    },
+                    {
+                      "id": "6003388314512",
+                      "name": "Investment (business and finance)"
+                    },
+                    {
+                      "id": "6003102546240",
+                      "name": "Private banking"
+                    },
+                    {
+                      "id": "6002920953955",
+                      "name": "Interior design (design)"
+                    },
+                    {
+                      "id": "6003371567474",
+                      "name": "Entrepreneurship (business and finance)"
+                    }
+                  ],
+                  "behaviors": [
+                    {
+                      "id": "6022788483583",
+                      "name": "Frequent international travellers"
+                    }
+                  ]
+                }
+              ]
+            },
+            "instagram_actor_id": "(none)",
+            "end_time": "(no end date)"
+          },
+          "creative": {
+            "headline": "8,500 sq ft above the city.",
+            "body": "Most penthouses are apartments wearing a crown. At 8,500 sq ft on Sindhu Bhavan Road, this one is a floor of its own.",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      },
+      {
+        "dry_run": true,
+        "variant": 2,
+        "would_create": {
+          "image": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-13_17-07-05\\images\\image_2.png",
+          "campaign": "(would create) Ikebana Heights, 5 bhk",
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "Ahmedabad +25km \u00b7 Age 28\u201365 \u00b7 7 interests \u00b7 1 behaviour",
+            "age_min": 28,
+            "age_max": 65,
+            "targeting": {
+              "age_min": 28,
+              "age_max": 65,
+              "targeting_automation": {
+                "advantage_audience": 0
+              },
+              "geo_locations": {
+                "cities": [
+                  {
+                    "key": "1015741",
+                    "radius": 25,
+                    "distance_unit": "kilometer"
+                  }
+                ]
+              },
+              "flexible_spec": [
+                {
+                  "interests": [
+                    {
+                      "id": "6007828099136",
+                      "name": "Luxury goods (retail)"
+                    },
+                    {
+                      "id": "6003446239080",
+                      "name": "Property investing (investing)"
+                    },
+                    {
+                      "id": "6003484864669",
+                      "name": "Wealth management (banking)"
+                    },
+                    {
+                      "id": "6003388314512",
+                      "name": "Investment (business and finance)"
+                    },
+                    {
+                      "id": "6003102546240",
+                      "name": "Private banking"
+                    },
+                    {
+                      "id": "6002920953955",
+                      "name": "Interior design (design)"
+                    },
+                    {
+                      "id": "6003371567474",
+                      "name": "Entrepreneurship (business and finance)"
+                    }
+                  ],
+                  "behaviors": [
+                    {
+                      "id": "6022788483583",
+                      "name": "Frequent international travellers"
+                    }
+                  ]
+                }
+              ]
+            },
+            "instagram_actor_id": "(none)",
+            "end_time": "(no end date)"
+          },
+          "creative": {
+            "headline": "No floor above. No compromise.",
+            "body": "This is not a purchase. It is 8,500 sq ft on Sindhu Bhavan Road \u2014 and the decision that belongs at the top.",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      },
+      {
+        "dry_run": true,
+        "variant": 3,
+        "would_create": {
+          "image": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-13_17-07-05\\images\\image_3.png",
+          "campaign": "(would create) Ikebana Heights, 5 bhk",
+          "adset": {
+            "optimization_goal": "LEAD_GENERATION",
+            "billing_event": "IMPRESSIONS",
+            "daily_budget_inr": 1000,
+            "daily_budget_paise": 100000,
+            "geo": "Ahmedabad +25km \u00b7 Age 28\u201365 \u00b7 7 interests \u00b7 1 behaviour",
+            "age_min": 28,
+            "age_max": 65,
+            "targeting": {
+              "age_min": 28,
+              "age_max": 65,
+              "targeting_automation": {
+                "advantage_audience": 0
+              },
+              "geo_locations": {
+                "cities": [
+                  {
+                    "key": "1015741",
+                    "radius": 25,
+                    "distance_unit": "kilometer"
+                  }
+                ]
+              },
+              "flexible_spec": [
+                {
+                  "interests": [
+                    {
+                      "id": "6007828099136",
+                      "name": "Luxury goods (retail)"
+                    },
+                    {
+                      "id": "6003446239080",
+                      "name": "Property investing (investing)"
+                    },
+                    {
+                      "id": "6003484864669",
+                      "name": "Wealth management (banking)"
+                    },
+                    {
+                      "id": "6003388314512",
+                      "name": "Investment (business and finance)"
+                    },
+                    {
+                      "id": "6003102546240",
+                      "name": "Private banking"
+                    },
+                    {
+                      "id": "6002920953955",
+                      "name": "Interior design (design)"
+                    },
+                    {
+                      "id": "6003371567474",
+                      "name": "Entrepreneurship (business and finance)"
+                    }
+                  ],
+                  "behaviors": [
+                    {
+                      "id": "6022788483583",
+                      "name": "Frequent international travellers"
+                    }
+                  ]
+                }
+              ]
+            },
+            "instagram_actor_id": "(none)",
+            "end_time": "(no end date)"
+          },
+          "creative": {
+            "headline": "Ahmedabad kept this for you.",
+            "body": "8,500 sq ft on Sindhu Bhavan Road. The penthouse that makes coming back feel like an arrival, not a transaction.",
+            "cta": "GET_QUOTE",
+            "lead_gen_form_id": "1473613254435640",
+            "thank_you_url": "https://pikorua.in/"
+          },
+          "ad": {
+            "status": "PAUSED"
+          }
+        }
+      }
+    ]
   }
 }

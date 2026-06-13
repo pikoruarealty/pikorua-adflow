@@ -42,6 +42,9 @@ write_meta_ads:
       plan brochure. Choose ONE number, then make the reader feel what it means.
     - Place as identity: name only the location and stop. Trust the address to carry weight.
       (A hotel says only "Park Avenue" and lets the reader supply the prestige.)
+      USE THIS SPARINGLY — at most ONE variant, and only if the address genuinely carries
+      prestige on its own. A bare locality name ("Sindhu Bhavan Road.") is the laziest
+      possible headline; if every campaign defaults to it, it stops meaning anything.
     - Contrast: name what the category does, then name what this property does instead.
       The gap between them is the headline. (A car brand: faster vs. quieter.)
     - Fragment sequence: short, rhythmic pieces accumulate to a single decision.
@@ -68,6 +71,19 @@ write_meta_ads:
     specific locality — not the city in general, not a nearby district. If a trend mentions
     GIFT City and the property is on Sindhu Bhavan Road, the trend is background, not copy
     material. Buyers will verify the address. Mismatched geography destroys trust.
+
+    FRESHNESS — fight your own defaults:
+    You write campaigns like this constantly, and you have favourite moves you reach for on
+    autopilot: the bare locality name, the "Not an investment — a return" reversal, the
+    square-footage number-statement. If a headline is one you could have written for a
+    different property last week, it is stale — bin it. Concretely:
+    - The 5 headlines must use 5 DIFFERENT creative techniques from the list above — never
+      three number-statements, never two bare-locality lines.
+    - Do not repeat sentence skeletons you tend to fall back on ("Not X. Y.", "X sq ft.
+      One address.", "Where X meets Y."). If your draft fits one of those moulds, rebuild it.
+    - The trend context is the SAME each run for a given city — so do NOT let it pull every
+      headline toward the same idea (rates, NRI demand, appreciation). A trend earns at most
+      one variant; the other four come from THIS property's specifics.
 
     ORIGINALITY CHECK — last step before output:
     Read your 5 headlines. If any headline matches phrasing you recognise from training data,
@@ -161,13 +177,17 @@ write_google_ads:
     Persona insight:
     {persona}
   expected_output: >
-    Formatted as:
+    OUTPUT ONLY THE FINAL FIVE LINES — nothing else. Do NOT show your selection
+    process, alternatives, rejected drafts, character-count math, trimming passes,
+    or any commentary or preamble. The very first character of your output is "H"
+    (the start of "Headline 1:"). Exactly:
       Headline 1: ...
       Headline 2: ...
       Headline 3: ...
       Description 1: ...
       Description 2: ...
     Plain text only — no markdown bold or asterisks. No character counts in brackets.
+    Do all your thinking silently; the saved answer is only these five labelled lines.
   agent: campaign_copywriter
 
 write_whatsapp_script:
@@ -464,10 +484,18 @@ format_for_api:
 
 generate_banner_prompts:
   description: >
-    Generate 3 Ideogram 3 image prompts for {product} that will serve as
-    scroll-stopping Meta ad banners. These must read like editorial luxury
-    photography — not AI renders. Before writing each prompt ask yourself:
-    "Could this pass for a spread in Architectural Digest India?" If not, revise.
+    You are art-directing 3 finished luxury Meta ad banners for {product}, written
+    as Ideogram image prompts. Think like an ad creative, not a stock-photo shopper:
+    FIRST conceive an ultra-realistic editorial photograph, THEN design how the ad
+    text is laid over it — headline and a small locality/price line — as if a human
+    designer placed it. The text is PART of the image; Ideogram renders it. Before
+    writing each prompt ask two questions: "Could the photo pass for a spread in
+    Architectural Digest India?" and "Would this ad stop a buyer mid-scroll — does
+    it earn a second look, or is it just pretty?" If either answer is no, revise.
+
+    DO NOT settle into a house template. The three banners must NOT share the same
+    text placement, the same crop, or the same compositional logic — vary them as a
+    real art director would across one campaign.
 
     ── PHOTOREALISM TECHNIQUES (required in every prompt) ──────────────────
     - Camera + lens: always specify a camera body and lens.
@@ -524,50 +552,63 @@ generate_banner_prompts:
     - Perfect bilateral symmetry in any shot
     - Chandeliers as the hero subject (looks like a showroom, not a home)
 
-    ── TEXT OVERLAY DESIGN ─────────────────────────────────────────────────
-    The headline and info must feel part of the image, not stamped on top.
-    Use ONE of these two approaches — specify which:
+    ── AD TEXT — IDEOGRAM RENDERS IT (this is the creative part) ────────────
+    Ideogram bakes the text INTO the photograph, so design it like a real ad
+    layout. Two pieces of text only:
+    - The HEADLINE (the variant headline assigned to this prompt) — the
+      dominant typographic element, set in a refined editorial serif.
+    - A SMALL SECONDARY LINE carrying the locality and price: "{locality} ·
+      ₹{price_cr} Cr" — quiet, supporting, never competing with the headline.
 
-    A. TOP GRADIENT BAR: a semi-transparent dark overlay occupying the top
-       22% of the frame. Headline text in Cormorant Garamond or Didot-style
-       serif, white, sentence case (not ALL CAPS), 72–88pt equivalent, wide
-       letter-spacing (+0.08em). Below the headline: one smaller line in
-       regular weight — locality name + price (e.g. "Sindhu Bhavan Road  ·
-       ₹13 Cr") at 32pt. Nothing else.
+    DESIGN THE TEXT DELIBERATELY — and differently in each of the three prompts:
+    1. First place the text where the PHOTOGRAPH gives it room: describe a real
+       pocket of negative space the composition creates (a luminous pale ceiling
+       up top, a shadowed wall to one side, a soft-focus sky through glazing) and
+       set the type INTO that space so it reads cleanly. Light text on dark
+       ground, or dark text on light ground — match it to the scene.
+    2. Vary the layout across the three: e.g. headline upper-left over bright
+       sky; or headline lower-third over a deep-shadow pocket; or a tall
+       left-column treatment. NEVER the same placement twice.
+    3. Typography must feel couture, not corporate: generous letter-spacing on a
+       short headline, real hierarchy between headline and the small detail line,
+       breathing room around it. NEVER a solid black or gold bar across the frame,
+       NEVER bold all-caps builder-ad styling, NEVER text crammed edge to edge.
+    4. The text must stay legible — give it contrast against whatever sits behind
+       it. If the scene behind the type is busy, let a soft natural gradient of
+       light or shadow (part of the photograph, not a graphic box) carry it.
 
-    B. LOWER-LEFT DARK PANEL: a dark-tinted rectangle in the lower-left
-       corner (occupying roughly 30% width × 18% height of frame). Headline
-       in the same elegant white serif. One info line below in lighter weight.
+    Reserve the BOTTOM-RIGHT corner as clean, empty negative space — the brand
+    logo is composited there afterward, so place no text or detail in that corner.
 
-    Colour palette for text zones: #1a1a1a at 72% opacity for the overlay,
-    white (#FAFAFA) for text, warm gold (#C9A84C) only as an accent dash or
-    thin rule — never as a headline colour. No yellow, no black bars, no
-    exclamation marks anywhere.
-
-    COMPANY NAME IN IMAGE:
-    If {company_name} is non-blank: add the brand text "{company_name}" at
-    the bottom-right corner — same Cormorant Garamond serif, white, 20pt
-    equivalent, 55% opacity. If {company_name} is "Pikorua" (any casing),
-    render it as "PIKORUA". If {company_name} is blank: no brand name at all.
+    DO NOT write font names, point sizes, or pixel dimensions in the prompt
+    (e.g. "Cormorant Garamond", "72pt", "1200x628px") — Ideogram renders those as
+    literal garbled text. Describe the typographic FEEL in words instead ("an
+    elegant high-contrast serif", "airy capitals", "a quiet sans caption").
+    DO NOT ask Ideogram to render any company name, brand wordmark, logo, emblem,
+    or "PIKORUA" — the real logo is added outside Ideogram.
 
     ── COLOUR PALETTE ──────────────────────────────────────────────────────
     Warm cream, teak, champagne, warm stone, muted sage green. Accent: brushed
     gold sparingly. Avoid: pure white, cold blues, neon tones, bright red.
 
     ── WHAT KILLS LUXURY ADS (never produce these) ─────────────────────────
-    - Solid black horizontal bars with bold yellow/gold text = cheap builder ad
+    - Solid black or gold horizontal bars with bold text = cheap builder ad
     - "POSSESSION SOON !!" energy anywhere in the image
     - Perfect CGI blue-sky renders with tropical pools
-    - More than 3 text elements in the frame
+    - Any logo, brand wordmark, watermark, or invented brand name in the image
+      (the headline and locality/price line ARE wanted; brand marks are NOT)
+    - Loud, bold, all-caps or crammed text that fights the photograph
     - Generic stock-photo interiors with identical cream sofas and no character
 
     ── PER-PROMPT CHECKLIST ────────────────────────────────────────────────
     Each prompt must contain all of: shot type + camera + lens + aperture +
     lighting quality + colour temperature + 3 material micro-details + one
-    imperfection detail + text overlay spec (approach + content) + brand mark
-    instruction. End every prompt with: "Editorial luxury real estate
-    photography, India. 1200x628px. Photorealistic — not rendered. Subtle
-    natural lens imperfections. No watermarks."
+    imperfection detail + a deliberate text-layout design (where the headline and
+    the small locality/price line sit, and why the composition gives them room),
+    with the bottom-right corner left clear for the logo.
+    End every prompt with: "Editorial luxury real estate photography, India.
+    Photorealistic — not rendered. Subtle natural lens imperfections. Elegant
+    integrated typography. No logo, watermark, or brand mark."
 
     Property: {product}
     City: {city}  |  Locality: {locality}  |  Type: {property_type}
@@ -603,29 +644,32 @@ generate_render_prompts:
     photorealism discipline as generate_banner_prompts: camera spec, depth of
     field, material micro-detail, natural imperfection, asymmetric composition.
 
-    Prompt 4 — ARRIVAL / APPROACH SHOT (not a building facade render):
-    Do NOT generate a symmetrical building exterior — CGI facades look identical
-    across every property ad in India and signal "AI-generated" instantly.
-    Instead, show the ARRIVAL EXPERIENCE:
-    - The landscaped driveway entrance or motor court at golden hour, with
-      mature Ashoka or Champa trees lining a stone-paved path
-    - OR: the lobby forecourt seen from outside — glass canopy, stone cladding
-      at the entry threshold, a valet stand in soft background focus
-    - OR: the private lift lobby interior — marble floor, brushed brass call
-      button, a tall vase of white Anthuriums on a plinth
-    - Camera: Leica Q3, 28mm f/2.0, slight upward tilt from waist height,
-      natural vignette, film grain at ISO 800
-    - Lighting: warm 4500K golden hour, long shadow bands across the paving,
-      light catching suspended dust or pollen in the air
-    - One human cue in far background (soft focus): a figure approaching the
-      entrance, or a parked dark sedan with open door, driver in distance
-    - Material specificity: name the stone type at the entrance (Kota stone,
-      Jaisalmer sandstone, grey granite), specify the plant species
-    - Natural imperfection: "light flare at the edge of the glass canopy",
-      "slight motion blur on a falling leaf"
-    - End with: "Architectural lifestyle photography, India. 1200x628px. 4K.
-      No text overlays. Photorealistic — not rendered. Natural film grain.
-      No watermarks."
+    Prompt 4 — EXTERIOR ESTABLISHING SHOT (the building seen from a distance):
+    Show the full {property_type} from far enough away to read its form against the
+    {city} skyline — but shot like a real architectural photographer, NOT a CGI
+    render. The difference between a luxury exterior and a builder render:
+    - NEVER head-on and symmetrical. Use a three-quarter angle from across the
+      street or an adjacent rooftop, so two faces of the building are visible and
+      the composition is off-centre (building weighted to one third of the frame).
+    - NEVER a flat midday blue sky. Shoot at BLUE HOUR or dusk: deep indigo sky,
+      and — the key luxury signal — warm interior lights glowing from inside the
+      units, so the building reads as alive and lived-in, not an empty render.
+    - Ground it in real context, not a void: neighbouring low-rise Ahmedabad
+      rooftops, mature trees, a quiet street with a faint car-light trail, ambient
+      haze. This is what makes it a photograph of a real place.
+    - Camera: Sony A7R V, 85mm f/4 (compression flattering to architecture) OR a
+      tilt-shift 50mm to keep verticals true; long exposure feel, ISO 200, tripod.
+    - Material/architecture detail: name the facade material (floor-to-ceiling
+      glazing with slim black mullions, fluted stone spandrels, exposed concrete
+      and timber balconies), and one rooftop or crown detail.
+    - Natural imperfection: "faint sensor bloom around the brightest windows",
+      "soft atmospheric haze softening the far skyline", "a slight car-light streak".
+    - NEVER include: tropical palms, a swimming pool unless {product} names one,
+      a perfectly mirrored facade, a glowing CGI lawn, or signage/brand name on the
+      building.
+    - End with: "Architectural exterior photography at dusk, India. Photorealistic
+      — not rendered. Natural film grain. No text, labels, logos, watermarks, or
+      brand marks."
 
     Prompt 5 — INTERIOR SIGNATURE MOMENT:
     - The primary living space of a {property_type}, showing depth: a sharp
@@ -651,9 +695,8 @@ generate_render_prompts:
       natural bokeh; ISO 640, slight warm colour grade (+200K)
     - Natural imperfection: "dust suspended in the diagonal light band",
       "soft lens breathing at extreme edge of the 24mm"
-    - End with: "Interior lifestyle photography, India. 1200x628px. 4K.
-      No text overlays. Photorealistic — not rendered. Natural grain. No
-      watermarks."
+    - End with: "Interior lifestyle photography, India. Photorealistic — not
+      rendered. Natural grain. No text, labels, logos, watermarks, or brand marks."
 
     Property: {product}  |  City: {city}, India  |  Type: {property_type}
     Locality: {locality}
@@ -661,8 +704,8 @@ generate_render_prompts:
   expected_output: >
     Two Flux 2 Pro prompts appended to outputs/visual_brief.md:
 
-      Prompt 4 — Arrival/Approach:
-      "[Full Flux prompt — 100–160 words, specific in every detail]"
+      Prompt 4 — Exterior Establishing Shot:
+      "[Full prompt — 100–160 words, specific in every detail]"
 
       Prompt 5 — Interior Signature Moment:
       "[Full Flux prompt — 100–160 words]"

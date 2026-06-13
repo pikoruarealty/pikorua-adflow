@@ -1,8 +1,6 @@
-```markdown
 ## CRM Signal
-- ₹9–12 Cr and ₹12 Cr+ segments together represent **24%** of clean leads — focus new campaigns on this specific budget range for deeper engagement.
-- **Owners**, **Business** professionals, and **Directors** are the top three buyer profiles — tailor messaging to emphasize smart investments and luxury lifestyle.
-- NRI leads account for only **3%** of total leads — develop targeted campaigns aimed at overseas demographics highlighting property investment as a viable option.
-- A significant **46%** of leads are in the ₹2–3 Cr bracket — consider revising targeting strategies to ensure alignment with Pikorua's portfolio.
-- Regular cleaning is essential — **10 junk/test entries** were found; enhance lead quality measures to improve future campaign effectiveness.
-```
+- **High-value segment**: The **27 leads at ₹9 Cr+** represent Pikorua's ideal buyers; leverage this segment to create lookalike audiences for better targeting in campaigns.
+- **NRI opportunity**: With only **3 confirmed international leads**, there is a significant gap in targeting NRIs. Implement dedicated NRI ad sets and creatives to capture this underserved segment.
+- **Buyer profession impact**: Leads from professions like **Owner (14)** and **Business (11)** progressed highest in interest; utilize these identifiers in campaign messaging to resonate with decision-makers.
+- **Budget misalignment**: **46%** of leads are in the ₹2–3 Cr range, below Pikorua's luxury tier. Consider tightening targeting parameters or implementing a budget qualifier in lead forms to attract higher-value prospects.
+- **Need for data hygiene**: The **10 junk/test entries** indicate a need for ongoing CRM maintenance; ensure leads are regularly cleaned before generating lookalike audiences for better efficiency in targeting efforts.

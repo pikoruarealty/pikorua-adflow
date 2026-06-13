@@ -22,7 +22,21 @@ from typing import Any
 _BASE = "https://graph.facebook.com/v20.0"
 
 
-def _post(path: str, payload: dict, token: str) -> dict:
+# ISO-2 → display name for the countries we may target (used to identify which
+# location a regional-compliance error refers to, and to word the warning).
+_ISO_NAMES: dict[str, str] = {
+    "IN": "India", "SG": "Singapore", "AE": "United Arab Emirates",
+    "US": "United States", "GB": "United Kingdom", "CA": "Canada",
+    "QA": "Qatar", "BH": "Bahrain", "KW": "Kuwait", "OM": "Oman",
+    "DE": "Germany", "FR": "France", "NL": "Netherlands", "CH": "Switzerland",
+    "AU": "Australia", "NZ": "New Zealand", "HK": "Hong Kong", "JP": "Japan",
+    "KE": "Kenya", "ZA": "South Africa", "TW": "Taiwan",
+}
+
+
+def _do_post(path: str, payload: dict, token: str) -> tuple[bool, dict]:
+    """POST to the Graph API. Returns (ok, data). On HTTP error, data is the parsed
+    error JSON (so callers can inspect subcodes) rather than raising."""
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"{_BASE}/{path}",
@@ -32,10 +46,127 @@ def _post(path: str, payload: dict, token: str) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
+            return True, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        try:
+            return False, json.loads(body)
+        except ValueError:
+            return False, {"error": {"message": body, "code": e.code}}
+
+
+def _post(path: str, payload: dict, token: str) -> dict:
+    ok, data = _do_post(path, payload, token)
+    if ok:
+        return data
+    raise RuntimeError(f"POST {path} failed: {json.dumps(data.get('error', data))}")
+
+
+def _get(path: str, token: str, params: dict | None = None) -> dict:
+    """GET from the Graph API. Raises on HTTP error."""
+    import urllib.parse as _uparse
+    qs = _uparse.urlencode({"access_token": token, **(params or {})})
+    req = urllib.request.Request(f"{_BASE}/{path}?{qs}")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
-        raise RuntimeError(f"POST {path} failed [{e.code}]: {body}") from e
+        raise RuntimeError(f"GET {path} failed [{e.code}]: {body}") from e
+
+
+def _fetch_instagram_actor_id(page_id: str, token: str) -> str:
+    """Return the Instagram Business Account ID linked to this Facebook Page.
+    This is the value Meta requires as instagram_actor_id on adcreatives.
+    Tries connected_instagram_account first (Business pages), then falls back to
+    instagram_accounts (personal/legacy). Returns "" if nothing is linked."""
+    try:
+        data = _get(page_id, token, {"fields": "connected_instagram_account"})
+        cia = data.get("connected_instagram_account", {})
+        if cia.get("id"):
+            return str(cia["id"])
+    except Exception:
+        pass
+    try:
+        data = _get(f"{page_id}/instagram_accounts", token, {"fields": "id"})
+        accounts = data.get("data", [])
+        if accounts:
+            return str(accounts[0]["id"])
+    except Exception:
+        pass
+    return ""
+
+
+def _regulated_country_to_drop(error: dict, targeted_countries: list[str]) -> str | None:
+    """
+    Some locations (e.g. Singapore) require a regional regulated-categories
+    declaration that we must NOT auto-make on the advertiser's behalf. When Meta
+    rejects the ad set for that reason (subcode 3858550), return the ISO-2 code of
+    the targeted country to drop so the rest of the campaign can still deploy.
+    Returns None if the error is something else we can't safely auto-fix.
+    """
+    err = error.get("error", error)
+    msg = f"{err.get('error_user_title', '')} {err.get('error_user_msg', '')} {err.get('message', '')}".lower()
+    is_compliance = (
+        err.get("error_subcode") == 3858550
+        or "regional regulated categories" in msg
+        or "universal ads declaration" in msg
+    )
+    if not is_compliance:
+        return None
+    # Identify which of OUR targeted countries the error names.
+    for iso in targeted_countries:
+        name = _ISO_NAMES.get(iso, "").lower()
+        if name and name in msg:
+            return iso
+    return None
+
+
+def _delete(object_id: str, token: str) -> bool:
+    """Best-effort DELETE of a Graph API object. Never raises — used for cleanup."""
+    req = urllib.request.Request(
+        f"{_BASE}/{object_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        method="DELETE",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=20).read()
+        return True
+    except Exception:
+        return False
+
+
+def _rollback(created: dict, token: str, skip_campaign: bool = False) -> list[str]:
+    """
+    Delete partially-created objects after a failed deploy so the ad account isn't
+    left with orphaned half-built campaigns. Deletes in reverse dependency order
+    (ad → creative → ad set → campaign). Best-effort: returns the IDs removed.
+    skip_campaign=True when the campaign is shared across variants — the caller
+    is responsible for cleaning it up after the full loop finishes.
+    """
+    removed = []
+    keys = ("ad", "creative", "adset") if skip_campaign else ("ad", "creative", "adset", "campaign")
+    for key in keys:
+        oid = created.get(key)
+        if oid and _delete(oid, token):
+            removed.append(oid)
+    return removed
+
+
+def create_campaign(*, campaign_name: str, token: str, ad_account_id: str) -> str:
+    """Create one PAUSED OUTCOME_LEADS campaign and return its ID."""
+    campaign = _post(
+        f"act_{ad_account_id}/campaigns",
+        {
+            "name": campaign_name,
+            "objective": "OUTCOME_LEADS",
+            "special_ad_categories": [],
+            "is_adset_budget_sharing_enabled": False,
+            "status": "PAUSED",
+        },
+        token,
+    )
+    return campaign["id"]
 
 
 def _upload_image(ad_account_id: str, image_path: pathlib.Path, token: str) -> str:
@@ -91,10 +222,16 @@ def deploy_ad(
     landing_page_url: str = "https://pikorua.in/",
     daily_budget_inr: int = 1000,
     cta: str = "GET_QUOTE",
+    targeting_spec: dict[str, Any] | None = None,
+    audience_label: str = "",
+    instagram_actor_id: str = "",
+    end_time: str = "",
+    campaign_id: str = "",
 ) -> dict[str, Any]:
     """
-    Create a Meta OUTCOME_LEADS campaign for one ad variant.
-    Steps: upload image → campaign → ad set → creative → ad (all PAUSED).
+    Create ad objects for one variant under a Meta OUTCOME_LEADS campaign.
+    Steps: upload image → (campaign if no campaign_id) → ad set → creative → ad (all PAUSED).
+    Pass campaign_id to reuse an existing campaign (multi-variant single-campaign flow).
 
     DRY_RUN=true: returns a preview dict without calling the API.
     On failure: raises RuntimeError with API error details.
@@ -104,6 +241,13 @@ def deploy_ad(
     ad_account_id = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
     page_id = os.getenv("META_PAGE_ID", "")
     lead_form_id = os.getenv("META_LEAD_FORM_ID", "")
+    # Instagram actor lets the ad run on Instagram placements under the brand's
+    # handle. Without it Meta shows "Please add Instagram account" and the ad is
+    # Facebook-only. Param overrides env; env is the always-on default.
+    # If neither is set, auto-discover from the linked page via Graph API.
+    instagram_actor_id = instagram_actor_id or os.getenv("META_INSTAGRAM_ACTOR_ID", "")
+    if not instagram_actor_id and page_id and token and not dry_run:
+        instagram_actor_id = _fetch_instagram_actor_id(page_id, token)
 
     if dry_run:
         return {
@@ -111,20 +255,18 @@ def deploy_ad(
             "variant": variant,
             "would_create": {
                 "image": str(image_path) if image_path else None,
-                "campaign": {
-                    "name": f"{campaign_name} — V{variant}",
-                    "objective": "OUTCOME_LEADS",
-                    "special_ad_categories": [],
-                    "status": "PAUSED",
-                },
+                "campaign": campaign_id or f"(would create) {campaign_name}",
                 "adset": {
                     "optimization_goal": "LEAD_GENERATION",
                     "billing_event": "IMPRESSIONS",
                     "daily_budget_inr": daily_budget_inr,
                     "daily_budget_paise": daily_budget_inr * 100,
-                    "geo": "India (country-level)",
-                    "age_min": age_min,
-                    "age_max": age_max,
+                    "geo": audience_label or "India (country-level)",
+                    "age_min": (targeting_spec or {}).get("age_min", age_min),
+                    "age_max": (targeting_spec or {}).get("age_max", age_max),
+                    "targeting": targeting_spec,
+                    "instagram_actor_id": instagram_actor_id or "(none)",
+                    "end_time": end_time or "(no end date)",
                 },
                 "creative": {
                     "headline": headline,
@@ -152,104 +294,182 @@ def deploy_ad(
     if image_path and image_path.exists():
         image_hash = _upload_image(ad_account_id, image_path, token)
 
-    # Step 2 — create campaign
-    campaign = _post(
-        f"act_{ad_account_id}/campaigns",
-        {
-            "name": f"{campaign_name} — V{variant}",
-            "objective": "OUTCOME_LEADS",
-            "special_ad_categories": [],  # HOUSING restriction is US/EU only — not applicable in India
-            # Budget lives at the ad-set level (daily_budget below), not the campaign.
-            # Meta now requires this flag to be explicit when there's no campaign budget.
-            "is_adset_budget_sharing_enabled": False,
-            "status": "PAUSED",
-        },
-        token,
-    )
-    campaign_id = campaign["id"]
+    # Steps 2–5 create real objects. If any step fails partway, roll back what was
+    # created so the ad account isn't left with half-built campaigns. Cleanup is
+    # best-effort; the original error is always re-raised.
+    # campaign_id passed in → shared campaign owned by caller; don't roll it back here.
+    _shared_campaign = bool(campaign_id)
+    created: dict[str, str | None] = {"campaign": None, "adset": None,
+                                      "creative": None, "ad": None}
+    dropped_locations: list[str] = []
+    try:
+        # Step 2 — create campaign (skipped when caller already created a shared one)
+        if campaign_id:
+            created["campaign"] = campaign_id
+        else:
+            campaign = _post(
+                f"act_{ad_account_id}/campaigns",
+                {
+                    "name": campaign_name,
+                    "objective": "OUTCOME_LEADS",
+                    "special_ad_categories": [],  # HOUSING restriction is US/EU only — not applicable in India
+                    # Budget lives at the ad-set level; Meta needs this flag explicit when absent.
+                    "is_adset_budget_sharing_enabled": False,
+                    "status": "PAUSED",
+                },
+                token,
+            )
+            created["campaign"] = campaign["id"]
 
-    # Step 3 — create ad set
-    # Country-level targeting for India. City-level targeting requires Meta's
-    # geo search API to resolve city keys — add in a future iteration.
-    adset_targeting: dict[str, Any] = {
-        "geo_locations": {"countries": ["IN"]},
-        "age_min": age_min,
-        "age_max": age_max,
-        # Newer API versions require an explicit choice on Advantage Audience.
-        # 0 = off (honour the exact targeting above); 1 = let Meta expand it.
-        "targeting_automation": {"advantage_audience": 0},
-    }
-    adset = _post(
-        f"act_{ad_account_id}/adsets",
-        {
+        # Step 3 — create ad set
+        # Targeting: a resolved spec (city geo + interests/behaviours from the audience
+        # panel) is used when provided. Without one we fall back to country-level India.
+        if targeting_spec:
+            adset_targeting = dict(targeting_spec)
+            adset_targeting.setdefault("targeting_automation", {"advantage_audience": 0})
+        else:
+            adset_targeting = {
+                "geo_locations": {"countries": ["IN"]},
+                "age_min": age_min,
+                "age_max": age_max,
+                "targeting_automation": {"advantage_audience": 0},
+            }
+
+        # Proactively add compliance declarations required by the targeted locations.
+        # Singapore requires SINGAPORE_UNIVERSAL for ALL ad types — not a special-category
+        # declaration, just a mandatory compliance checkbox. Safe to auto-add.
+        _geo = adset_targeting.get("geo_locations", {})
+        _sg_via_country = "SG" in _geo.get("countries", [])
+        _sg_via_city = any(c.get("country") == "SG" for c in _geo.get("cities", []))
+        _regional_cats: list[str] = []
+        if _sg_via_country or _sg_via_city:
+            _regional_cats.append("SINGAPORE_UNIVERSAL")
+
+        adset_payload: dict[str, Any] = {
             "name": f"{campaign_name} — V{variant} — Ad Set",
-            "campaign_id": campaign_id,
+            "campaign_id": created["campaign"],
             "optimization_goal": "LEAD_GENERATION",
             "billing_event": "IMPRESSIONS",
-            # Instant Form leads open inside the ad itself. A lead-form creative is only
-            # valid with an ON_AD destination — without it the ad step fails (subcode 1892040).
+            # Lead-form creatives need ON_AD (form opens in the ad) — subcode 1892040.
             "destination_type": "ON_AD",
-            # Automatic bidding — "highest volume" for the budget. Without an explicit
-            # bid_strategy, Meta defaults to a capped strategy that requires a bid_amount.
+            # Explicit auto-bid; without it Meta defaults to a capped strategy needing bid_amount.
             "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
             "daily_budget": daily_budget_inr * 100,  # Meta expects paise (1 INR = 100 paise)
-            # For LEAD_GENERATION the ad set must declare what's being promoted — the Page
-            # that owns the Lead Gen form. Without this, the ad step fails (subcode 1885154).
+            # LEAD_GENERATION ad sets must declare what's promoted — subcode 1885154.
             "promoted_object": {"page_id": page_id},
             "targeting": adset_targeting,
             "status": "PAUSED",
-        },
-        token,
-    )
-    adset_id = adset["id"]
+        }
+        if _regional_cats:
+            adset_payload["regional_regulated_categories"] = _regional_cats
+        # Optional campaign end date (ISO 8601, e.g. "2026-07-31T23:59:00+0530").
+        if end_time:
+            adset_payload["end_time"] = end_time
 
-    # Step 4 — create ad creative
-    # `link` is required by Meta even for Lead Gen creatives; the form opens on
-    # click, and this URL is also the Thank-You-screen destination.
-    link_data: dict[str, Any] = {
-        "link": landing_page_url,
-        "message": body,
-        "name": headline,
-        "call_to_action": {
-            "type": cta,
-            "value": {"lead_gen_form_id": lead_form_id},
-        },
-    }
-    if image_hash:
-        link_data["image_hash"] = image_hash
+        # Create the ad set. On first attempt the compliance list is already populated
+        # for known locations (Singapore above). If Meta still returns a compliance
+        # error (e.g. an unknown city triggered it), add SINGAPORE_UNIVERSAL and retry
+        # once. For any other regional issue, drop the offending country and retry.
+        _compliance_retried = False
+        while True:
+            ok, adset = _do_post(f"act_{ad_account_id}/adsets", adset_payload, token)
+            if ok:
+                break
+            err = adset.get("error", adset)
+            err_msg = (
+                f"{err.get('error_user_title', '')} "
+                f"{err.get('error_user_msg', '')} "
+                f"{err.get('message', '')}".lower()
+            )
+            subcode = err.get("error_subcode")
+            # Singapore universal ads declaration — add it and retry once
+            if (subcode == 3858550 or "singapore_universal" in err_msg) and not _compliance_retried:
+                cats = adset_payload.get("regional_regulated_categories", [])
+                if "SINGAPORE_UNIVERSAL" not in cats:
+                    adset_payload["regional_regulated_categories"] = cats + ["SINGAPORE_UNIVERSAL"]
+                _compliance_retried = True
+                continue
+            # Other regional compliance issues — drop the offending country and retry
+            countries = adset_targeting.get("geo_locations", {}).get("countries", [])
+            iso = _regulated_country_to_drop(adset, countries)
+            if not iso:
+                err_detail = json.dumps(err)
+                raise RuntimeError(
+                    f"POST act_{ad_account_id}/adsets failed: {err_detail}"
+                )
+            countries.remove(iso)
+            dropped_locations.append(iso)
+            if countries:
+                adset_targeting["geo_locations"]["countries"] = countries
+            else:
+                adset_targeting["geo_locations"].pop("countries", None)
+            # If stripping the country left no geo at all, we can't deploy this variant.
+            if not adset_targeting["geo_locations"]:
+                raise RuntimeError(
+                    "All targeted locations require regulatory declarations that must be "
+                    "made in Meta Ads Manager. Nothing left to target after removing: "
+                    + ", ".join(_ISO_NAMES.get(c, c) for c in dropped_locations)
+                )
+        created["adset"] = adset["id"]
 
-    creative = _post(
-        f"act_{ad_account_id}/adcreatives",
-        {
-            "name": f"{campaign_name} — V{variant} — Creative",
-            "object_story_spec": {
-                "page_id": page_id,
-                "link_data": link_data,
+        # Step 4 — create ad creative
+        # `link` is required by Meta even for Lead Gen creatives; the form opens on
+        # click, and this URL is also the Thank-You-screen destination.
+        link_data: dict[str, Any] = {
+            "link": landing_page_url,
+            "message": body,
+            "name": headline,
+            "call_to_action": {
+                "type": cta,
+                "value": {"lead_gen_form_id": lead_form_id},
             },
-        },
-        token,
-    )
-    creative_id = creative["id"]
+        }
+        if image_hash:
+            link_data["image_hash"] = image_hash
 
-    # Step 5 — create ad
-    ad = _post(
-        f"act_{ad_account_id}/ads",
-        {
-            "name": f"{campaign_name} — V{variant} — Ad",
-            "adset_id": adset_id,
-            "creative": {"creative_id": creative_id},
-            "status": "PAUSED",
-        },
-        token,
-    )
-    ad_id = ad["id"]
+        object_story_spec: dict[str, Any] = {
+            "page_id": page_id,
+            "link_data": link_data,
+        }
+        # Instagram actor makes the ad eligible for Instagram placements under the
+        # brand's handle (clears "Please add Instagram account").
+        if instagram_actor_id:
+            object_story_spec["instagram_actor_id"] = instagram_actor_id
+
+        creative = _post(
+            f"act_{ad_account_id}/adcreatives",
+            {
+                "name": f"{campaign_name} — V{variant} — Creative",
+                "object_story_spec": object_story_spec,
+            },
+            token,
+        )
+        created["creative"] = creative["id"]
+
+        # Step 5 — create ad
+        ad = _post(
+            f"act_{ad_account_id}/ads",
+            {
+                "name": f"{campaign_name} — V{variant} — Ad",
+                "adset_id": created["adset"],
+                "creative": {"creative_id": created["creative"]},
+                "status": "PAUSED",
+            },
+            token,
+        )
+        created["ad"] = ad["id"]
+    except Exception:
+        # Remove any objects created before the failure so Ads Manager stays clean.
+        _rollback(created, token, skip_campaign=_shared_campaign)
+        raise
 
     return {
         "variant": variant,
-        "campaign_id": campaign_id,
-        "adset_id": adset_id,
-        "creative_id": creative_id,
-        "ad_id": ad_id,
+        "campaign_id": created["campaign"],
+        "adset_id": created["adset"],
+        "creative_id": created["creative"],
+        "ad_id": created["ad"],
         "image_hash": image_hash,
+        "dropped_locations": [_ISO_NAMES.get(c, c) for c in dropped_locations],
         "dry_run": False,
     }
