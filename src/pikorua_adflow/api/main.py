@@ -551,6 +551,7 @@ def _topbar(active: str = "") -> str:
         '<nav class="nav" style="align-items:center;">'
         f'<a class="{cls("new")}" href="/portal">New campaign</a>'
         f'<a class="{cls("runs")}" href="/runs">My campaigns</a>'
+        f'<a class="{cls("crm")}" href="/crm-dashboard">Lead insights</a>'
         '<button class="theme-btn" onclick="_pikTheme()" '
         'title="Switch to dark mode" aria-label="Switch to dark mode">◐</button>'
         '</nav>'
@@ -643,6 +644,11 @@ def logo_light():
 @app.get("/logo/dark")
 def logo_dark():
     p = _LOGO_DIR / "with Sparkle Logo.png"
+    return Response(content=p.read_bytes(), media_type="image/png")
+
+@app.get("/favicon.ico")
+def favicon():
+    p = _LOGO_DIR / "favicon.png"
     return Response(content=p.read_bytes(), media_type="image/png")
 
 
@@ -846,11 +852,15 @@ def get_results(run_id: str):
                 {f'<div style="font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Headline</div><div id="hl-{num}" style="font-size:0.95rem;font-weight:bold;color:var(--ink);margin-bottom:8px;">{_esc(headline)}</div>' if headline else f'<div id="hl-{num}" style="font-size:0.85rem;color:var(--muted);margin-bottom:8px;">(no headline yet)</div>'}
                 {f'<div style="font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Body</div><div id="bd-{num}" style="font-size:0.85rem;color:var(--ink-soft);line-height:1.6;">{_esc(body)}</div>' if body else f'<div id="bd-{num}" style="font-size:0.85rem;color:var(--muted);">(no body yet)</div>'}
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
                 <button class="mini-btn" onclick="startEdit({num})">Edit</button>
                 <button class="mini-btn" onclick="duplicateVariant('{run_id}',{num})">Duplicate</button>
                 <button class="mini-btn" onclick="copyFromData(this)" data-copy="{_esc(headline)} — {_esc(body)}">Copy</button>
                 <button class="mini-btn mini-btn-danger" onclick="deleteVariant('{run_id}',{num},{str(added).lower()})">Delete</button>
+                <span style="width:1px;height:16px;background:var(--line);margin:0 2px;flex-shrink:0;"></span>
+                <button id="rewrite-headline-{num}" class="mini-btn" onclick="rewriteCopy('{run_id}',{num},'headline')">↺ Headline</button>
+                <button id="rewrite-body-{num}" class="mini-btn" onclick="rewriteCopy('{run_id}',{num},'body')">↺ Body</button>
+                <span id="rewrite-status-{num}" style="font-size:0.76rem;color:var(--ink-soft);"></span>
               </div>
             </div>"""
 
@@ -872,32 +882,37 @@ def get_results(run_id: str):
 
         # ── Image control (pick any generated image, upload, or revert) ──
         # Resolved order: user's explicit assignment → image_{num}.png → nothing
-        assigned_img_num = edits_overlay.get("meta", {}).get(str(num), {}).get("image_num")
-        if assigned_img_num is None and (images_dir / f"image_{num}.png").exists():
-            assigned_img_num = num
-        has_img = assigned_img_num is not None
+        # assigned_img_stem is a string like "1" or "1_v2" used to build filenames.
+        _raw_assigned = edits_overlay.get("meta", {}).get(str(num), {}).get("image_num")
+        assigned_img_stem = str(_raw_assigned) if _raw_assigned is not None else None
+        if assigned_img_stem is None and images_dir is not None and (images_dir / f"image_{num}.png").exists():
+            assigned_img_stem = str(num)
+        has_img = assigned_img_stem is not None
         img_preview = (
-            f'<img id="thumb-{num}" src="/image/{run_id}/image_{assigned_img_num}.png" '
+            f'<img id="thumb-{num}" src="/image/{run_id}/image_{assigned_img_stem}.png" '
             f'style="width:100%;max-width:240px;border-radius:6px;border:1px solid var(--line);'
             f'display:block;margin-bottom:8px;cursor:zoom-in;" '
-            f'onclick="openLightbox(\'/image/{run_id}/image_{assigned_img_num}.png\', \'Version {num}\')">'
+            f'onclick="openLightbox(\'/image/{run_id}/image_{assigned_img_stem}.png\', \'Version {num}\')">'
             if has_img else
             f'<div id="thumb-{num}" style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">'
             f'No image — generate in the Images tab or upload your own.</div>'
         )
-        # Dropdown listing all generated images so any can be assigned to this variant
+        # Dropdown listing all generated images (including versioned image_N_vK.png) so any
+        # can be assigned to this variant. Value is the filename stem, e.g. "1" or "1_v2".
         img_options = '<option value="">— None / upload your own —</option>'
         for fname in existing_images:
+            stem = fname[len("image_"):-len(".png")]  # e.g. "1", "1_v2"
             try:
-                img_n = int(fname[len("image_"):-len(".png")])
+                base_n = int(stem.split("_v")[0])
             except ValueError:
                 continue
-            sel = "selected" if img_n == assigned_img_num else ""
-            label = f"Image {img_n}"
-            if img_n <= len(image_prompts):
-                ptitle = image_prompts[img_n - 1][0][:35]
-                label = f"Image {img_n} — {ptitle}"
-            img_options += f'<option value="{img_n}" {sel}>{_esc(label)}</option>'
+            ver = int(stem.split("_v")[1]) if "_v" in stem else None
+            sel = "selected" if stem == assigned_img_stem else ""
+            label = f"Image {base_n}" + (f" v{ver}" if ver else "")
+            if base_n <= len(image_prompts):
+                ptitle = image_prompts[base_n - 1][0][:30]
+                label = f"{label} — {ptitle}"
+            img_options += f'<option value="{stem}" {sel}>{_esc(label)}</option>'
         img_select_html = (
             f'<div style="margin-bottom:10px;">'
             f'<label style="font-size:0.78rem;color:var(--ink-soft);display:block;margin-bottom:4px;">Use generated image</label>'
@@ -909,17 +924,24 @@ def get_results(run_id: str):
             '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">'
             'No generated images yet — go to the Images tab to create some.</div>'
         )
+        has_ai_backup = images_dir is not None and (images_dir / ".ai_backup" / f"image_{num}.png").exists()
+        revert_btn_html = (
+            f'<button class="mini-btn" onclick="revertImage(\'{run_id}\',{num})">Restore original</button>'
+            if has_ai_backup else ""
+        )
         image_block = f"""
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">
               <div class="eyebrow" style="margin-bottom:8px;">Image</div>
               {img_preview}
               {img_select_html}
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <label class="mini-btn" style="cursor:pointer;display:inline-flex;align-items:center;">Upload your own
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;">
+                <label class="mini-btn" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1v10M4 7l4 4 4-4"/><rect x="2" y="12" width="12" height="2" rx="1"/></svg>
+                  Upload your own
                   <input type="file" accept="image/*" style="display:none;"
                     onchange="uploadImage('{run_id}',{num},this)">
                 </label>
-                <button class="mini-btn" onclick="revertImage('{run_id}',{num})">Revert image</button>
+                {revert_btn_html}
               </div>
               <div id="imgstatus-{num}" style="font-size:0.74rem;color:var(--ink-soft);margin-top:6px;min-height:1em;"></div>
             </div>"""
@@ -1001,16 +1023,20 @@ def get_results(run_id: str):
     # Persona section
     persona_html = ""
     if persona_text:
-        persona_html = f"""<pre style="white-space:pre-wrap;font-family:'Georgia',serif;font-size:0.84rem;
-          color:var(--ink);line-height:1.7;background:var(--paper-warm);padding:14px;
-          border:1px solid var(--line);border-radius:3px;">{_esc(persona_text.strip())}</pre>"""
+        persona_html = (
+            '<div class="brief-card">'
+            + _md_to_html(persona_text)
+            + '</div>'
+        )
 
     # Targeting brief section
     targeting_html = ""
     if targeting_text:
-        targeting_html = f"""<pre style="white-space:pre-wrap;font-family:'Georgia',serif;font-size:0.82rem;
-          color:var(--ink);line-height:1.7;background:var(--paper-warm);padding:14px;
-          border:1px solid var(--line);border-radius:3px;">{_esc(targeting_text.strip())}</pre>"""
+        targeting_html = (
+            '<div class="brief-card">'
+            + _md_to_html(targeting_text)
+            + '</div>'
+        )
 
     scorecard_summary = run.get("copy_scorecard_summary", "")
 
@@ -1062,6 +1088,24 @@ def get_results(run_id: str):
       padding:9px 11px;font-family:inherit;font-size:0.88rem;color:var(--ink);background:var(--paper-warm);
       line-height:1.5;resize:vertical;}}
     .edit-input:focus{{outline:none;border-color:var(--gold);background:var(--paper);}}
+    /* ── Buyers & Targeting brief cards ── */
+    .brief-card{{background:var(--paper);border:1px solid var(--line);border-radius:10px;
+      padding:22px 26px;margin-bottom:20px;line-height:1.7;}}
+    .brief-card h3{{font-size:0.75rem;letter-spacing:0.12em;text-transform:uppercase;
+      color:var(--gold);margin:20px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line);}}
+    .brief-card h3:first-child{{margin-top:0;}}
+    .brief-card h4{{font-size:0.82rem;font-weight:600;color:var(--ink);margin:14px 0 4px;}}
+    .brief-card h5{{font-size:0.8rem;font-weight:600;color:var(--ink-soft);margin:10px 0 4px;}}
+    .brief-card p{{font-size:0.87rem;color:var(--ink-soft);margin:6px 0;}}
+    .brief-card ul{{margin:6px 0 10px 20px;padding:0;}}
+    .brief-card li{{font-size:0.87rem;color:var(--ink-soft);margin-bottom:4px;}}
+    .brief-card strong{{color:var(--ink);font-weight:600;}}
+    .brief-card em{{color:var(--ink-soft);font-style:italic;}}
+    .brief-card code{{background:var(--paper-warm);border:1px solid var(--line);border-radius:3px;
+      padding:1px 5px;font-size:0.82rem;color:var(--ink);}}
+    .brief-table{{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:0.85rem;}}
+    .brief-table td{{padding:7px 12px;border:1px solid var(--line);color:var(--ink-soft);vertical-align:top;}}
+    .brief-table tr:nth-child(even) td{{background:var(--paper-warm);}}
   </style>
 </head>
 <body>
@@ -1110,10 +1154,11 @@ def get_results(run_id: str):
   </div>
 
   <div id="tab-audience" class="panel">
-    <h2 style="margin-top:0.5rem;">Who we'd target</h2>
-    <p class="section-sub">The ideal buyer for this property, and how we'd reach them.</p>
+    <h2 style="margin-top:0.5rem;">Ideal buyer profile</h2>
+    <p class="section-sub">Market trends and the type of buyer most likely to enquire about this property.</p>
     {persona_html if persona_html else '<p style="color:var(--muted);font-size:0.9rem;">No buyer profile found.</p>'}
-    <h2 style="margin-top:1.6rem;">Targeting plan</h2>
+    <h2 style="margin-top:1.8rem;">Targeting plan</h2>
+    <p class="section-sub" style="margin-bottom:1rem;">Geo zones, demographics, platform strategies, and keyword lists for this campaign.</p>
     {targeting_html if targeting_html else '<p style="color:var(--muted);font-size:0.9rem;">No targeting plan found.</p>'}
   </div>
 
@@ -1184,6 +1229,49 @@ def get_results(run_id: str):
       cc.textContent = n + ' / ' + limit + (n > limit ? ' — over Meta\\'s recommended limit' : '');
       cc.classList.toggle('over', n > limit);
     }}
+    // ── AI rewrite of a single copy field (headline or body) ──
+    async function rewriteCopy(runId, variantNum, field) {{
+      const btnId = 'rewrite-' + field + '-' + variantNum;
+      const btn = document.getElementById(btnId);
+      const statusEl = document.getElementById('rewrite-status-' + variantNum);
+      const label = field === 'headline' ? '↺ Headline' : '↺ Body';
+      if (btn) {{ btn.disabled = true; btn.textContent = 'Rewriting…'; }}
+      if (statusEl) {{ statusEl.textContent = 'Rewriting…'; statusEl.style.color = 'var(--ink-soft)'; }}
+      try {{
+        const res = await fetch('/rewrite-copy/' + runId, {{
+          method: 'POST', headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify({{ variant_num: variantNum, field }})
+        }});
+        const data = await res.json();
+        if (res.ok && data[field]) {{
+          const newText = data[field];
+          // Update view display
+          const displayEl = document.getElementById(field === 'headline' ? 'hl-' + variantNum : 'bd-' + variantNum);
+          if (displayEl) displayEl.textContent = newText;
+          // Update hidden edit textarea (so Save picks it up if user opens edit)
+          const taEl = document.getElementById(field === 'headline' ? 'ehl-' + variantNum : 'ebd-' + variantNum);
+          if (taEl) taEl.value = newText;
+          // Show edited badge
+          const eb = document.getElementById('editbadge-' + variantNum);
+          if (eb) eb.style.display = 'inline-block';
+          // Auto-save both fields so the overlay is always in sync
+          const hl = document.getElementById('ehl-' + variantNum).value;
+          const bd = document.getElementById('ebd-' + variantNum).value;
+          await fetch('/edit-content/' + runId, {{
+            method: 'POST', headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{channel: 'meta', variant: variantNum, headline: hl, body: bd}})
+          }});
+          if (statusEl) {{ statusEl.textContent = ''; }}
+          toast();
+        }} else {{
+          if (statusEl) {{ statusEl.textContent = 'Error: ' + (data.detail || 'Unknown'); statusEl.style.color = 'var(--danger)'; }}
+        }}
+      }} catch(e) {{
+        if (statusEl) {{ statusEl.textContent = 'Failed: ' + e.message; statusEl.style.color = 'var(--danger)'; }}
+      }}
+      if (btn) {{ btn.disabled = false; btn.textContent = label; }}
+    }}
+
     async function saveEdit(runId, num) {{
       const headline = document.getElementById('ehl-' + num).value;
       const body = document.getElementById('ebd-' + num).value;
@@ -1282,29 +1370,30 @@ def get_results(run_id: str):
     }}
 
     // ── Image assignment — pick any generated image for a variant ──
-    async function assignImage(runId, variantNum, imageNumStr) {{
-      const imageNum = imageNumStr ? parseInt(imageNumStr) : null;
+    // imageStem is a string like "1" or "1_v2" matching the filename image_{stem}.png
+    async function assignImage(runId, variantNum, imageStem) {{
+      const stem = imageStem || null;
       const status = document.getElementById('imgstatus-' + variantNum);
       try {{
         const res = await fetch('/assign-image/' + runId + '/' + variantNum, {{
           method: 'POST',
           headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify({{image_num: imageNum}})
+          body: JSON.stringify({{image_num: stem}})
         }});
         if (!res.ok) throw new Error(await res.text());
         // Swap the thumbnail immediately without a page reload
         const thumbEl = document.getElementById('thumb-' + variantNum);
         if (thumbEl) {{
-          if (imageNum) {{
-            thumbEl.outerHTML = `<img id="thumb-${{variantNum}}" src="/image/${{runId}}/image_${{imageNum}}.png"
+          if (stem) {{
+            thumbEl.outerHTML = `<img id="thumb-${{variantNum}}" src="/image/${{runId}}/image_${{stem}}.png"
               style="width:100%;max-width:240px;border-radius:6px;border:1px solid var(--line);
               display:block;margin-bottom:8px;cursor:zoom-in;"
-              onclick="openLightbox('/image/${{runId}}/image_${{imageNum}}.png','Version ${{variantNum}}')">`;
+              onclick="openLightbox('/image/${{runId}}/image_${{stem}}.png','Version ${{variantNum}}')">`;
           }} else {{
             thumbEl.outerHTML = `<div id="thumb-${{variantNum}}" style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">No image assigned.</div>`;
           }}
         }}
-        if (status) {{ status.style.color = 'var(--green)'; status.textContent = imageNum ? 'Image assigned.' : 'Cleared.'; setTimeout(()=>{{if(status)status.textContent='';}},2000); }}
+        if (status) {{ status.style.color = 'var(--green)'; status.textContent = stem ? 'Image assigned.' : 'Cleared.'; setTimeout(()=>{{if(status)status.textContent='';}},2000); }}
       }} catch(e) {{
         if (status) {{ status.style.color = 'var(--danger)'; status.textContent = 'Error: ' + e.message; }}
       }}
@@ -1475,6 +1564,24 @@ def get_results(run_id: str):
       }}
     }}
 
+    async function deleteImage(runId, fname) {{
+      if (!confirm('Delete this image? This cannot be undone.')) return;
+      const status = document.getElementById('gen-status');
+      status.textContent = 'Deleting…';
+      try {{
+        const res = await fetch('/image/' + runId + '/' + fname, {{method: 'DELETE'}});
+        const data = await res.json();
+        if (res.ok) {{
+          sessionStorage.setItem('activeTab', 'visuals');
+          window.location.reload();
+        }} else {{
+          status.textContent = 'Delete failed: ' + (data.detail || 'unknown error');
+        }}
+      }} catch(e) {{
+        status.textContent = 'Delete failed: ' + e.message;
+      }}
+    }}
+
     function imgSelectAll(on) {{
       document.querySelectorAll('.img-row .img-sel').forEach(cb => {{
         cb.checked = on;
@@ -1603,6 +1710,83 @@ def get_results(run_id: str):
         status.textContent = 'Request failed: ' + e.message;
       }}
     }}
+
+    // ── Rewrite a single image prompt via AI ──
+    async function regeneratePromptOne(runId, promptNum) {{
+      const row = document.querySelector('.img-row[data-prompt="' + promptNum + '"]');
+      const statusEl = document.getElementById('regen-status-' + promptNum);
+      const btns = row ? row.querySelectorAll('.regen-prompt-btn') : [];
+      btns.forEach(b => {{ b.disabled = true; b.textContent = 'Rewriting…'; }});
+      if (statusEl) {{ statusEl.textContent = 'Rewriting prompt…'; statusEl.style.color = 'var(--ink-soft)'; }}
+
+      try {{
+        const res = await fetch('/regenerate-prompt/' + runId, {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify({{ prompt_num: promptNum }})
+        }});
+        const data = await res.json();
+        if (res.ok && data.prompt) {{
+          const ta = row && row.querySelector('.img-prompt-edit');
+          if (ta) {{
+            ta.value = data.prompt;
+            ta.closest('.img-row').querySelector('.img-edited-badge').style.display = 'inline';
+            // Open the edit panel so the user can see the new prompt
+            const det = ta.closest('details');
+            if (det) det.open = true;
+          }}
+          if (statusEl) {{ statusEl.textContent = 'Prompt rewritten — review above.'; statusEl.style.color = 'var(--green)'; }}
+          btns.forEach(b => {{ b.disabled = false; b.textContent = '↺ Rewrite prompt'; }});
+        }} else {{
+          const err = (data.detail) || 'Unknown error';
+          if (statusEl) {{ statusEl.textContent = 'Error: ' + err; statusEl.style.color = 'var(--danger)'; }}
+          btns.forEach(b => {{ b.disabled = false; b.textContent = '↺ Rewrite prompt'; }});
+        }}
+      }} catch(e) {{
+        if (statusEl) {{ statusEl.textContent = 'Failed: ' + e.message; statusEl.style.color = 'var(--danger)'; }}
+        btns.forEach(b => {{ b.disabled = false; b.textContent = '↺ Rewrite prompt'; }});
+      }}
+    }}
+
+    // ── Regenerate a single image (existing gallery) ──
+    async function regenerateOne(runId, promptNum) {{
+      const row = document.querySelector('.img-row[data-prompt="' + promptNum + '"]');
+      const speed = row ? row.querySelector('.img-speed').value : 'QUALITY';
+      const ratio = row ? row.querySelector('.img-ratio').value : '4x5';
+      const ta = row ? row.querySelector('.img-prompt-edit') : null;
+      const custom = ta && ta.value !== ta.dataset.original ? ta.value : null;
+
+      const statusEl = document.getElementById('regen-status-' + promptNum);
+      const btns = row ? row.querySelectorAll('.regen-btn') : [];
+      btns.forEach(b => {{ b.disabled = true; b.textContent = 'Generating…'; }});
+      if (statusEl) {{ statusEl.textContent = 'Generating…'; statusEl.style.color = 'var(--ink-soft)'; }}
+
+      const body = {{ prompts: [promptNum], speeds: {{}}, ratios: {{}} }};
+      body.speeds[promptNum] = speed;
+      body.ratios[promptNum] = ratio;
+      if (custom) body.custom_prompts = {{ [promptNum]: custom }};
+
+      try {{
+        const res = await fetch('/generate-images/' + runId, {{
+          method: 'POST', headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify(body)
+        }});
+        const data = await res.json();
+        const ok = res.ok && data.generated && data.generated.some(r => r.status === 'generated');
+        if (ok) {{
+          if (statusEl) statusEl.textContent = 'Done — reloading…';
+          sessionStorage.setItem('activeTab', 'visuals');
+          setTimeout(() => window.location.reload(), 800);
+        }} else {{
+          const err = (data.errors && data.errors[0] && data.errors[0].error) || (data.detail) || 'Unknown error';
+          if (statusEl) {{ statusEl.textContent = 'Error: ' + err; statusEl.style.color = 'var(--danger)'; }}
+          btns.forEach(b => {{ b.disabled = false; b.textContent = 'Regenerate'; }});
+        }}
+      }} catch(e) {{
+        if (statusEl) {{ statusEl.textContent = 'Failed: ' + e.message; statusEl.style.color = 'var(--danger)'; }}
+        btns.forEach(b => {{ b.disabled = false; b.textContent = 'Regenerate'; }});
+      }}
+    }}
   </script>
 </body></html>"""
     return HTMLResponse(content=html)
@@ -1616,6 +1800,106 @@ def _esc(s: str) -> str:
             .replace(">", "&gt;")
             .replace('"', "&quot;")
             .replace("'", "&#39;"))
+
+
+def _md_to_html(text: str) -> str:
+    """Lightweight markdown-to-HTML for persona/targeting briefs.
+
+    Handles: ATX headers (#/##/###), fenced blocks, tables, unordered lists,
+    bold, italic, inline code, and paragraph breaks. Enough for AI brief output.
+    """
+    import re as _re
+
+    def esc(s: str) -> str:
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def inline(s: str) -> str:
+        s = esc(s)
+        s = _re.sub(r'\*\*\*(.+?)\*\*\*', r'<strong><em>\1</em></strong>', s)
+        s = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
+        s = _re.sub(r'\*([^*]+?)\*', r'<em>\1</em>', s)
+        s = _re.sub(r'`([^`]+?)`', r'<code>\1</code>', s)
+        return s
+
+    lines = text.strip().splitlines()
+    out: list[str] = []
+    i = 0
+    in_ul = False
+    in_table = False
+
+    def close_ul():
+        nonlocal in_ul
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+
+    def close_table():
+        nonlocal in_table
+        if in_table:
+            out.append("</tbody></table>")
+            in_table = False
+
+    while i < len(lines):
+        line = lines[i]
+
+        # ATX headers
+        hm = _re.match(r'^(#{1,6})\s+(.*)', line)
+        if hm:
+            close_ul(); close_table()
+            lvl = len(hm.group(1))
+            tag = "h3" if lvl <= 2 else "h4" if lvl == 3 else "h5"
+            out.append(f'<{tag}>{inline(hm.group(2))}</{tag}>')
+            i += 1
+            continue
+
+        # Horizontal rule or setext header separator — skip
+        if _re.match(r'^[-=]{3,}\s*$', line):
+            close_ul(); close_table()
+            i += 1
+            continue
+
+        # Table row (contains at least one |)
+        if "|" in line and _re.match(r'^\s*\|', line):
+            # Skip separator rows (|---|---|)
+            if _re.match(r'^[\s|:\-]+$', line):
+                i += 1
+                continue
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if not in_table:
+                close_ul()
+                out.append('<table class="brief-table">')
+                out.append('<tbody>')
+                in_table = True
+            out.append("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in cells) + "</tr>")
+            i += 1
+            continue
+        else:
+            close_table()
+
+        # Unordered list item
+        lm = _re.match(r'^(\s*)[-*]\s+(.*)', line)
+        if lm:
+            if not in_ul:
+                out.append('<ul>')
+                in_ul = True
+            out.append(f'<li>{inline(lm.group(2))}</li>')
+            i += 1
+            continue
+
+        # Blank line
+        if not line.strip():
+            close_ul(); close_table()
+            out.append("")
+            i += 1
+            continue
+
+        # Plain paragraph text
+        close_ul(); close_table()
+        out.append(f'<p>{inline(line)}</p>')
+        i += 1
+
+    close_ul(); close_table()
+    return "\n".join(out)
 
 
 def _clean_copy(text: str) -> str:
@@ -2119,8 +2403,27 @@ def revert_logo(run_id: str, prompt_num: int):
     return {"ok": True}
 
 
+@app.delete("/image/{run_id}/{fname}")
+def delete_generated_image(run_id: str, fname: str):
+    """Permanently delete a generated image file."""
+    import re as _re
+    if not _re.fullmatch(r'image_\d+(?:_v\d+)?\.png', fname):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    run = _require_complete(run_id)
+    images = Path(run["review_folder"]) / "images"
+    target = images / fname
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Image not found.")
+    target.unlink()
+    # Also remove any logo backup for this image
+    backup = images / ".logo_backup" / fname
+    if backup.exists():
+        backup.unlink()
+    return {"ok": True}
+
+
 class _AssignImagePayload(BaseModel):
-    image_num: int | None = None
+    image_num: int | str | None = None
 
 
 @app.post("/assign-image/{run_id}/{variant_num}")
@@ -2132,7 +2435,7 @@ def assign_image(run_id: str, variant_num: int, payload: _AssignImagePayload):
     m = edits.setdefault("meta", {})
     cur = m.get(str(variant_num), {})
     if payload.image_num is not None:
-        cur["image_num"] = payload.image_num
+        cur["image_num"] = str(payload.image_num)  # normalize: store always as string stem
     else:
         cur.pop("image_num", None)
     m[str(variant_num)] = cur
@@ -2299,6 +2602,9 @@ def _build_visuals_html(run_id: str, image_prompts: list, existing_images: list,
 
     html = ""
 
+    # Resolve backend availability once — used both in gallery and prompt rows.
+    backend_ready = bool(ideogram_key or replicate_token or together_key)
+
     # Show already-generated images
     logo_backup_dir = (images_dir / ".logo_backup") if images_dir else None
     if existing_images:
@@ -2316,25 +2622,25 @@ def _build_visuals_html(run_id: str, image_prompts: list, existing_images: list,
             revert_btn = (
                 f'<button class="btn btn-ghost btn-sm" style="color:var(--ink-soft);" '
                 f'onclick="revertLogo(\'{run_id}\', {prompt_num})">Remove logo</button>'
-                if has_logo_backup else ""
+                if has_logo_backup else
+                '<button class="btn btn-ghost btn-sm" style="color:var(--ink-soft);visibility:hidden;" disabled>Remove logo</button>'
             )
             html += f"""
             <div style="background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);">
               <img src="/image/{run_id}/{fname}" alt="{_esc(title)}" title="Click to view full size"
                    onclick="openLightbox('/image/{run_id}/{fname}', this.alt)"
                    style="width:100%;display:block;border-bottom:1px solid var(--line);cursor:zoom-in;">
-              <div style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
-                <span style="font-size:0.8rem;color:var(--ink-soft);">{_esc(title)}{_esc(version_label)}</span>
-                <div style="display:flex;align-items:center;gap:6px;">
-                  {revert_btn}
-                  <span class="badge badge-gold">{_type_label(prompt_num)}</span>
-                </div>
+              <div style="padding:10px 12px;display:flex;align-items:center;gap:6px;">
+                <span class="badge badge-gold" style="flex-shrink:0;">{_type_label(prompt_num)}</span>
+                <span style="font-size:0.8rem;color:var(--ink-soft);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{_esc(title)}{_esc(version_label)}</span>
+                {revert_btn}
+                <button class="btn btn-ghost btn-sm" style="color:var(--red,#B23B2E);"
+                  onclick="deleteImage('{run_id}', '{fname}')">Delete</button>
               </div>
             </div>"""
         html += "</div>"
 
     # Is an image service connected? (kept non-technical for the operator)
-    backend_ready = bool(ideogram_key or replicate_token or together_key)
     if backend_ready:
         backend_note = ("Tick the images you want to create, pick a quality for each, then click "
                         "Create selected. Higher quality takes a little longer.")
@@ -2440,7 +2746,8 @@ def _build_visuals_html(run_id: str, image_prompts: list, existing_images: list,
                        background:var(--paper-warm);color:var(--ink);
                        font-size:0.82rem;line-height:1.6;resize:vertical;
                        font-family:inherit;"
-                data-original="{esc_prompt}">{esc_prompt}</textarea>
+                data-original="{esc_prompt}"
+                oninput="this.closest('.img-row').querySelector('.img-edited-badge').style.display='inline';">{esc_prompt}</textarea>
               <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
                 <button class="btn btn-ghost btn-sm"
                   onclick="revertPrompt(this)">Revert to original</button>
@@ -2451,6 +2758,14 @@ def _build_visuals_html(run_id: str, image_prompts: list, existing_images: list,
               </div>
             </div>
           </details>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+            <button class="btn btn-sm regen-prompt-btn"
+              onclick="regeneratePromptOne('{run_id}', {i})"
+              title="Ask the AI to rewrite this image description using the brand rules, headlines, and ad copy">
+              ↺ Rewrite prompt
+            </button>
+            <span id="regen-status-{i}" style="font-size:0.8rem;color:var(--ink-soft);"></span>
+          </div>
         </div>"""
     html += "</div>"
 
@@ -2657,6 +2972,288 @@ def _audience_panel_html(run_id: str, audience: dict) -> str:
               .replace("__RUN_ID__", run_id)
               .replace("__AUDIENCE_JSON__", _json.dumps(audience)))
     return shell + script
+
+
+def _post_deploy_intel_html(run_id: str) -> str:
+    """Live-ads-only section: rendered previews (auto-loaded), audience signals,
+    and performance + CRM-driven optimisation chips. All client-side fetched."""
+    template = r"""
+  <div style="border-top:1px solid var(--line);margin:28px 0 20px;"></div>
+
+  <!-- Ad previews -->
+  <div style="margin-bottom:28px;">
+    <div class="section-title">Ad previews</div>
+    <div class="section-sub">Exactly how each version renders across placements.</div>
+    <div id="mp-previews"><div class="mp-skel" style="height:120px;"></div></div>
+  </div>
+
+  <!-- Audience signals -->
+  <div style="margin-bottom:28px;">
+    <div class="section-title">Audience signals</div>
+    <div class="section-sub">Check your reach before switching the ads on.</div>
+    <div id="mp-signals-wrap">
+      <button class="btn btn-sm" id="mp-signals-btn" onclick="mpFetchSignals()">Check audience size</button>
+    </div>
+  </div>
+
+  <!-- Performance + optimisation -->
+  <div style="margin-bottom:8px;">
+    <div class="section-title">Performance &amp; optimisation</div>
+    <div class="section-sub">Recommendations from live Meta data and your CRM lead history.</div>
+    <div id="mp-perf-wrap">
+      <button class="btn btn-sm" id="mp-perf-btn" onclick="mpFetchPerformance()">Check performance</button>
+    </div>
+    <div id="mp-learning" style="margin-top:14px;"></div>
+  </div>
+
+  <style>
+    .mp-skel{background:linear-gradient(90deg,var(--cream) 25%,var(--paper-warm) 50%,var(--cream) 75%);
+      background-size:200% 100%;animation:mpsh 1.3s infinite;border-radius:10px;}
+    @keyframes mpsh{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+    .mp-prevrow{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;}
+    .mp-prevcard{flex:0 0 auto;width:340px;border:1px solid var(--line);border-radius:10px;
+      overflow:hidden;background:var(--paper);}
+    .mp-prevcard .lbl{font-size:0.72rem;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line);
+      text-transform:uppercase;letter-spacing:0.08em;}
+    .mp-prevcard iframe{width:100%;height:560px;border:0;display:block;}
+    .mp-chip{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:7px 12px;
+      font-size:0.8rem;border:1px solid var(--line);background:var(--paper-warm);margin:5px 6px 0 0;}
+    .mp-chip.red{border-color:#e6b3ab;background:var(--danger-soft);}
+    .mp-chip.amber{border-color:#e6d28a;background:var(--warn-soft);}
+    .mp-chip.green{border-color:#a9cbb4;background:var(--green-soft);}
+    .mp-chip .crm-tag{font-size:0.62rem;font-weight:700;letter-spacing:0.06em;color:var(--gold-deep);
+      background:var(--gold-soft);border-radius:4px;padding:1px 5px;text-transform:uppercase;}
+    .mp-chip button{border:none;background:var(--green);color:#fff;border-radius:6px;
+      padding:3px 10px;font-size:0.74rem;cursor:pointer;font-family:inherit;}
+    .mp-chip button:disabled{background:var(--line);color:var(--muted);cursor:default;}
+    .mp-metric{display:inline-block;margin-right:16px;font-size:0.82rem;}
+    .mp-metric b{color:var(--ink);}
+    .mp-exp{font-size:0.7rem;color:var(--ink-soft);margin-left:4px;font-style:italic;white-space:nowrap;}
+    .mp-result{display:block;width:100%;}
+    .mp-impact{font-size:0.74rem;color:var(--ink-soft);margin-top:5px;line-height:1.4;}
+    .mp-impact b{color:var(--ink);}
+    #mp-learning table{width:100%;font-size:0.82rem;}
+    #mp-learning th{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);}
+  </style>
+
+  <script>
+  (function(){
+    const RID = "__RUNID__";
+
+    async function loadPreviews(){
+      const box = document.getElementById('mp-previews');
+      try{
+        const r = await fetch('/meta-previews/' + RID);
+        const d = await r.json();
+        if(!d.previews || !d.previews.length){
+          box.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">'
+            + (d.note || 'No previews available.') + '</p>'; return;
+        }
+        let html = '';
+        const FMT = {MOBILE_FEED_STANDARD:'Facebook feed', INSTAGRAM_STANDARD:'Instagram feed',
+                     INSTAGRAM_STORY:'Instagram story', DESKTOP_FEED_STANDARD:'Desktop feed'};
+        let anyFrame = false;
+        d.previews.forEach(function(v){
+          let cards = '';
+          Object.keys(v.previews||{}).forEach(function(fmt){
+            const frame = v.previews[fmt];
+            if(!frame) return;
+            anyFrame = true;
+            cards += '<div class="mp-prevcard"><div class="lbl">' + (FMT[fmt]||fmt) + '</div>' + frame + '</div>';
+          });
+          if(cards){
+            html += '<div style="margin-bottom:18px;"><div style="font-size:0.72rem;'
+              + 'text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px;">'
+              + 'Version ' + v.variant + '</div><div class="mp-prevrow">' + cards + '</div></div>';
+          }
+        });
+        box.innerHTML = anyFrame ? html :
+          '<div style="padding:12px 14px;background:var(--warn-soft);border:1px solid #e6d28a;'
+          + 'border-radius:10px;font-size:0.83rem;color:var(--warn);">Previews aren\'t available '
+          + 'from Meta right now — they usually appear a few minutes after publishing.</div>';
+      }catch(e){
+        box.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Couldn\'t load previews.</p>';
+      }
+    }
+
+    window.mpFetchSignals = async function(){
+      const wrap = document.getElementById('mp-signals-wrap');
+      const btn = document.getElementById('mp-signals-btn');
+      btn.disabled = true; btn.textContent = 'Checking…';
+      try{
+        const r = await fetch('/meta-signals/' + RID);
+        const d = await r.json();
+        if(!d.reach || !d.reach.estimate_mau){
+          wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">'
+            + (d.note || 'Meta couldn\'t estimate the audience yet — try again shortly.') + '</p>'; return;
+        }
+        const C = {red:'var(--danger)', amber:'var(--warn)', green:'var(--green)', muted:'var(--muted)'};
+        const col = C[d.reach.color] || 'var(--ink)';
+        let dlv = '';
+        (d.delivery||[]).forEach(function(x){
+          dlv += '<div style="font-size:0.82rem;color:var(--ink-soft);margin-top:4px;">Version '
+            + x.variant + ': ' + (x.daily_range || 'estimate forming…') + '</div>';
+        });
+        wrap.innerHTML = '<div class="card" style="margin:0;">'
+          + '<div style="font-size:0.8rem;color:var(--muted);">' + (d.reach.audience_summary||'') + '</div>'
+          + '<div style="font-size:1.4rem;font-weight:700;color:var(--ink);margin-top:4px;">'
+          + d.reach.estimate_mau.toLocaleString() + ' people '
+          + '<span class="badge" style="background:transparent;border:1px solid ' + col + ';color:' + col
+          + ';vertical-align:middle;">' + d.reach.status_label + '</span></div>'
+          + '<div style="margin-top:8px;">' + (dlv || '') + '</div>'
+          + '<button class="btn btn-sm" style="margin-top:12px;" onclick="mpFetchPerformance()">See optimisation tips →</button>'
+          + '</div>';
+      }catch(e){
+        btn.disabled = false; btn.textContent = 'Check audience size';
+        alert('Could not fetch signals: ' + e.message);
+      }
+    };
+
+    function fmtNum(n){ n=Number(n)||0; const a=Math.abs(n);
+      if(a>=1e7) return (n/1e7).toFixed(2)+'Cr';
+      if(a>=1e5) return (n/1e5).toFixed(2)+'L';
+      if(a>=1e3) return (n/1e3).toFixed(1)+'K';
+      return ''+Math.round(n); }
+    function signed(p){ if(p==null) return '—'; return (p>0?'+':'') + p + '%'; }
+    function mpMetricName(m){ return m==='reach' ? 'reach' : (m==='leads' ? 'enquiries' : (m||'')); }
+
+    window.mpApply = async function(el, action, variant, idx){
+      const key = variant + ':' + idx;
+      const rec = (window._mpRecs||{})[key] || {};
+      const orig = el.textContent;
+      el.disabled = true; el.textContent = 'Applying…';
+      const _imp = rec.impact || {};
+      const params = Object.assign({}, rec.params || {}, {
+        label: rec.label || '',
+        basis_hint: _imp.basis || '',
+        raw_multiplier_hint: _imp.raw_multiplier != null ? _imp.raw_multiplier : null,
+      });
+      try{
+        const r = await fetch('/meta-optimize/' + RID, {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({action:action, variant:variant, params:params})});
+        const d = await r.json();
+        if(r.ok){
+          el.textContent = 'Applied ✓'; el.style.background = 'var(--green)';
+          const res = el.parentElement.querySelector('.mp-result');
+          const im = d.impact;
+          if(res && im && im.apply_error){
+            res.innerHTML = '<div class="mp-impact" style="color:var(--danger);">'
+              + '⚠ ' + im.apply_error + '</div>';
+          } else if(res && im && im.measurable_now && im.before && im.actual_after != null){
+            res.innerHTML = '<div class="mp-impact">' + mpMetricName(im.metric) + ' '
+              + fmtNum(im.before) + ' → ' + fmtNum(im.actual_after)
+              + ' <b>(actual ' + signed(im.actual_pct) + ')</b> · we predicted ' + signed(im.predicted_pct)
+              + (im.prediction_error_pp!=null ? ' · off by ' + im.prediction_error_pp + 'pp (noted for next time)' : '')
+              + '</div>';
+          } else if(res && im){
+            res.innerHTML = '<div class="mp-impact">Predicted ' + signed(im.predicted_pct) + ' '
+              + mpMetricName(im.metric) + ' — ' + (im.note || 'measured once the ad runs') + '</div>';
+          }
+          mpFetchHistory();
+        } else { el.disabled = false; el.textContent = orig;
+          el.parentElement.insertAdjacentHTML('beforeend',
+            '<span style="color:var(--danger);font-size:0.74rem;margin-left:6px;">'
+            + (d.detail || 'failed') + '</span>'); }
+      }catch(e){ el.disabled = false; el.textContent = orig; alert('Failed: ' + e.message); }
+    };
+
+    window.mpRenderLearning = function(data){
+      const box = document.getElementById('mp-learning'); if(!box) return;
+      const recs = (data && data.records) || [];
+      if(!recs.length){ box.innerHTML = ''; return; }
+      let rows = '';
+      recs.slice(0,8).forEach(function(r){
+        const act = r.actual_pct!=null ? signed(r.actual_pct) : (r.settled_at ? '—' : 'pending');
+        const miss = r.prediction_error_pp!=null ? r.prediction_error_pp+'pp' : '—';
+        rows += '<tr><td>V'+r.variant+'</td><td>'+(r.label||r.action)+'</td><td>'
+          + signed(r.predicted_pct)+'</td><td>'+act+'</td><td>'+miss+'</td></tr>';
+      });
+      const acc = data.avg_prediction_error_pp!=null
+        ? ('avg miss '+data.avg_prediction_error_pp+'pp across '+data.settled_count+' measured')
+        : 'no measured outcomes yet';
+      box.innerHTML = '<div class="card" style="margin:0;">'
+        + '<div style="font-weight:600;color:var(--ink);">Optimisation log — predicted vs actual</div>'
+        + '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">'
+        + 'Predictions self-correct as real outcomes are measured ('+acc+').</div>'
+        + '<table><thead><tr><th>Ver</th><th>Action</th><th>Predicted</th><th>Actual</th><th>Miss</th></tr></thead>'
+        + '<tbody>'+rows+'</tbody></table></div>';
+    };
+
+    window.mpFetchHistory = async function(){
+      try{ const r = await fetch('/meta-optimize-history/' + RID); mpRenderLearning(await r.json()); }
+      catch(e){}
+    };
+
+    window.mpFetchPerformance = async function(){
+      const wrap = document.getElementById('mp-perf-wrap');
+      wrap.innerHTML = '<div class="mp-skel" style="height:90px;"></div>';
+      window._mpRecs = window._mpRecs || {};
+      try{
+        const r = await fetch('/meta-performance/' + RID);
+        const d = await r.json();
+        if((!d.variants || !d.variants.length) && (!d.crm_signals || !d.crm_signals.length)){
+          wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">'
+            + (d.note || 'No performance data yet — ads need a little run time first.') + '</p>'; return;
+        }
+        let html = '';
+        (d.variants||[]).forEach(function(v){
+          const m = v.metrics || {};
+          let mrow = '';
+          if(Object.keys(m).length){
+            mrow = '<div style="margin:6px 0 10px;">'
+              + '<span class="mp-metric">Shown <b>' + (m.impressions||0).toLocaleString() + '</b></span>'
+              + '<span class="mp-metric">Reached <b>' + (m.reach||0).toLocaleString() + '</b></span>'
+              + '<span class="mp-metric">Freq <b>' + (m.frequency||0) + '</b></span>'
+              + '<span class="mp-metric">Spent <b>₹' + (m.spend||0) + '</b></span>'
+              + '<span class="mp-metric">CTR <b>' + (m.ctr||0) + '%</b></span>'
+              + '<span class="mp-metric">Per enquiry <b>' + (m.cpl!=null?'₹'+m.cpl:'—') + '</b></span></div>';
+          } else {
+            mrow = '<div style="font-size:0.8rem;color:var(--muted);margin:6px 0 10px;">No spend yet — metrics appear once the ad runs.</div>';
+          }
+          let chips = '';
+          (v.recommendations||[]).forEach(function(rec, i){
+            const key = v.variant + ':' + i;
+            window._mpRecs[key] = rec;
+            const apply = rec.action === 'note' ? '' :
+              '<button onclick="mpApply(this,\'' + rec.action + '\',' + v.variant + ',' + i + ')">Apply</button>';
+            let exp = '';
+            if(rec.impact && rec.impact.expected_pct != null){
+              const im = rec.impact;
+              const tip = im.calibrated ? ('learned from ' + im.n_samples + ' past outcome(s)')
+                                        : 'first-time estimate — self-corrects after we measure it';
+              exp = '<span class="mp-exp" title="' + tip + '">est. ' + signed(im.expected_pct)
+                + ' ' + mpMetricName(im.metric) + (im.calibrated ? ' ✦' : '') + '</span>';
+            }
+            chips += '<span class="mp-chip ' + (rec.severity||'') + '" title="' + (rec.detail||'') + '">'
+              + rec.label + exp + apply + '<span class="mp-result"></span></span>';
+          });
+          if(!chips) chips = '<span style="font-size:0.8rem;color:var(--green);">Looking healthy — no changes needed.</span>';
+          html += '<div class="card" style="margin:0 0 14px;"><div style="font-weight:600;color:var(--ink);">Version '
+            + v.variant + '</div>' + mrow + '<div>' + chips + '</div></div>';
+        });
+        if(d.crm_signals && d.crm_signals.length){
+          let crm = '';
+          d.crm_signals.forEach(function(rec){
+            crm += '<span class="mp-chip amber" title="' + (rec.detail||'') + '">'
+              + '<span class="crm-tag">CRM</span>' + rec.label + '</span>';
+          });
+          html += '<div class="card" style="margin:0;"><div style="font-weight:600;color:var(--ink);">'
+            + 'From your lead history</div><div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px;">'
+            + 'What your past enquiries suggest.</div><div>' + crm + '</div></div>';
+        }
+        wrap.innerHTML = html;
+        mpRenderLearning(d.learning);
+      }catch(e){
+        wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Couldn\'t load performance.</p>';
+      }
+    };
+
+    loadPreviews();
+  })();
+  </script>
+"""
+    return template.replace("__RUNID__", run_id)
 
 
 def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C901
@@ -2941,6 +3538,11 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
 
         cards += _ad_card(v, h, b, badge, struct)
 
+    # Live-only intelligence (previews + signals + performance/optimisation).
+    real_ads = [a for a in meta_ads if not a.get("dry_run") and a.get("ad_id")]
+    if real_ads and not dry_run:
+        cards += _post_deploy_intel_html(run_id)
+
     for err in dep_errors:
         v = err.get("variant", "?")
         msg = str(err.get("error", "Something went wrong — see developer log."))
@@ -3089,13 +3691,19 @@ def _sanitize_image_prompt(text: str, is_banner: bool = False,
         'styling.')
     if headline:
         guard += (f' Render the headline "{headline}" as the dominant text element in an '
-                  f'elegant serif.')
+                  f'elegant serif. Place it where the composition naturally gives it '
+                  f'high contrast — light text against a dark area, or dark text against a '
+                  f'pale area. The headline must be immediately legible at a glance.')
     if secondary:
-        guard += (f' Beneath it render a smaller secondary line reading exactly "{secondary}". '
-                  'This secondary line must be clearly legible — set it against a darker or '
-                  'higher-contrast part of the scene (a soft shadow, a deeper-toned surface) so '
-                  'it never washes out against a pale background; it should read at a glance, '
-                  'though it stays quieter than the headline.')
+        guard += (f' Beneath or near the headline, render a smaller secondary line reading '
+                  f'exactly "{secondary}". CRITICAL: this line must be clearly legible — '
+                  f'do NOT place it over a pale floor, bright sky, or any busy mid-tone area '
+                  f'where it will wash out. Set it against a definitively contrasting surface '
+                  f'(a shadowed wall, a deep-toned material, a darker portion of the scene). '
+                  f'If no naturally dark area exists near the headline, let a soft natural '
+                  f'shadow or gradient from the photograph carry it — never a solid bar. '
+                  f'The secondary line stays quieter than the headline but must be instantly '
+                  f'readable without straining.')
     guard += (' Spell every word and number letter-for-letter, exactly as written. '
               'Do NOT render any company logo, brand wordmark, emblem, monogram, watermark, '
               'or brand name; keep the bottom-right corner clean, empty negative space so a '
@@ -3369,6 +3977,218 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
     return {"run_id": run_id, "generated": results, "errors": errors}
 
 
+class RegeneratePromptPayload(BaseModel):
+    prompt_num: int
+
+
+@app.post("/regenerate-prompt/{run_id}")
+async def regenerate_prompt(run_id: str, payload: RegeneratePromptPayload):
+    """Rewrite one image-prompt description using the campaign's ad copy and brand rules."""
+    run = _runs.get(run_id)
+    if not run or run.get("status") != "complete" or not run.get("review_folder"):
+        raise HTTPException(status_code=400, detail="Run not complete or not found.")
+
+    review_folder = Path(run["review_folder"])
+    visual_path = review_folder / "visual_brief.md"
+    if not visual_path.exists():
+        raise HTTPException(status_code=400, detail="visual_brief.md not found.")
+
+    image_prompts = _parse_image_prompts(visual_path.read_text(encoding="utf-8"))
+    n = payload.prompt_num
+    if not (1 <= n <= len(image_prompts)):
+        raise HTTPException(status_code=400, detail=f"prompt_num {n} out of range.")
+
+    ptitle, current_prompt = image_prompts[n - 1]
+    is_banner = True  # all 5 images carry headline + info line text overlay
+    is_scene = n > 3
+    prompt_type = "Social banner (text overlay)" if not is_scene else "Lifestyle/scene photo with text overlay"
+
+    brief = run.get("brief", {})
+    property_name  = brief.get("property_name", "")
+    property_type  = brief.get("property_type", "")
+    city           = brief.get("city", "")
+    locality       = brief.get("locality", "")
+    price_cr       = brief.get("price_cr", "")
+    standout       = brief.get("standout_feature", "")
+
+    # Collect headlines + body from effective ad copy
+    eff = _effective_meta(review_folder)
+    copy_lines = []
+    for num in sorted(eff)[:5]:
+        c = eff[num]
+        copy_lines.append(f'  Variant {num}: headline="{c["headline"]}" / body="{c["body"]}"')
+    copy_block = "\n".join(copy_lines) if copy_lines else "  (no copy variants available)"
+
+    banner_rules = """
+BANNER PROMPTS (images 1–3):
+- Ideogram will render text as part of the ad composition. The prompt must specify the exact headline and a small info line (locality · ₹X Cr) using the [HEADLINE:"…"] tag format.
+- Art-direct the full scene: photo first, then editorial type laid over real negative space.
+- Vary text placement across banners (top-left, lower-third, etc). No solid bars.
+- Reserve bottom-right corner as clean negative space (logo composited there later).
+- Use Ideogram v4 for text rendering. Keep prompt under 400 words.
+- One variant may use "bare locality headline" (place as identity) — not all three."""
+
+    scene_rules = """
+SCENE / LIFESTYLE PHOTO PROMPTS WITH TEXT OVERLAY (images 4–5):
+- These are photorealistic lifestyle scenes that ALSO carry a headline + info line — same text overlay rules as banners.
+- First-person POV: camera inside luxury space looking outward through full-height glazing.
+- Human lifestyle moment from behind (back of head, ≤20% of frame height). Never face-forward.
+- Warm golden-hour lighting (2700–4500K, raking at 10–20 degrees).
+- Depth of field: foreground sharp, background soft bokeh.
+- Natural imperfections: lens flare at window edge, dust in light beam, slight grain.
+- Colour palette: warm cream, teak, champagne, sage green, brushed gold accent.
+- Camera spec (pick one): Sony A7R V 35mm f/1.8 ISO 400 | Hasselblad H6D 45mm f/2.8 | Leica Q3 28mm f/2.0
+- Text placement: use natural negative space (shadowed wall, dark corner, deep-toned material, top strip of sky) — never a solid bar.
+- NEVER: full CGI building exterior, centred facade, pool + blue sky + palm trees, solid black bars."""
+
+    broker_rule = """
+PIKORUA IS A BROKER — never name the developer's project in the image. Show lifestyle and neighbourhood, not the specific building. A balcony view of the city works for any property on that street."""
+
+    # Pick a headline from effective copy for the banner format guidance
+    first_headline = next((c["headline"] for c in eff.values() if c.get("headline")), "")
+
+    format_rule = f"""
+OUTPUT FORMAT (mandatory for all images):
+Your output MUST start with [HEADLINE:"<chosen headline>"] followed by the scene description.
+Example: [HEADLINE:"Wake to the skyline."] A first-person interior POV looking outward through…
+
+Choose one headline from the ad copy variants above (or write a short luxury headline in the same voice).
+The info line (locality · ₹X Cr) is handled automatically — do NOT add it to the prompt."""
+
+    system_prompt = f"""You are a luxury real-estate ad art director writing Ideogram image prompts for PIKORUA, a premium property consultancy.
+
+Campaign context:
+- Property: {property_name} ({property_type})
+- Location: {locality + ", " if locality else ""}{city}
+- Price: ₹{price_cr} Cr
+- Standout feature: {standout or "not specified"}
+
+Ad copy variants (pick a headline from these for banner prompts):
+{copy_block}
+
+Style rules:
+{scene_rules if is_scene else banner_rules}
+
+{broker_rule}
+
+{format_rule}
+
+Output ONLY the prompt text — no preamble, no explanation, no surrounding quotes."""
+
+    user_msg = f"""Rewrite image prompt slot {n} ("{ptitle}" — {prompt_type}).
+
+Current prompt:
+{current_prompt}
+
+Rewrite it following all style rules above."""
+
+    model = os.getenv("CREATIVE_MODEL", "gemini/gemini-2.5-flash")
+    try:
+        resp = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.85,
+            max_tokens=600,
+        )
+        new_prompt = resp.choices[0].message.content.strip().strip('"')
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}")
+
+    # Guarantee banner format: if AI missed the [HEADLINE:"..."] prefix, inject it.
+    if is_banner and not new_prompt.startswith('[HEADLINE:'):
+        import re as _re
+        hm = _re.search(r'\[HEADLINE:"([^"]+)"\]', new_prompt)
+        if hm:
+            rest = (new_prompt[:hm.start()] + new_prompt[hm.end():]).strip()
+            new_prompt = f'[HEADLINE:"{hm.group(1)}"] {rest}'
+        elif first_headline:
+            new_prompt = f'[HEADLINE:"{first_headline}"] {new_prompt}'
+
+    return {"prompt_num": n, "prompt": new_prompt}
+
+
+class RewriteCopyPayload(BaseModel):
+    variant_num: int
+    field: str  # "headline" or "body"
+
+
+@app.post("/rewrite-copy/{run_id}")
+async def rewrite_copy(run_id: str, payload: RewriteCopyPayload):
+    """AI-rewrite one copy field (headline or body) for a Meta ad variant."""
+    if payload.field not in ("headline", "body"):
+        raise HTTPException(status_code=400, detail="field must be 'headline' or 'body'")
+    run = _runs.get(run_id)
+    if not run or run.get("status") != "complete" or not run.get("review_folder"):
+        raise HTTPException(status_code=400, detail="Run not complete or not found.")
+
+    review_folder = Path(run["review_folder"])
+    eff = _effective_meta(review_folder)
+    variant = eff.get(payload.variant_num)
+    if not variant:
+        raise HTTPException(status_code=404, detail=f"Variant {payload.variant_num} not found.")
+
+    headline = variant.get("headline", "")
+    body = variant.get("body", "")
+    brief = run.get("brief", {})
+    property_name = brief.get("property_name", "")
+    property_type = brief.get("property_type", "")
+    city          = brief.get("city", "")
+    locality      = brief.get("locality", "")
+    price_cr      = brief.get("price_cr", "")
+    standout      = brief.get("standout_feature", "")
+
+    field_label = "headline" if payload.field == "headline" else "body"
+    other_label = "body" if payload.field == "headline" else "headline"
+    other_text  = body if payload.field == "headline" else headline
+    current_text = headline if payload.field == "headline" else body
+
+    limits = {"headline": "under 40 characters", "body": "under 125 characters"}
+
+    system_prompt = f"""You are a luxury real-estate copywriter for PIKORUA, a premium property consultancy.
+
+Campaign context:
+- Property: {property_name} ({property_type})
+- Location: {locality + ", " if locality else ""}{city}
+- Price: ₹{price_cr} Cr
+- Standout feature: {standout or "not specified"}
+
+HARD RULES (never break):
+1. No invented scarcity: never write unit counts or "limited availability" unless it is literally in the brief.
+2. No single-word possessive closers: never end a fragment sequence with "Yours.", "Home.", "Done.", "Claimed.", "Earned." — end on a property truth instead.
+3. Luxury restraint: no exclamation marks, no ALL CAPS, no hyperbole like "one-of-a-kind" or "dream home".
+4. PIKORUA is a broker — never name the developer's project. Keep it neighbourhood/lifestyle anchored.
+
+The {other_label} for this variant is: "{other_text}"
+Keep the new {field_label} coherent with the {other_label} above.
+Length: {limits[payload.field]}.
+
+Output ONLY the rewritten {field_label} text — no label, no quotes, no explanation."""
+
+    user_msg = f"""Rewrite this {field_label}:
+
+{current_text}"""
+
+    model = os.getenv("CREATIVE_MODEL", "gemini/gemini-2.5-flash")
+    try:
+        resp = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.85,
+            max_tokens=100,
+        )
+        new_text = resp.choices[0].message.content.strip().strip('"').strip("'")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}")
+
+    return {payload.field: new_text}
+
+
 class AudienceSave(BaseModel):
     city: str = ""
     city_key: str | None = None
@@ -3543,6 +4363,477 @@ def deploy_to_meta(run_id: str):
             "dropped_locations": dropped}
 
 
+# --------------------------------------------------------------------------- #
+# Post-deploy intelligence: previews, signals, performance, optimisation
+# --------------------------------------------------------------------------- #
+def _real_meta_ads(run: dict) -> list[dict]:
+    """Variants that were really published (have a live ad_id, not a dry-run preview)."""
+    return [a for a in run.get("meta_ads", [])
+            if not a.get("dry_run") and a.get("ad_id")]
+
+
+def _variant_lookup(run: dict) -> dict[int, dict]:
+    return {a.get("variant"): a for a in _real_meta_ads(run)}
+
+
+@app.get("/meta-previews/{run_id}")
+def meta_previews(run_id: str):
+    """Rendered ad previews (iframe HTML) per placement, per published variant."""
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    ads = _real_meta_ads(run)
+    if not ads:
+        return {"previews": [], "note": "No live ads to preview yet."}
+
+    from pikorua_adflow.tools.meta_tool import fetch_ad_previews
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    out = []
+    for a in ads:
+        previews = fetch_ad_previews(a["ad_id"], token)
+        out.append({"variant": a.get("variant"), "previews": previews})
+    return {"previews": out}
+
+
+def _reach_status(mau: int) -> tuple[str, str]:
+    """Map an audience size to a (label, colour) signal."""
+    if not mau:
+        return "Unknown", "muted"
+    if mau < 100_000:
+        return "Too narrow", "red"
+    if mau <= 3_000_000:
+        return "Good", "green"
+    return "Broad", "amber"
+
+
+@app.get("/meta-signals/{run_id}")
+def meta_signals(run_id: str):
+    """Pre-activation audience signals: reach estimate + per-variant delivery."""
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    ads = _real_meta_ads(run)
+    if not ads:
+        return {"reach": {}, "delivery": [], "note": "No live ad sets to estimate yet."}
+
+    from pikorua_adflow.tools import meta_targeting as _mt
+    from pikorua_adflow.tools.meta_tool import (fetch_reach_estimate,
+                                                fetch_delivery_estimate)
+    rf = Path(run["review_folder"])
+    brief = run.get("brief", {})
+    audience = _effective_audience(rf, brief)
+    spec = _mt.build_targeting_spec(audience)
+
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    account = os.getenv("META_AD_ACCOUNT_ID", "")
+    reach = fetch_reach_estimate(account, spec, token)
+    mau = reach.get("estimate_mau", 0)
+    label, color = _reach_status(mau)
+
+    delivery = []
+    for a in ads:
+        de = fetch_delivery_estimate(a["adset_id"], token)
+        daily = ""
+        curve = de.get("daily_outcomes_curve") or []
+        if curve:
+            reaches = [pt.get("reach", 0) for pt in curve if pt.get("reach")]
+            if reaches:
+                daily = f"{min(reaches):,}–{max(reaches):,}/day"
+        delivery.append({"variant": a.get("variant"), "daily_range": daily,
+                         "estimate_ready": de.get("estimate_ready", False)})
+
+    return {
+        "reach": {"estimate_mau": mau, "estimate_dau": reach.get("estimate_dau", 0),
+                  "status_label": label, "color": color,
+                  "audience_summary": _mt.audience_summary(audience)},
+        "delivery": delivery,
+    }
+
+
+def _metrics_from_insight(row: dict) -> dict:
+    """Pull the headline metrics (and CPL) out of an insights row."""
+    def f(key: str) -> float:
+        try:
+            return float(row.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    leads = 0.0
+    for act in row.get("actions", []) or []:
+        if act.get("action_type") in ("lead", "onsite_conversion.lead_grouped",
+                                       "leadgen.other", "lead_grouped"):
+            try:
+                leads += float(act.get("value", 0) or 0)
+            except (TypeError, ValueError):
+                pass
+    spend = f("spend")
+    cpl = round(spend / leads, 1) if leads else None
+    return {
+        "impressions": int(f("impressions")), "reach": int(f("reach")),
+        "frequency": round(f("frequency"), 2), "spend": round(spend, 1),
+        "ctr": round(f("ctr"), 2), "leads": int(leads), "cpl": cpl,
+    }
+
+
+def _crm_optimisation_signals() -> list[dict]:
+    """Account-level recommendations derived from CRM analytics (not Meta)."""
+    signals: list[dict] = []
+    try:
+        rep = _crm_report()
+    except Exception:
+        return signals
+    if not rep or rep.get("total_leads", 0) == 0:
+        return signals
+
+    # Share of QUALITY leads attributable to each industry.
+    industries = rep.get("professions", {}).get("industries", [])
+    weighted = {p["industry"]: p["count"] * p["quality_rate"] for p in industries}
+    total_w = sum(weighted.values()) or 1
+    for industry, w in sorted(weighted.items(), key=lambda kv: kv[1], reverse=True)[:1]:
+        share = w / total_w
+        if industry == "IT/Tech" and share > 0.30:
+            signals.append({
+                "source": "crm", "action": "targeting_interests",
+                "label": "Add Technology & Software interests",
+                "detail": f"IT professionals are {round(share*100)}% of your quality leads — "
+                          "lean targeting toward them.",
+                "severity": "info", "params": {"interests": ["Technology", "Software"]},
+            })
+
+    # Dominant budget segment among quality leads → copy guidance (no API action).
+    # Weight by quality where we have it; fall back to volume when buying-status
+    # data is absent (e.g. CSV export). Never surface an empty segment.
+    seg = {k: v for k, v in rep.get("budget_segments", {}).items() if v.get("count")}
+    best_seg = max(seg.items(),
+                   key=lambda kv: kv[1]["count"] * (kv[1]["avg_quality_score"] or 1),
+                   default=(None, None))[0] if seg else None
+    if best_seg and best_seg != "Unknown":
+        signals.append({
+            "source": "crm", "action": "note",
+            "label": f"Speak to the ₹{best_seg} buyer in copy",
+            "detail": f"Your best-converting budget segment is ₹{best_seg}. "
+                      "Make sure the ad copy resonates with that price tier.",
+            "severity": "info", "params": {},
+        })
+
+    # Top converting profile with a known pincode → geo hint.
+    for prof in rep.get("top_profiles", []):
+        city = prof.get("profile", {}).get("city")
+        if city and city != "Unknown":
+            signals.append({
+                "source": "crm", "action": "note",
+                "label": f"Top profile converts in {city}",
+                "detail": f"{prof['profile']['industry']}, ₹{prof['profile']['budget']}, "
+                          f"{city} — {prof['quality_rate']:g}% quality across {prof['count']} leads. "
+                          "Confirm this city is in your geo targeting.",
+                "severity": "info", "params": {},
+            })
+            break
+
+    # A campaign with markedly higher quality than the rest → scale it.
+    attribution = rep.get("attribution", {})
+    rates = [(name, d["quality_rate"], d["count"]) for name, d in attribution.items()
+             if d["count"] >= 5]
+    if len(rates) >= 2:
+        rates.sort(key=lambda x: x[1], reverse=True)
+        top, others = rates[0], rates[1:]
+        avg_other = sum(r[1] for r in others) / len(others) if others else 0
+        if avg_other and top[1] >= 2 * avg_other:
+            signals.append({
+                "source": "crm", "action": "note",
+                "label": f"Campaign “{top[0]}” converts 2× better",
+                "detail": f"{top[0]} runs at {top[1]:g}% quality vs {round(avg_other)}% average — "
+                          "consider shifting budget toward it.",
+                "severity": "info", "params": {},
+            })
+    return signals
+
+
+def _spec_radius(spec: dict):
+    cities = (spec.get("geo_locations", {}) or {}).get("cities", []) or []
+    return cities[0].get("radius") if cities else None
+
+
+def _spec_countries(spec: dict) -> set:
+    return set((spec.get("geo_locations", {}) or {}).get("countries", []) or [])
+
+
+def _targeting_basis(before_spec: dict, after_spec: dict) -> tuple[str, float]:
+    """Classify a targeting change into a heuristic family + a raw reach multiplier.
+
+    Naive on purpose — the optimization_tracker learns the correction factor:
+      - adding countries → assume reach roughly doubles (raw 2.0)
+      - changing the city radius → reach scales with the area ratio (r2/r1)^2
+    """
+    before_c, after_c = _spec_countries(before_spec), _spec_countries(after_spec)
+    if after_c - before_c:
+        return "add_countries", 2.0
+    rb, ra = _spec_radius(before_spec), _spec_radius(after_spec)
+    if rb and ra and rb != ra:
+        return "radius_scale", (ra / rb) ** 2
+    return "targeting_other", 1.0
+
+
+def _live_adset_targeting(adset_id: str, token: str) -> dict:
+    """Fetch an ad set's current live targeting spec. {} on failure."""
+    from pikorua_adflow.tools.meta_tool import _get
+    try:
+        return _get(adset_id, token, {"fields": "targeting"}).get("targeting", {}) or {}
+    except Exception:
+        return {}
+
+
+@app.get("/meta-performance/{run_id}")
+def meta_performance(run_id: str):
+    """Per-variant performance + Meta-signal and CRM-driven optimisation chips."""
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    ads = _real_meta_ads(run)
+    if not ads:
+        return {"variants": [], "crm_signals": [],
+                "note": "Publish live ads first to see performance."}
+
+    from pikorua_adflow.tools import meta_targeting as _mt
+    from pikorua_adflow.tools.meta_tool import (fetch_insights,
+                                                fetch_relevance_diagnostics,
+                                                fetch_reach_estimate)
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    account = os.getenv("META_AD_ACCOUNT_ID", "")
+    rf = Path(run["review_folder"])
+    brief = run.get("brief", {})
+    base_audience = _effective_audience(rf, brief)
+    base_budget = int(brief.get("daily_budget_inr", 1000))
+
+    # One reach estimate for the shared audience drives broaden/narrow recs.
+    reach = fetch_reach_estimate(account, _mt.build_targeting_spec(base_audience), token)
+    reach_mau = reach.get("estimate_mau", 0)
+
+    diagnostics = fetch_relevance_diagnostics([a["ad_id"] for a in ads], token)
+
+    def _spec_with(**changes) -> dict:
+        aud = dict(base_audience)
+        if "radius_delta" in changes:
+            cur = int(aud.get("radius_km") or _mt.DEFAULT_RADIUS_KM)
+            aud["radius_km"] = max(_mt._RADIUS_MIN_KM,
+                                   min(_mt._RADIUS_MAX_KM, cur + changes["radius_delta"]))
+        if changes.get("add_nri"):
+            aud["nri_countries"] = list(dict.fromkeys(
+                (aud.get("nri_countries") or []) + ["AE", "US", "GB"]))
+        if changes.get("add_interests"):
+            resolved = list(aud.get("interests") or [])
+            for nm in changes["add_interests"]:
+                try:
+                    hits = _mt.search_interests(nm, token, limit=1)
+                except Exception:
+                    hits = []
+                if hits:
+                    resolved.append({"id": hits[0]["id"], "name": hits[0]["name"]})
+            aud["interests"] = resolved
+        return _mt.build_targeting_spec(aud)
+
+    variants_out = []
+    for a in ads:
+        vnum = a.get("variant")
+        ad_id = a["ad_id"]
+        adset_id = a.get("adset_id", "")
+        insights = fetch_insights(ad_id, token)
+        metrics = _metrics_from_insight(insights[0]) if insights else {}
+        diag = diagnostics.get(ad_id, {})
+        quality = diag.get("quality_ranking", "")
+
+        recs: list[dict] = []
+        if reach_mau and reach_mau < 100_000:
+            recs.append({"source": "meta", "action": "targeting", "severity": "red",
+                         "label": "Broaden audience (+15km)",
+                         "detail": f"Audience is only ~{reach_mau:,} people — widen the radius.",
+                         "params": {"targeting_spec": _spec_with(radius_delta=15)}})
+        elif reach_mau and reach_mau > 4_000_000:
+            recs.append({"source": "meta", "action": "targeting", "severity": "amber",
+                         "label": "Narrow audience (−10km)",
+                         "detail": f"Audience is ~{reach_mau:,} people — tighten the radius.",
+                         "params": {"targeting_spec": _spec_with(radius_delta=-10)}})
+        if quality == "BELOW_AVERAGE_10" or quality == "BELOW_AVERAGE":
+            recs.append({"source": "meta", "action": "note", "severity": "amber",
+                         "label": "Swap the creative",
+                         "detail": "Quality ranking is below average — try a fresh image/headline "
+                                   "from the Image Prompts tab, then re-publish.",
+                         "params": {}})
+        if metrics.get("frequency", 0) > 3.0:
+            recs.append({"source": "meta", "action": "targeting", "severity": "amber",
+                         "label": "Expand to NRI countries",
+                         "detail": f"Frequency is {metrics['frequency']} — the same people are "
+                                   "seeing it too often. Widen the audience.",
+                         "params": {"targeting_spec": _spec_with(add_nri=True)}})
+        cpl = metrics.get("cpl")
+        if cpl is not None and cpl > 500:
+            recs.append({"source": "meta", "action": "pause", "severity": "red",
+                         "label": "Pause this variant",
+                         "detail": f"Cost per enquiry is ₹{cpl} — above the ₹500 ceiling.",
+                         "params": {}})
+        if quality in ("ABOVE_AVERAGE",) and cpl is not None and cpl < 300:
+            recs.append({"source": "meta", "action": "budget", "severity": "green",
+                         "label": "Scale up 20%",
+                         "detail": f"Strong quality and ₹{cpl} per enquiry — give it more budget.",
+                         "params": {"daily_budget_inr": int(base_budget * 1.2),
+                                    "base_budget": base_budget}})
+
+        # Attach a PREDICTED impact (calibrated heuristic) to each actionable rec
+        # so the user sees the expected change before clicking Apply.
+        from pikorua_adflow.analytics import optimization_tracker as _tracker
+        base_spec = _mt.build_targeting_spec(base_audience)
+        for rec in recs:
+            if rec["action"] == "targeting" and rec["params"].get("targeting_spec"):
+                basis, raw = _targeting_basis(base_spec, rec["params"]["targeting_spec"])
+                pred = _tracker.predict(basis, raw, reach_mau)
+                rec["impact"] = {"metric": "reach", "before": reach_mau,
+                                 "measurable_now": True, **pred}
+            elif rec["action"] == "budget":
+                new_b = int(rec["params"].get("daily_budget_inr", base_budget))
+                pred = _tracker.predict("budget_linear", new_b / max(base_budget, 1), None)
+                rec["impact"] = {"metric": "leads", "before": None,
+                                 "measurable_now": False, **pred}
+
+        variants_out.append({
+            "variant": vnum, "ad_id": ad_id, "adset_id": adset_id,
+            "metrics": metrics, "diagnostics": diag, "recommendations": recs,
+        })
+
+    from pikorua_adflow.analytics import optimization_tracker as _tracker
+    return {"variants": variants_out, "crm_signals": _crm_optimisation_signals(),
+            "reach_mau": reach_mau, "learning": _tracker.history(run_id)}
+
+
+class MetaOptimizeReq(BaseModel):
+    action: str = Field(..., description="pause|resume|budget|targeting|swap_creative")
+    variant: int = Field(..., description="Variant number to act on")
+    params: dict = Field(default_factory=dict)
+
+
+@app.post("/meta-optimize/{run_id}")
+def meta_optimize(run_id: str, req: MetaOptimizeReq):
+    """Apply one optimisation action to a published variant."""
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    lookup = _variant_lookup(run)
+    ad = lookup.get(req.variant)
+    if not ad:
+        raise HTTPException(status_code=404,
+                            detail=f"Version {req.variant} isn't published live.")
+
+    from pikorua_adflow.tools import meta_tool as _mtool
+    from pikorua_adflow.tools.errors import explain_and_log
+    from pikorua_adflow.analytics import optimization_tracker as _tracker
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    account = os.getenv("META_AD_ACCOUNT_ID", "")
+    ad_id = ad["ad_id"]
+    adset_id = ad.get("adset_id", "")
+    impact = None
+
+    try:
+        if req.action == "pause":
+            _mtool.pause_variant(ad_id, token)
+            ad["status"] = "PAUSED"
+        elif req.action == "resume":
+            _mtool.resume_variant(ad_id, token)
+            ad["status"] = "ACTIVE"
+        elif req.action == "budget":
+            budget = int(req.params.get("daily_budget_inr", 0))
+            if budget <= 0:
+                raise HTTPException(status_code=400, detail="No budget supplied.")
+            # Lead-volume impact can't be measured until the ad spends; record the
+            # prediction now and leave it pending for a later settle.
+            pred = _tracker.predict("budget_linear",
+                                    budget / max(int(req.params.get("base_budget", budget)), 1),
+                                    None)
+            _tracker.open_record(run_id=run_id, variant=req.variant, action="budget",
+                                 basis="budget_linear", metric="leads",
+                                 label=req.params.get("label", "Adjust budget"),
+                                 before=None, raw_multiplier=pred["raw_multiplier"],
+                                 expected=pred)
+            _mtool.update_adset_budget(adset_id, budget, token)
+            ad["daily_budget_inr"] = budget
+            impact = {"metric": "leads", "measurable_now": False,
+                      "predicted_pct": pred["expected_pct"],
+                      "note": "Effect on enquiries shows once the ad runs."}
+        elif req.action == "targeting":
+            spec = req.params.get("targeting_spec")
+            if not spec:
+                raise HTTPException(status_code=400, detail="No targeting supplied.")
+            # PREDICT → APPLY → MEASURE → LEARN.  Each step is individually guarded
+            # so a failure at any point still returns whatever we have measured so far.
+            live_spec = _live_adset_targeting(adset_id, token)
+            # Measure BEFORE reach — use live spec when available, fall back to proposed spec.
+            before_reach = 0
+            try:
+                est = _mtool.fetch_reach_estimate(account, live_spec if live_spec else spec, token)
+                before_reach = est.get("estimate_mau", 0)
+            except Exception:
+                pass
+            basis_hint = req.params.get("basis_hint", "")
+            raw_hint = req.params.get("raw_multiplier_hint")
+            if basis_hint and raw_hint is not None:
+                basis, raw = basis_hint, float(raw_hint)
+            else:
+                basis, raw = _targeting_basis(live_spec if live_spec else spec, spec)
+            pred = _tracker.predict(basis, raw, before_reach)
+            rid = _tracker.open_record(run_id=run_id, variant=req.variant, action="targeting",
+                                       basis=basis, metric="reach",
+                                       label=req.params.get("label", "Adjust targeting"),
+                                       before=before_reach, raw_multiplier=raw, expected=pred)
+            # Apply — capture any Meta API error so we can surface it without losing the
+            # prediction that was already returned to the UI.
+            apply_error: str | None = None
+            try:
+                _mtool.update_adset_targeting(adset_id, spec, token)
+            except Exception as _ae:
+                from pikorua_adflow.tools.errors import humanize as _humanize
+                apply_error = _humanize(_ae)["message"]
+            # Measure AFTER reach — only meaningful if apply succeeded.
+            after_reach: int | None = None
+            if not apply_error:
+                try:
+                    after_reach = _mtool.fetch_reach_estimate(account, spec, token).get("estimate_mau", 0)
+                except Exception:
+                    after_reach = None
+            settled = _tracker.settle(rid, after_reach) if (after_reach is not None) else None
+            impact = {
+                "metric": "reach", "measurable_now": True,
+                "before": before_reach, "actual_after": after_reach,
+                "predicted_after": pred["expected_after"], "predicted_pct": pred["expected_pct"],
+                "actual_pct": (settled or {}).get("actual_pct"),
+                "prediction_error_pp": (settled or {}).get("prediction_error_pp"),
+                "basis": basis, "n_samples": pred["n_samples"],
+                "apply_error": apply_error,
+            }
+        elif req.action == "swap_creative":
+            spec = req.params.get("object_story_spec")
+            if not spec:
+                raise HTTPException(status_code=400, detail="No creative supplied.")
+            result = _mtool.swap_ad_creative(ad_id, account, spec, token)
+            ad["creative_id"] = result["creative_id"]
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action '{req.action}'.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        friendly = explain_and_log(f"Meta optimise — {req.action} V{req.variant}", exc)
+        raise HTTPException(status_code=400, detail=friendly["message"])
+
+    # Persist any state we mutated on the run.
+    _runs[run_id]["meta_ads"] = run.get("meta_ads", [])
+    _save_runs()
+    return {"ok": True, "action": req.action, "variant": req.variant, "impact": impact}
+
+
+@app.get("/meta-optimize-history/{run_id}")
+def meta_optimize_history(run_id: str):
+    """Predicted-vs-actual log + learned calibration for this run's optimisations."""
+    from pikorua_adflow.analytics import optimization_tracker as _tracker
+    return _tracker.history(run_id)
+
+
 @app.get("/image/{run_id}/{filename}")
 def serve_image(run_id: str, filename: str):
     """Serve a generated image file from a run's images/ subfolder."""
@@ -3668,6 +4959,309 @@ def upload_crm_audience(req: CRMAudienceRequest):
         raise HTTPException(status_code=400, detail=result["error"])
 
     return result
+
+
+# --------------------------------------------------------------------------- #
+# CRM Analytics — deep lead intelligence (Task 1)
+# --------------------------------------------------------------------------- #
+# In-memory cache so we don't re-fetch Supabase + recompute on every request.
+_CRM_CACHE_TTL_SECS = 4 * 60 * 60  # 4 hours
+_crm_cache: dict = {"data": None, "fetched_at": None, "source": ""}
+
+
+def _crm_report(force: bool = False) -> dict:
+    """Return the full CRM analytics report, served from cache unless stale."""
+    from pikorua_adflow.analytics import crm_analytics
+
+    now = datetime.now(timezone.utc)
+    fetched = _crm_cache.get("fetched_at")
+    fresh = (
+        not force
+        and _crm_cache.get("data") is not None
+        and fetched is not None
+        and (now - fetched).total_seconds() < _CRM_CACHE_TTL_SECS
+    )
+    if fresh:
+        return _crm_cache["data"]
+
+    leads, source = crm_analytics.get_leads()
+    report = crm_analytics.full_report(leads)
+    report["source"] = source
+    _crm_cache.update({"data": report, "fetched_at": now, "source": source})
+    return report
+
+
+@app.get("/crm-analytics/summary")
+def crm_analytics_summary():
+    """Full CRM analytics report (cached, 4h TTL)."""
+    return _crm_report()
+
+
+@app.get("/crm-analytics/refresh")
+def crm_analytics_refresh():
+    """Re-fetch Supabase and bust the cache, then return the fresh report."""
+    return _crm_report(force=True)
+
+
+@app.get("/crm-analytics/geography")
+def crm_analytics_geography():
+    from pikorua_adflow.analytics import crm_analytics
+    leads, _ = crm_analytics.get_leads()
+    return crm_analytics.geographic_distribution(leads)
+
+
+@app.get("/crm-analytics/budget-segments")
+def crm_analytics_budget():
+    from pikorua_adflow.analytics import crm_analytics
+    leads, _ = crm_analytics.get_leads()
+    return crm_analytics.budget_segments(leads)
+
+
+@app.get("/crm-analytics/professions")
+def crm_analytics_professions():
+    from pikorua_adflow.analytics import crm_analytics
+    leads, _ = crm_analytics.get_leads()
+    return crm_analytics.profession_industry_breakdown(leads)
+
+
+@app.get("/crm-analytics/lead-quality")
+def crm_analytics_lead_quality():
+    from pikorua_adflow.analytics import crm_analytics
+    leads, _ = crm_analytics.get_leads()
+    return crm_analytics.lead_quality_funnel(leads)
+
+
+@app.get("/crm-analytics/attribution")
+def crm_analytics_attribution():
+    from pikorua_adflow.analytics import crm_analytics
+    leads, _ = crm_analytics.get_leads()
+    return crm_analytics.campaign_source_attribution(leads)
+
+
+@app.get("/crm-analytics/project/{name}")
+def crm_analytics_project(name: str):
+    from pikorua_adflow.analytics import crm_analytics
+    leads, _ = crm_analytics.get_leads()
+    return crm_analytics.project_analytics(leads, name)
+
+
+@app.get("/crm-analytics/top-profiles")
+def crm_analytics_top_profiles():
+    from pikorua_adflow.analytics import crm_analytics
+    leads, _ = crm_analytics.get_leads()
+    return crm_analytics.top_converting_profiles(leads)
+
+
+# ---- Mini dashboard (server-rendered inline SVG, no chart library) ---------- #
+def _svg_hbars(items: list[tuple[str, float, str]], unit: str = "",
+               color: str = "#2E5740", max_val: float | None = None) -> str:
+    """Render a horizontal bar chart as inline SVG.
+
+    items: list of (label, value, right_caption). right_caption shows on the bar.
+    """
+    if not items:
+        return '<p style="color:var(--muted);font-size:0.85rem;">No data.</p>'
+    row_h, gap, label_w, bar_w, cap_w = 30, 10, 130, 280, 160
+    top_val = max_val if max_val is not None else max((v for _, v, _ in items), default=1) or 1
+    height = len(items) * (row_h + gap)
+    width = label_w + bar_w + cap_w
+    parts = [f'<svg viewBox="0 0 {width} {height}" width="100%" '
+             f'style="max-width:{width}px;font-family:inherit;overflow:visible;" role="img">']
+    for i, (label, value, cap) in enumerate(items):
+        y = i * (row_h + gap)
+        bw = max(2, (value / top_val) * bar_w) if top_val else 2
+        lbl = _esc(label[:26])
+        parts.append(
+            f'<text x="0" y="{y + row_h * 0.68}" font-size="12" fill="var(--ink)">{lbl}</text>'
+            f'<rect x="{label_w}" y="{y}" width="{bar_w}" height="{row_h}" rx="5" fill="var(--line)" opacity="0.5"/>'
+            f'<rect x="{label_w}" y="{y}" width="{bw:.1f}" height="{row_h}" rx="5" fill="{color}"/>'
+            f'<text x="{label_w + bar_w + 6}" y="{y + row_h * 0.68}" font-size="11.5" '
+            f'fill="var(--ink-soft)" text-anchor="start">{_esc(cap)}</text>'
+        )
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _quality_badge(rate: float) -> str:
+    cls = "badge-ok" if rate >= 30 else "badge-warn" if rate >= 12 else "badge-muted"
+    return f'<span class="badge {cls}">{rate:g}% quality</span>'
+
+
+@app.get("/crm-dashboard", response_class=HTMLResponse)
+def crm_dashboard():
+    """Server-rendered lead-intelligence dashboard with inline SVG charts."""
+    try:
+        rep = _crm_report()
+    except Exception as exc:
+        rep = None
+        err = str(exc)
+
+    if not rep or rep.get("total_leads", 0) == 0:
+        body = (
+            '<div class="card" style="padding:2rem;text-align:center;color:var(--ink-soft);">'
+            '<h2 style="margin-top:0;">No lead data yet</h2>'
+            '<p>We couldn\'t load any leads from the CRM right now. '
+            'Check the Supabase connection or the CSV fallback, then refresh.</p>'
+            '<button class="btn" onclick="refreshCRM(this)">Refresh data</button>'
+            '</div>'
+        ) if rep is not None else (
+            f'<div class="card" style="padding:2rem;color:var(--danger);">'
+            f'Could not build the report: {_esc(err)}</div>'
+        )
+        return HTMLResponse(_crm_dashboard_page(body, source=""))
+
+    total = rep["total_leads"]
+    source = rep.get("source", "")
+
+    # --- Lead funnel ---
+    funnel = rep["lead_quality"]["stages"]
+    funnel_items = [(s["stage"], s["count"], f'{s["count"]} · {s["pct_of_total"]:g}%') for s in funnel]
+    funnel_svg = _svg_hbars(funnel_items, color="#1F3D2E", max_val=total)
+
+    # --- Budget segments ---
+    seg = rep["budget_segments"]
+    seg_items = [(b, seg[b]["count"], f'{seg[b]["count"]} · {seg[b]["pct"]:g}% · {seg[b]["avg_quality_score"]:g}% qual')
+                 for b in ["<1Cr", "1–2Cr", "2–5Cr", "5Cr+", "Unknown"] if seg[b]["count"]]
+    budget_svg = _svg_hbars(seg_items, color="#C9A84C")
+
+    # --- Top professions ---
+    profs = rep["professions"]["industries"][:8]
+    prof_rows = "".join(
+        f'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
+        f'padding:8px 0;border-bottom:1px solid var(--line);">'
+        f'<span style="color:var(--ink);font-weight:600;">{_esc(p["industry"])}</span>'
+        f'<span style="display:flex;gap:8px;align-items:center;">'
+        f'<span style="color:var(--ink-soft);font-size:0.85rem;">{p["count"]} · {p["pct"]:g}%</span>'
+        f'{_quality_badge(p["quality_rate"])}</span></div>'
+        for p in profs
+    ) or '<p style="color:var(--muted);">No data.</p>'
+
+    # --- Top cities ---
+    cities = rep["geography"]["top_cities"][:8]
+    city_items = [(c, n, str(n)) for c, n in cities]
+    city_svg = _svg_hbars(city_items, color="#2E5740")
+
+    # --- Campaign attribution ---
+    attribution = rep["attribution"]
+    attr_rows = "".join(
+        f'<tr><td style="font-weight:600;color:var(--ink);">{_esc(name)}</td>'
+        f'<td>{d["count"]}</td>'
+        f'<td>{_quality_badge(d["quality_rate"])}</td>'
+        f'<td style="color:var(--ink-soft);font-size:0.85rem;">{_esc(d["avg_budget_bucket"])}</td>'
+        f'<td style="color:var(--ink-soft);font-size:0.85rem;">{_esc(", ".join(d["top_professions"]) or "—")}</td></tr>'
+        for name, d in list(attribution.items())[:12]
+    ) or '<tr><td colspan="5" style="color:var(--muted);">No campaign data.</td></tr>'
+
+    # --- Top converting profiles ---
+    profiles = rep["top_profiles"]
+    if profiles:
+        profile_cards = "".join(
+            f'<div class="card" style="padding:1rem 1.1rem;margin:0;">'
+            f'<div style="font-weight:600;color:var(--ink);">{_esc(p["profile"]["industry"])}, '
+            f'₹{_esc(p["profile"]["budget"])}, {_esc(p["profile"]["city"])}</div>'
+            f'<div style="margin-top:6px;display:flex;align-items:center;gap:8px;">'
+            f'{_quality_badge(p["quality_rate"])}'
+            f'<span style="color:var(--ink-soft);font-size:0.82rem;">{p["count"]} leads</span></div>'
+            f'</div>'
+            for p in profiles
+        )
+    else:
+        profile_cards = ('<p style="color:var(--muted);">Not enough leads per profile yet '
+                         '(need 3+ in an industry × budget × city combination).</p>')
+
+    # --- Volume trend caption ---
+    trend = rep["volume_trend"]
+    growth = trend.get("growth_rate")
+    growth_txt = (f'{growth:+g}% vs prior month' if growth is not None else 'trend forming')
+    peak = trend.get("peak_month") or "—"
+
+    body = f"""
+  <div class="card" style="padding:1.1rem 1.3rem;margin-bottom:1.4rem;display:flex;
+      flex-wrap:wrap;gap:1.4rem;align-items:center;">
+    <div><div class="eyebrow">Total leads</div><div style="font-size:1.6rem;font-weight:700;color:var(--ink);">{total}</div></div>
+    <div><div class="eyebrow">Peak month</div><div style="font-size:1.1rem;color:var(--ink);">{_esc(peak)} · {trend.get('peak_count',0)}</div></div>
+    <div><div class="eyebrow">Recent growth</div><div style="font-size:1.1rem;color:var(--ink);">{growth_txt}</div></div>
+    <div style="margin-left:auto;text-align:right;">
+      <div style="font-size:0.78rem;color:var(--muted);max-width:34ch;">{_esc(source)}</div>
+      <button class="btn btn-sm" style="margin-top:6px;" onclick="refreshCRM(this)">Refresh data</button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:1.4rem;">
+    <div class="card">
+      <div class="section-title">Lead funnel</div>
+      <div class="section-sub">Received → Spoken → HWC → Exploring → Hot</div>
+      {funnel_svg}
+    </div>
+    <div class="card">
+      <div class="section-title">Budget segments</div>
+      <div class="section-sub">Share of leads + quality rate per bracket</div>
+      {budget_svg}
+    </div>
+    <div class="card">
+      <div class="section-title">Top cities</div>
+      <div class="section-sub">Where enquiries come from</div>
+      {city_svg}
+    </div>
+    <div class="card">
+      <div class="section-title">Top professions</div>
+      <div class="section-sub">Industry mix with quality rate</div>
+      {prof_rows}
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.4rem;">
+    <div class="section-title">Campaign attribution</div>
+    <div class="section-sub">Which campaigns bring the best leads</div>
+    <table style="width:100%;">
+      <thead><tr><th>Campaign</th><th>Leads</th><th>Quality</th><th>Top budget</th><th>Top professions</th></tr></thead>
+      <tbody>{attr_rows}</tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:1.4rem;">
+    <div class="section-title">Top converting profiles</div>
+    <div class="section-sub">Use these to tune Meta interest &amp; geo targeting</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+      {profile_cards}
+    </div>
+  </div>
+"""
+    return HTMLResponse(_crm_dashboard_page(body, source=source))
+
+
+def _crm_dashboard_page(body: str, source: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  {_theme_fouc()}
+  <title>PIKORUA — Lead Insights</title>
+  <link rel="stylesheet" href="/brand.css"/>
+</head><body>
+  {_topbar('crm')}
+  <div class="wrap-wide">
+    <div style="margin-bottom:1.6rem;">
+      <div class="eyebrow">Customer intelligence</div>
+      <h1 style="margin:0.1rem 0 0;">Lead insights</h1>
+      <p class="lede">Deep analytics across your CRM — geography, budget, profession, funnel and the profiles that convert best.</p>
+    </div>
+    {body}
+  </div>
+  <script>
+    async function refreshCRM(btn) {{
+      const original = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Refreshing…';
+      try {{
+        await fetch('/crm-analytics/refresh');
+        location.reload();
+      }} catch (e) {{
+        btn.disabled = false; btn.textContent = original;
+        alert('Could not refresh: ' + e.message);
+      }}
+    }}
+  </script>
+</body></html>"""
 
 
 @app.get("/runs/json")

@@ -1086,5 +1086,67 @@
         }
       }
     ]
+  },
+  "aa78cf5f": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Shilaj Bungalow, 3600 sqft",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 50000,
+      "city": "Ahmedabad",
+      "locality": "Shilaj",
+      "property_type": "Luxury Bungalow",
+      "price_cr": "6",
+      "standout_feature": "Club Class Amenities, possession in 1 year",
+      "buyer_type": "HNI",
+      "nri_geographies": "",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1500,
+      "cta": "GET_QUOTE",
+      "company_name": ""
+    },
+    "created_at": "2026-06-14T10:54:51.288237+00:00",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-14_16-29-08",
+    "copy_scorecard_summary": "**5/5 variants passed initial hard-fail checks. 4/5 variants passed full scoring. 1 flagged for rewrite: Variant 5.**",
+    "approved": true,
+    "selected_variants": [
+      2,
+      3,
+      5
+    ],
+    "meta_ads": [
+      {
+        "variant": 2,
+        "campaign_id": "7000851704097",
+        "adset_id": "7000851725697",
+        "creative_id": "1627574332706380",
+        "ad_id": "7000851749697",
+        "image_hash": "d3cdc1711cd0e198566ab2a039153a72",
+        "dropped_locations": [],
+        "dry_run": false
+      },
+      {
+        "variant": 3,
+        "campaign_id": "7000851704097",
+        "adset_id": "7000851773697",
+        "creative_id": "2445604175865410",
+        "ad_id": "7000851794497",
+        "image_hash": "deeb6c83888d5ec7b63c13283024a1af",
+        "dropped_locations": [],
+        "dry_run": false
+      },
+      {
+        "variant": 5,
+        "campaign_id": "7000851704097",
+        "adset_id": "7000851833097",
+        "creative_id": "2105586753721089",
+        "ad_id": "7000851867097",
+        "image_hash": "07adbec296f07284b3cb263714ed533c",
+        "dropped_locations": [],
+        "dry_run": false
+      }
+    ]
   }
 }

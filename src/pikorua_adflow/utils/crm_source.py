@@ -29,9 +29,9 @@ _CSV_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "project_contex
 # PostgREST embed: meta_leads holds the contact/campaign columns; lead_crm_details
 # (FK lead_id -> meta_leads.id) holds budget/profession/company. One joined query.
 _SELECT = (
-    "full_name,phone,email,city,campaign_name,source,status,received_at,"
-    "lead_crm_details(budget_range,profession,company_name,current_city,configuration,"
-    "call_status,buying_status,remarks)"
+    "full_name,phone,email,city,campaign_name,source,status,received_at,assigned_to,"
+    "lead_crm_details(budget_range,profession,company_name,current_city,current_area,"
+    "configuration,call_status,buying_status,hwc,remarks)"
 )
 
 
@@ -83,9 +83,12 @@ def _fetch_supabase(base_url: str, key: str) -> list[dict]:
                 "Budget": crm.get("budget_range") or "",
                 "Profession": crm.get("profession") or "",
                 "Company": crm.get("company_name") or "",
+                "CurrentArea": crm.get("current_area") or "",
                 "Configuration": crm.get("configuration") or "",
                 "CallStatus": crm.get("call_status") or "",
                 "BuyingStatus": crm.get("buying_status") or "",
+                "HWC": crm.get("hwc") or "",
+                "AssignedTo": r.get("assigned_to") or "",
                 "Remarks": crm.get("remarks") or "",
             })
         if len(batch) < page_size:

@@ -1,19 +1,18 @@
 ```json
 {
   "age_range": "40-55",
-  "net_worth": "₹50 Cr - ₹200 Cr",
-  "primary_motivation": "Lifestyle and Investment",
+  "net_worth": "₹20 Cr - ₹50 Cr",
+  "primary_motivation": "Lifestyle and family-oriented living; seeking a luxurious, spacious environment for family gatherings and quality living",
   "pain_points": [
-    "Concerns about the property value appreciation post-purchase due to market fluctuations.",
-    "Doubts regarding the credibility and reliability of the builder/real estate consultancy."
+    "Concerns about property appreciation and overall market stability in Ahmedabad",
+    "Fear of inadequate legal documentation and potential issues with property ownership transfer"
   ],
   "preferred_channels": [
     "WhatsApp",
     "Email",
-    "Instagram",
-    "Phone Calls"
+    "Phone calls"
   ],
-  "decision_style": "Considered, often involving family or financial advisors in the process.",
-  "trust_trigger": "Demonstrable track record of successful past transactions and transparent communication."
+  "decision_style": "Considered, involving family members and consulting with legal and financial advisors",
+  "trust_trigger": "Proven track record with testimonials and case studies demonstrating successful transactions in the luxury segment"
 }
 ```

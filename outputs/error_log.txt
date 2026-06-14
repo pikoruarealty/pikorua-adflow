@@ -38,3 +38,7 @@ POST act_207925274/adcreatives failed: {"message": "(#100) Param instagram_actor
 [2026-06-13T18:24:52] Meta deploy — variant 3
 POST act_207925274/adcreatives failed: {"message": "(#100) Param instagram_actor_id must be a valid Instagram account id", "type": "OAuthException", "code": 100, "fbtrace_id": "AHXhuQRHf0MU5lpiJty1rzN"}
 ------------------------------------------------------------
+
+[2026-06-14T15:08:10] Meta optimise — targeting V2
+UPDATE 6999192451297 failed: {"message": "Invalid parameter", "type": "OAuthException", "code": 100, "error_data": "{\"blame_field_specs\":[[\"compliance_section\"]]}", "error_subcode": 3858550, "is_transient": false, "error_user_title": "No Singapore universal ads declaration", "error_user_msg": "Regional regulated categories value required: To publish ads that include locations in Singapore, use the following value for regional regulated categories: SINGAPORE_UNIVERSAL", "fbtrace_id": "A_VZGfpG27MM4p-DQlVP2Zn"}
+------------------------------------------------------------

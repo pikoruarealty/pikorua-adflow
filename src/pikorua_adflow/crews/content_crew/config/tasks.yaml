@@ -573,9 +573,15 @@ generate_banner_prompts:
        short headline, real hierarchy between headline and the small detail line,
        breathing room around it. NEVER a solid black or gold bar across the frame,
        NEVER bold all-caps builder-ad styling, NEVER text crammed edge to edge.
-    4. The text must stay legible — give it contrast against whatever sits behind
-       it. If the scene behind the type is busy, let a soft natural gradient of
-       light or shadow (part of the photograph, not a graphic box) carry it.
+    4. BOTH the headline AND the secondary locality/price line must be immediately
+       legible. CRITICAL: do NOT place the secondary line over a pale floor, a
+       bright sky zone, or any mid-tone busy area where it will wash out — it must
+       sit against a definitively darker or lighter surface than the text colour.
+       If the composition is predominantly pale/warm, place text in a shadow pocket
+       or at a naturally darkened edge. Think: "Can a buyer read both lines on a
+       phone screen in one glance?" If no, redesign the placement before writing
+       the prompt. The secondary line is quieter than the headline but must be
+       equally readable — not a detail that disappears into the background.
 
     Reserve the BOTTOM-RIGHT corner as clean, empty negative space — the brand
     logo is composited there afterward, so place no text or detail in that corner.
@@ -639,10 +645,26 @@ generate_banner_prompts:
 
 generate_render_prompts:
   description: >
-    Generate 2 Flux 2 Pro prompts for text-free lifestyle images of {product}.
-    These are used for retargeting and brand awareness creatives. Apply the same
+    Generate 2 image prompts for lifestyle/architectural ads of {product}.
+    These are editorial ad images — like Prompts 1-3, each MUST carry a headline
+    and a secondary locality/price line as integrated typography. Apply the same
     photorealism discipline as generate_banner_prompts: camera spec, depth of
     field, material micro-detail, natural imperfection, asymmetric composition.
+
+    Headline sources: Prompt 4 → Variant 4 headline (or Variant 1 if only 3 variants
+    exist), Prompt 5 → Variant 5 headline (or Variant 2 if only 3 variants exist).
+    Use the rewritten version where available.
+
+    TEXT PLACEMENT RULES (same as generate_banner_prompts):
+    - Design the photograph first so it creates real negative space for the text.
+    - Both the headline AND the secondary line must be placed against a definitively
+      contrasting surface — light text on a dark area, dark text on a pale area.
+    - NEVER place the secondary line on a pale floor, bright sky, or mid-tone busy
+      area. If the composition is predominantly light, place text in a shadow pocket
+      or at the edge where the scene darkens naturally.
+    - Both text elements must be immediately legible at a glance; the secondary line
+      quieter but equally readable.
+    - Keep the BOTTOM-RIGHT corner empty (logo composited there afterward).
 
     Prompt 4 — EXTERIOR ESTABLISHING SHOT (the building seen from a distance):
     Show the full {property_type} from far enough away to read its form against the
@@ -654,7 +676,7 @@ generate_render_prompts:
     - NEVER a flat midday blue sky. Shoot at BLUE HOUR or dusk: deep indigo sky,
       and — the key luxury signal — warm interior lights glowing from inside the
       units, so the building reads as alive and lived-in, not an empty render.
-    - Ground it in real context, not a void: neighbouring low-rise Ahmedabad
+    - Ground it in real context, not a void: neighbouring low-rise {city}
       rooftops, mature trees, a quiet street with a faint car-light trail, ambient
       haze. This is what makes it a photograph of a real place.
     - Camera: Sony A7R V, 85mm f/4 (compression flattering to architecture) OR a
@@ -667,9 +689,11 @@ generate_render_prompts:
     - NEVER include: tropical palms, a swimming pool unless {product} names one,
       a perfectly mirrored facade, a glowing CGI lawn, or signage/brand name on the
       building.
+    - Headline text placement: use the deep indigo sky upper zone or a shadowed
+      side of the building as the text area — wherever contrast is highest.
     - End with: "Architectural exterior photography at dusk, India. Photorealistic
-      — not rendered. Natural film grain. No text, labels, logos, watermarks, or
-      brand marks."
+      — not rendered. Natural film grain. Elegant integrated typography. No logo,
+      watermark, or brand mark."
 
     Prompt 5 — INTERIOR SIGNATURE MOMENT:
     - The primary living space of a {property_type}, showing depth: a sharp
@@ -695,20 +719,28 @@ generate_render_prompts:
       natural bokeh; ISO 640, slight warm colour grade (+200K)
     - Natural imperfection: "dust suspended in the diagonal light band",
       "soft lens breathing at extreme edge of the 24mm"
+    - Headline text placement: use the ceiling or a wall section where material
+      creates definitive contrast; if the ceiling is pale, use the shadowed left
+      wall or the dark foreground floor strip — wherever the headline will read.
     - End with: "Interior lifestyle photography, India. Photorealistic — not
-      rendered. Natural grain. No text, labels, logos, watermarks, or brand marks."
+      rendered. Natural grain. Elegant integrated typography. No logo, watermark,
+      or brand mark."
 
     Property: {product}  |  City: {city}, India  |  Type: {property_type}
     Locality: {locality}
     Only use features present in {product} — do not invent amenities.
   expected_output: >
-    Two Flux 2 Pro prompts appended to outputs/visual_brief.md:
+    Two image prompts appended to outputs/visual_brief.md, each with a
+    Headline overlay line (same format as Prompts 1-3):
 
       Prompt 4 — Exterior Establishing Shot:
-      "[Full prompt — 100–160 words, specific in every detail]"
+      Headline overlay: "[Variant 4 or Variant 1 final headline]"
+      "[Full prompt — 100–160 words, specific in every detail, ending with the
+      typography and no-logo instruction]"
 
       Prompt 5 — Interior Signature Moment:
-      "[Full Flux prompt — 100–160 words]"
+      Headline overlay: "[Variant 5 or Variant 2 final headline]"
+      "[Full prompt — 100–160 words]"
 
     No invented property facts. No generic luxury tropes.
   agent: visual_prompter

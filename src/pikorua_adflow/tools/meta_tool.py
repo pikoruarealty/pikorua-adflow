@@ -75,6 +75,35 @@ def _get(path: str, token: str, params: dict | None = None) -> dict:
         raise RuntimeError(f"GET {path} failed [{e.code}]: {body}") from e
 
 
+def _do_patch(path: str, payload: dict, token: str) -> tuple[bool, dict]:
+    """POST with an update payload (Graph API has no true PATCH — updates are POSTs
+    to the object id). Named _do_patch to make optimisation intent explicit.
+    Returns (ok, data); on HTTP error data is the parsed error JSON."""
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{_BASE}/{path}",
+        data=data,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return True, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        try:
+            return False, json.loads(body)
+        except ValueError:
+            return False, {"error": {"message": body, "code": e.code}}
+
+
+def _patch(path: str, payload: dict, token: str) -> dict:
+    ok, data = _do_patch(path, payload, token)
+    if ok:
+        return data
+    raise RuntimeError(f"UPDATE {path} failed: {json.dumps(data.get('error', data))}")
+
+
 def _fetch_instagram_actor_id(page_id: str, token: str) -> str:
     """Return the Instagram Business Account ID linked to this Facebook Page.
     This is the value Meta requires as instagram_actor_id on adcreatives.
@@ -473,3 +502,157 @@ def deploy_ad(
         "dropped_locations": [_ISO_NAMES.get(c, c) for c in dropped_locations],
         "dry_run": False,
     }
+
+
+# =========================================================================== #
+# Post-deploy intelligence: previews, signals, performance, optimisation
+# =========================================================================== #
+
+# Placement formats we render as live previews in the Deploy tab.
+PREVIEW_FORMATS = [
+    "MOBILE_FEED_STANDARD",
+    "INSTAGRAM_STANDARD",
+    "INSTAGRAM_STORY",
+    "DESKTOP_FEED_STANDARD",
+]
+
+
+def fetch_ad_previews(ad_id: str, token: str,
+                      formats: list[str] | None = None) -> dict[str, str]:
+    """Return {format: iframe_html} for an ad. Previews are cosmetic, so any
+    per-format failure yields "" rather than raising."""
+    out: dict[str, str] = {}
+    for fmt in (formats or PREVIEW_FORMATS):
+        try:
+            data = _get(f"{ad_id}/previews", token, {"ad_format": fmt})
+            body = data.get("data", [])
+            out[fmt] = body[0].get("body", "") if body else ""
+        except Exception:
+            out[fmt] = ""
+    return out
+
+
+def fetch_reach_estimate(ad_account_id: str, targeting_spec: dict, token: str) -> dict:
+    """Audience size estimate for a targeting spec. Returns {} on failure."""
+    acct = ad_account_id.replace("act_", "")
+    try:
+        data = _get(
+            f"act_{acct}/reachestimate", token,
+            {"targeting_spec": json.dumps(targeting_spec)},
+        )
+        d = data.get("data", data) or {}
+        # reachestimate returns users_lower_bound/users_upper_bound; older/other
+        # endpoints use estimate_mau* or a flat `users`. Cover them all.
+        mau = (d.get("estimate_mau")
+               or d.get("estimate_mau_upper_bound")
+               or d.get("users_upper_bound")
+               or d.get("users_lower_bound")
+               or d.get("users") or 0)
+        dau = (d.get("estimate_dau")
+               or d.get("estimate_dau_upper_bound") or 0)
+        return {"estimate_mau": int(mau or 0), "estimate_dau": int(dau or 0),
+                "estimate_ready": bool(d.get("estimate_ready", True))}
+    except Exception:
+        return {}
+
+
+def fetch_delivery_estimate(adset_id: str, token: str,
+                            optimization_goal: str = "LEAD_GENERATION") -> dict:
+    """Daily delivery estimate for an ad set. Returns {} on failure."""
+    try:
+        data = _get(
+            f"{adset_id}/delivery_estimate", token,
+            {"optimization_goal": optimization_goal},
+        )
+        body = data.get("data", [])
+        return body[0] if body else {}
+    except Exception:
+        return {}
+
+
+def fetch_insights(object_id: str, token: str, date_preset: str = "last_7d") -> list[dict]:
+    """Performance insights for a campaign/adset/ad. Returns [] on failure."""
+    fields = ("impressions,reach,frequency,spend,clicks,ctr,cpc,cpm,"
+              "actions,cost_per_action_type")
+    try:
+        data = _get(f"{object_id}/insights", token,
+                    {"fields": fields, "date_preset": date_preset, "level": "ad"})
+        return data.get("data", [])
+    except Exception:
+        return []
+
+
+def fetch_relevance_diagnostics(ad_ids: list[str], token: str) -> dict[str, dict]:
+    """Per-ad relevance rankings (quality/engagement/conversion). {} entries on failure."""
+    out: dict[str, dict] = {}
+    fields = "quality_ranking,engagement_rate_ranking,conversion_rate_ranking"
+    for ad_id in ad_ids:
+        try:
+            data = _get(f"{ad_id}/insights", token,
+                        {"fields": fields, "date_preset": "last_7d"})
+            body = data.get("data", [])
+            out[ad_id] = body[0] if body else {}
+        except Exception:
+            out[ad_id] = {}
+    return out
+
+
+# ---- Optimisation actions (each returns bool / dict; raise on hard failure) -- #
+def pause_variant(ad_id: str, token: str) -> bool:
+    _patch(ad_id, {"status": "PAUSED"}, token)
+    return True
+
+
+def resume_variant(ad_id: str, token: str) -> bool:
+    _patch(ad_id, {"status": "ACTIVE"}, token)
+    return True
+
+
+def update_adset_budget(adset_id: str, daily_budget_inr: int, token: str) -> bool:
+    # Meta stores budget in paise (1 INR = 100 paise).
+    _patch(adset_id, {"daily_budget": int(daily_budget_inr) * 100}, token)
+    return True
+
+
+def update_adset_targeting(adset_id: str, targeting_spec: dict, token: str) -> bool:
+    """PATCH the ad set's targeting. Retries once with SINGAPORE_UNIVERSAL if compliance error."""
+    payload: dict = {"targeting": targeting_spec}
+    ok, data = _do_patch(adset_id, payload, token)
+    if ok:
+        return True
+    err = data.get("error", data)
+    err_msg = (
+        f"{err.get('error_user_title', '')} "
+        f"{err.get('error_user_msg', '')} "
+        f"{err.get('message', '')}".lower()
+    )
+    subcode = err.get("error_subcode")
+    is_sg = (
+        subcode == 3858550
+        or "singapore_universal" in err_msg
+        or "universal ads declaration" in err_msg
+        or "regional regulated categories" in err_msg
+    )
+    if is_sg:
+        payload2 = {"targeting": targeting_spec,
+                    "regional_regulated_categories": ["SINGAPORE_UNIVERSAL"]}
+        ok2, data2 = _do_patch(adset_id, payload2, token)
+        if ok2:
+            return True
+        raise RuntimeError(f"UPDATE {adset_id} failed: {json.dumps(data2.get('error', data2))}")
+    raise RuntimeError(f"UPDATE {adset_id} failed: {json.dumps(err)}")
+
+
+def swap_ad_creative(ad_id: str, ad_account_id: str,
+                     object_story_spec: dict, token: str) -> dict:
+    """Create a fresh creative and point the ad at it. Returns {creative_id, ad_id}."""
+    acct = ad_account_id.replace("act_", "")
+    creative = _post(
+        f"act_{acct}/adcreatives",
+        {"name": f"Optimised creative for ad {ad_id}",
+         "object_story_spec": object_story_spec},
+        token,
+    )
+    new_creative_id = creative["id"]
+    _patch(ad_id, {"creative": {"creative_id": new_creative_id}}, token)
+    return {"creative_id": new_creative_id, "ad_id": ad_id}

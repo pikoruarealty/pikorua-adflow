@@ -1,6 +1,8 @@
+```markdown
 ## CRM Signal
-- **High-value segment**: The **27 leads at ₹9 Cr+** represent Pikorua's ideal buyers; leverage this segment to create lookalike audiences for better targeting in campaigns.
-- **NRI opportunity**: With only **3 confirmed international leads**, there is a significant gap in targeting NRIs. Implement dedicated NRI ad sets and creatives to capture this underserved segment.
-- **Buyer profession impact**: Leads from professions like **Owner (14)** and **Business (11)** progressed highest in interest; utilize these identifiers in campaign messaging to resonate with decision-makers.
-- **Budget misalignment**: **46%** of leads are in the ₹2–3 Cr range, below Pikorua's luxury tier. Consider tightening targeting parameters or implementing a budget qualifier in lead forms to attract higher-value prospects.
-- **Need for data hygiene**: The **10 junk/test entries** indicate a need for ongoing CRM maintenance; ensure leads are regularly cleaned before generating lookalike audiences for better efficiency in targeting efforts.
+- **High-value leads**: 153 leads at ₹9 Cr+ — prioritize these in new campaigns by creating specific ad sets targeting this segment.
+- **NRI potential**: Only 5 leads identified as NRI, signaling an opportunity. Develop dedicated ad creatives targeting NRIs to expand this underserved market.
+- **Profession insights**: The highest clusters of buyers are Business (107), Owner (77), and Director (58). Tailor messaging to reflect their value in legacy, investment credibility, and discretion.
+- **Data integrity concerns**: 16 junk entries were filtered out — prioritize regular CRM audits to maintain lead quality and optimize lookalike audiences.
+- **Lead distribution**: 73% of leads from Ahmedabad indicate strong local focus; design campaigns to promote properties specifically in this region to leverage the existing interest.
+```

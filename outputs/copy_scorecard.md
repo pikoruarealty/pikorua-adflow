@@ -1,42 +1,52 @@
-# Copy Scorecard — Ikebana Heights Penthouse, Sindhu Bhavan Road, Ahmedabad (₹13 Cr / 8,500 sq ft)
-
-**Evaluator note before scoring:** The run is marked unbranded (company name field is blank). I will flag any variant containing "Pikorua" or any other brand name as a HARD FAIL. I will also flag any invented numbers, wrong property type, invented scarcity claims, or use of the project name "Ikebana Heights." None of the five variants use the project name, invented unit counts, or wrong property type — confirmed before scoring begins.
-
----
-
-## Variant 1 — 8,500 sq ft. What That Number Actually Means.
-
-**Headline:** 8,500 sq ft above the city.
-**Body:** Most penthouses are apartments wearing a crown. At 8,500 sq ft on Sindhu Bhavan Road, this one is a floor of its own.
+# Pikorua Realty — Meta Ad Copy Scorecard
+**Property:** Shilaj Bungalow, 3,600 sq ft | ₹6 Cr | Ahmedabad, Shilaj
+**Evaluated against:** Pikorua Brand Voice Reference (June 2026)
+**Evaluator:** Brand Quality Evaluator, Luxury Real Estate Copy
 
 ---
 
-**1. Brand Voice: 8/10**
+## Pre-Scoring Checks (Automatic Flag Review)
 
-This is close to the Pikorua register. "A floor of its own" is a genuinely good line — it reframes the size without stating it bluntly, which is exactly what the voice document calls for. "Apartments wearing a crown" is a strong metaphor that earns its place. No banned words. No exclamation marks. No template phrases.
+Running all five variants against hard-fail criteria before scoring:
 
-The one friction point: "above the city" in the headline is a mild cliché in luxury real estate copy — it appears in enough competitor ads that it no longer feels owned. It does not violate the banned list, but it softens what is otherwise a sharp variant. A minor deduction.
+| Check | V1 | V2 | V3 | V4 | V5 |
+|---|---|---|---|---|---|
+| Developer/project name used | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Invented scarcity/unit count | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Invented statistics | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Wrong property type | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Brand name in unbranded run | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-**2. Platform Fit: 9/10**
+No automatic hard fails triggered. Proceeding to full scoring.
 
-Headline: 28 characters. ✓
-Body: 120 characters. ✓
-Format is clean. The headline is a complete thought — a number followed by a location phrase. It stops the scroll without being a riddle or a question. The body delivers one idea and lands it. No stacking of clauses.
+---
 
-**3. Specificity: 9/10**
+## Variant 1 — The Scale Statement
 
-8,500 sq ft — real, from the brief. ✓
-Sindhu Bhavan Road — real, from the brief. ✓
-"Penthouse" implied through "a floor of its own" — correct property type, not stated bluntly but clearly signalled. ✓
-The metaphor ("apartments wearing a crown") is specific to the penthouse category, not generic luxury. This copy could not describe a villa in Goa or a sea-view apartment in Mumbai. It is anchored to this property type and this scale.
+**Headline:** 3,600 sq ft. No shared walls. *(29 chars)*
+**Body:** A bungalow on the Shilaj corridor — the kind of space that stops being measured in square feet. Schedule a private viewing. *(124 chars)*
 
-Minor deduction: the body does not include the price (₹13 Cr) or the BHK count (5 BHK). These are real details that would add weight without cluttering. Their absence is a choice, not an error — but specificity could be pushed further.
+---
 
-**4. Luxury Signal: 8/10**
+### 1. Brand Voice Compliance: 8/10
 
-"A floor of its own" signals exclusivity through physical fact, not through assertion. That is exactly the right technique. The buyer feels the rarity without being told they are elite. No "trusted by celebrities," no "Book Now," no "limited availability."
+The headline uses the number-statement technique correctly — one real number, then a reframe. "No shared walls" is a bungalow truth, not a superlative. The body is calm and specific. "The kind of space that stops being measured in square feet" is the best line in this batch — it earns its place without trying too hard.
 
-"Above the city" in the headline is the weakest luxury signal here — it is aspirational but generic. The body recovers it. Overall the variant earns its luxury positioning through restraint and metaphor rather than claim.
+Minor deduction: "Schedule a private viewing" is a strong CTA and on the approved list, but the body sentence before it is slightly long for the register. The em-dash construction works, but the clause after it ("the kind of space that stops being measured in square feet") borders on the poetic in a way that could feel slightly effortful. Not a failure — a 9 would require that line to land with more inevitability.
+
+### 2. Platform Fit: 9/10
+
+Headline: 29 chars — within limit. Body: 124 chars — within 125-char limit by one character. That is uncomfortably close to the edge; any platform rendering variation could truncate it. The structure is scroll-stopping without being a riddle or a question. The CTA is clean.
+
+Deduction: one character of margin on the body is a production risk, not a creative failure. Flag for the production team to verify rendering.
+
+### 3. Specificity: 8/10
+
+"Shilaj corridor," "3,600 sq ft," "bungalow," "private viewing" — all grounded in the brief. The body does not name the amenities (club-class is the standout feature) and does not reference possession timeline. Both are real differentiators left unused. That is a missed opportunity, not a failure — this variant chose the scale hook and executed it cleanly.
+
+### 4. Luxury Signal: 9/10
+
+"No shared walls" signals bungalow privacy without stating "exclusive" or "private." "The kind of space that stops being measured in square feet" reframes the transaction as an experience. "Schedule a private viewing" is the correct CTA register. The buyer feels seen, not sold to.
 
 ---
 
@@ -45,83 +55,64 @@ Minor deduction: the body does not include the price (₹13 Cr) or the BHK count
 
 ---
 
-## Variant 2 — The Only Floor That Answers to No One
+## Variant 2 — The Category Break
 
-**Headline:** No floor above. No compromise.
-**Body:** A 5 BHK penthouse on Sindhu Bhavan Road is not a property decision. It is a decision about how the rest of your life should feel.
-
----
-
-**1. Brand Voice: 7/10**
-
-"No floor above. No compromise." is a clean, restrained headline. The parallel structure works without feeling like a template. No banned words. No exclamation marks.
-
-The body is where this variant earns and then slightly loses its footing. "A decision about how the rest of your life should feel" is a strong emotional frame — it elevates the purchase from transaction to life choice, which is precisely the Pikorua register. However, "how the rest of your life should feel" edges toward the philosophical abstraction that luxury copy sometimes uses as a substitute for specificity. It is not a banned phrase, but it is the kind of line that could appear in a high-end watch ad, a premium car ad, or a wellness retreat ad. It is not wrong — it is slightly unmoored from this specific property.
-
-**2. Platform Fit: 8/10**
-
-Headline: 30 characters. ✓ (exactly at the limit — acceptable)
-Body: 132 characters. ✓ (within 125? — **No. 132 characters exceeds the 125-character body limit.**)
-
-This is a platform fit failure. The body runs 7 characters over the stated limit. In Meta's lead ad format, body copy that exceeds character limits is truncated, which breaks the sentence mid-thought. "It is a decision about how the rest of your life should feel" would likely be cut to "It is a decision about how the rest of your li—" which destroys the line entirely.
-
-Deduction applied. This is not a HARD FAIL (it is a character count issue, not a fabricated claim or brand violation), but it is a meaningful platform fit problem that requires a rewrite of the body.
-
-**3. Specificity: 6/10**
-
-"5 BHK penthouse on Sindhu Bhavan Road" — real details, correctly used. ✓
-But the body's emotional payload — "a decision about how the rest of your life should feel" — is entirely transferable. Remove "Sindhu Bhavan Road" from the body and this line works for any luxury property in any city. The 8,500 sq ft figure, which is the property's single most differentiating fact, does not appear anywhere in this variant. The ₹13 Cr price point, which signals the buyer's cohort, is also absent.
-
-The variant uses the right address and property type but does not use the property's strongest specific detail. That is a meaningful specificity gap.
-
-**4. Luxury Signal: 8/10**
-
-"No floor above. No compromise." is a strong luxury signal through physical fact — the penthouse's defining characteristic (no neighbour above) is stated as a benefit without being dressed in superlatives. The body's emotional reframe ("not a property decision") elevates the purchase without claiming status. No transactional language. No urgency. No social proof claims.
-
-The luxury signal is genuine but slightly diluted by the body's generic philosophical register.
+**Headline:** Not a tower. Every amenity. *(27 chars)*
+**Body:** Club-class facilities, a full bungalow footprint, Shilaj address. Some decisions clarify themselves. Explore it privately. *(123 chars)*
 
 ---
 
-**Overall: 7.25/10**
-**Status: FLAG — Body is 132 characters, exceeding the 125-character Meta limit. The closing line will be truncated in-feed, breaking the variant's strongest emotional beat. Trim body to 125 characters and restore the 8,500 sq ft detail to lift specificity from 6/10.**
+### 1. Brand Voice Compliance: 8/10
+
+"Not a tower. Every amenity." is a genuine contrast headline — it does what the brand voice asks: calm, one complete thought, no superlatives. "Some decisions clarify themselves" is understated and confident — exactly the register. "Explore it privately" is on the approved CTA list.
+
+The body is a comma-separated spec list in its first sentence ("Club-class facilities, a full bungalow footprint, Shilaj address") which edges toward the spec-list pattern the brand voice rejects. It is saved by the second sentence, which reframes the decision emotionally. The list is short enough that it reads as specificity rather than a brochure dump — but it is the weakest structural moment in an otherwise strong variant.
+
+### 2. Platform Fit: 8/10
+
+Headline: 27 chars — clean. Body: 123 chars — within limit. The headline is a two-fragment contrast, which works on Meta feed — it creates a mild cognitive pause without being a riddle. The CTA is appropriate.
+
+### 3. Specificity: 8/10
+
+"Club-class facilities" directly references the standout feature. "Shilaj address" is location-specific. "Full bungalow footprint" is property-type accurate. What is missing: the 3,600 sq ft figure and the one-year possession — both real differentiators. The variant chose the amenity-contrast hook and executed it well, but leaves two strong specifics unused.
+
+### 4. Luxury Signal: 8/10
+
+The contrast between "not a tower" and "every amenity" does the work of implying exclusivity without stating it. "Some decisions clarify themselves" is the strongest luxury signal in the body — it assumes the buyer is already close to deciding, which is the correct psychological posture for a ₹6 Cr buyer. "Explore it privately" closes correctly.
 
 ---
 
-## Variant 3 — The Address You Left Space For
-
-**Headline:** Ahmedabad kept this for you.
-**Body:** 8,500 sq ft on Sindhu Bhavan Road. The penthouse that makes coming back feel like an arrival, not a transaction.
+**Overall: 8/10**
+**Status: PASS**
 
 ---
 
-**1. Brand Voice: 9/10**
+## Variant 3 — The Life Calendar
 
-This is the closest any of the five variants comes to the approved headline register in the brand voice document. Compare to the approved example: "Your Ahmedabad address. Finally." — Variant 3 achieves the same emotional compression ("Ahmedabad kept this for you") without copying the form. The NRI reconnection angle is explicitly endorsed in the voice document: "the emotional hook is reconnection, legacy, and belonging."
+**Headline:** Move in within the year. *(24 chars)*
+**Body:** A 3,600 sq ft bungalow in Shilaj, ready in twelve months. Close enough to plan around — a school, a return, a beginning. *(121 chars)*
 
-"Coming back feel like an arrival, not a transaction" is a precise, earned line. The contrast (arrival vs. transaction) does real work — it names the fear (being processed, being sold to) and dismisses it in the same breath. That is sophisticated copy.
+---
 
-No banned words. No exclamation marks. No template phrases. The only reason this does not score 10 is that "kept this for you" has a faint possessive-hook quality that the voice document flags in "Your Luxury, Your Land" — though the construction here is inverted (the city holds something for the buyer, rather than the buyer claiming it), which is meaningfully different and does not trigger the ban.
+### 1. Brand Voice Compliance: 9/10
 
-**2. Platform Fit: 9/10**
+This is the strongest brand voice execution in the batch. "Move in within the year" is a complete thought, calm, specific, and action-oriented without urgency language. The body uses "twelve months" (not "only 12 months!" — no exclamation, no FOMO) and then does something rare: it names three real life moments — "a school, a return, a beginning" — that a ₹6 Cr buyer in Ahmedabad actually plans around. The NRI homecoming angle ("a return") is embedded without being stated. The bungalow-buyer-with-children angle ("a school") is embedded without being stated. "A beginning" closes with enough openness to let the reader project their own meaning.
 
-Headline: 28 characters. ✓
-Body: 113 characters. ✓
-The headline is a complete thought — not a riddle, not a question, not a shout. The body opens with a hard fact (8,500 sq ft on Sindhu Bhavan Road) and then delivers the emotional reframe. The structure is: fact → meaning. That is the correct sequence for a Meta feed ad where the image carries the visual weight and the copy carries the emotional weight.
+This is the kind of copy that earns trust. The em-dash construction is used correctly. No banned words. No template patterns.
 
-**3. Specificity: 9/10**
+Minor deduction from a 10: "Move in within the year" is slightly functional as a headline — it tells rather than evokes. A 10 would find a way to make the timeline feel like a gift rather than a fact. But this is a high 9.
 
-8,500 sq ft — real. ✓
-Sindhu Bhavan Road — real. ✓
-"Penthouse" — correct property type, named explicitly. ✓
-NRI reconnection angle — directly relevant to the targeting brief (UAE, US, UK NRI segment, age 40–55). ✓
+### 2. Platform Fit: 9/10
 
-The ₹13 Cr price point and 5 BHK configuration are absent, but their omission is a deliberate creative choice — the NRI reconnection angle works through emotional pull, not financial specification. For this persona, the address and the scale are the right details. The price can live in the lead form.
+Headline: 24 chars — clean. Body: 121 chars — comfortable margin. The headline is a complete thought, not a riddle. The body breathes. No CTA is present — the body ends on "a beginning" which is intentional and works as an open invitation, but the absence of a CTA is a platform fit consideration. Meta lead ads benefit from a directional close. This is a minor deduction, not a failure.
 
-**4. Luxury Signal: 9/10**
+### 3. Specificity: 9/10
 
-"Arrival, not a transaction" is the strongest luxury signal in all five variants. It names the category failure (transactional real estate) and positions this property — and by implication, the advisory behind it — as the alternative. The buyer feels understood, not sold to. That is the exact emotional target the brand voice document specifies: "quiet confidence."
+"3,600 sq ft," "Shilaj," "twelve months" — all from the brief. The three life moments ("a school, a return, a beginning") are not invented — they are inferred from the buyer persona (Ahmedabad HNI/NRI, 35–60, family-stage decisions). The possession timeline is the hook and it is used precisely. Club-class amenities are not mentioned — the variant chose the life-calendar hook and stayed on it, which is the right discipline.
 
-"Ahmedabad kept this for you" implies scarcity and curation without stating either. No "limited availability," no "Book Now," no "trusted by elites." The exclusivity is demonstrated through the framing, not claimed through assertion.
+### 4. Luxury Signal: 9/10
+
+The luxury signal here is restraint and specificity. No one says "luxury" or "premium" or "exclusive." The buyer is assumed to be someone who plans in terms of schools, returns, and beginnings — not someone who needs to be told the property is prestigious. That assumption is the luxury signal. "Close enough to plan around" is the line that does it — it treats the buyer as someone who makes considered decisions, not impulse ones.
 
 ---
 
@@ -130,95 +121,77 @@ The ₹13 Cr price point and 5 BHK configuration are absent, but their omission 
 
 ---
 
-## Variant 4 — Space Enough for Everyone Who Matters
+## Variant 4 — The Quiet Signal
 
-**Headline:** Every generation. One roof.
-**Body:** At 8,500 sq ft, a penthouse on Sindhu Bhavan Road stops asking your family to choose between space and the address.
-
----
-
-**1. Brand Voice: 7/10**
-
-"Every generation. One roof." is a clean, restrained headline. The fragment sequence works — two short declaratives that build to a single idea. No banned words. No exclamation marks.
-
-However, the voice document contains a specific warning about fragment sequences that read as spec lists: "a real fragment sequence builds to a decision, not a list." "Every generation. One roof." builds to a concept (family legacy at scale), not a list. It passes that test.
-
-The body is solid: "stops asking your family to choose between space and the address" is a specific, earned line — it names the real trade-off that buyers at this price point face (either a large home in a secondary location, or a prestigious address in a smaller footprint) and dismisses it. That is good copy.
-
-Minor deduction: "Every generation" is a legacy phrase that appears frequently in Indian real estate advertising. It is not on the banned list, but it is well-worn. The headline would be stronger with a more specific anchor.
-
-**2. Platform Fit: 9/10**
-
-Headline: 27 characters. ✓
-Body: 116 characters. ✓
-Complete thought in the headline. Body delivers one idea without stacking clauses. Format is clean.
-
-**3. Specificity: 8/10**
-
-8,500 sq ft — real. ✓
-Sindhu Bhavan Road — real. ✓
-"Penthouse" — correct property type, named explicitly. ✓
-The "space and the address" contrast is specific to this property's combination of scale (8,500 sq ft) and location (Sindhu Bhavan Road) — it would not work for a smaller property at the same address, or a larger property in a secondary location. That is genuine specificity.
-
-The 5 BHK configuration and ₹13 Cr price are absent. For the family/legacy angle, the 5 BHK detail would strengthen the variant — "5 BHK" is a real, concrete detail that supports the "every generation" claim. Its absence is a missed opportunity.
-
-**4. Luxury Signal: 7/10**
-
-"Stops asking your family to choose" is a strong luxury signal — it implies that compromise is beneath this buyer, without stating it. The legacy angle (every generation) is appropriate for the HNI/NRI buyer profile.
-
-However, "Every generation. One roof." as a headline is a phrase that has appeared in enough Indian real estate advertising — including mass-market advertising — that it no longer reads as exclusively luxury. A ₹1.5 Cr apartment developer could use this headline without it feeling wrong. That is a luxury signal problem. The body recovers some ground, but the headline weakens the overall luxury positioning.
+**Headline:** Shilaj. ₹6 Cr. One bungalow. *(29 chars)*
+**Body:** At this address, at this size, with possession in a year — the right buyer already knows. Request details privately. *(117 chars)*
 
 ---
 
-**Overall: 7.75/10**
-**Status: PASS** — but the headline's "Every generation" phrasing is worn enough that a rewrite would strengthen the variant. Not a flag, but a note for the next iteration.
+### 1. Brand Voice Compliance: 7/10
+
+The headline technique — location, price, quantity — is deliberately restrained and specific. It echoes the register of approved examples like "Thaltej. Four bedrooms. No compromises." The brand voice reference explicitly warns: "a real fragment sequence builds to a decision, not a list." This headline is three data points in sequence, which risks reading as a spec list rather than a decision-builder. It is saved by "One bungalow" — the word "one" does the scarcity work without inventing a unit count. That is a smart move.
+
+"The right buyer already knows" is a strong line — it assumes the reader is qualified without stating it. "Request details privately" is on the approved CTA list.
+
+Deduction: "One bungalow" is the closest this batch comes to a scarcity signal. It is not an invented number (there is one bungalow in the brief), but it will read to some reviewers as a scarcity nudge. It is defensible — but it is a line worth watching. The bigger issue is that the headline's three-fragment structure is formally similar to the approved example "Thaltej. Four bedrooms. No compromises." — the brand voice reference explicitly warns against copying the form. This variant has learned the form rather than the voice. That is a 7, not a 6, because the execution is competent — but it is the weakest brand voice moment in the batch.
+
+### 2. Platform Fit: 8/10
+
+Headline: 29 chars — within limit. Body: 117 chars — comfortable. The headline is a complete thought (three fragments that build to a conclusion). The body is a single sentence plus CTA. Clean structure.
+
+### 3. Specificity: 9/10
+
+"Shilaj," "₹6 Cr," "this size" (implied 3,600 sq ft from context), "possession in a year" — all from the brief. The price point is named explicitly, which is unusual in this batch and adds specificity. The body references address, size, and possession in one clause — efficient use of the brief's real details.
+
+### 4. Luxury Signal: 8/10
+
+"The right buyer already knows" is the best luxury signal in this variant — it pre-qualifies the reader without stating "exclusive" or "elite." "Request details privately" closes correctly. The headline's explicit price point (₹6 Cr) is a deliberate choice — it signals that the brand is not hiding the number, which is a confidence move. At this price tier, transparency about price is a luxury signal, not a deterrent.
+
+Deduction: "One bungalow" as a scarcity signal, while defensible, is the one moment where the variant edges toward the urgency register the brand avoids.
 
 ---
 
-## Variant 5 — What ₹13 Cr on Sindhu Bhavan Road Actually Buys
-
-**Headline:** At ₹13 Cr, it's considered.
-**Body:** 8,500 sq ft on Sindhu Bhavan Road sits in a category that rarely announces itself. Reach out when you're ready.
-
----
-
-**1. Brand Voice: 8/10**
-
-"At ₹13 Cr, it's considered." is a genuinely unusual headline for Indian real estate advertising. The word "considered" does double work — it describes the purchase (a considered decision, not an impulse) and the property (considered design, considered scale). That ambiguity is intentional and effective. It is in the register of the approved examples without copying their form.
-
-"A category that rarely announces itself" is a strong line — it signals exclusivity through restraint, which is exactly the Pikorua technique. "Reach out when you're ready" is a near-perfect CTA for this brand: it removes urgency, places the decision with the buyer, and implies that the advisory will wait. Compare to the approved CTA list: "Let's find yours," "Explore by appointment" — this variant's CTA is in the same register.
-
-No banned words. No exclamation marks. No template phrases.
-
-Minor deduction: "it's considered" uses a pronoun ("it") without a clear antecedent in the headline. The reader must infer that "it" refers to the purchase, or the property, or the decision. In a Meta feed where the headline is read in isolation from the body, this ambiguity could read as incomplete rather than intriguing. The brand voice document specifies: "Never a riddle, never a question, never a shout." "At ₹13 Cr, it's considered" is not quite a riddle, but the pronoun creates a half-second of confusion that a cleaner construction would avoid.
-
-**2. Platform Fit: 8/10**
-
-Headline: 28 characters. ✓
-Body: 113 characters. ✓
-Format is clean. The headline is a complete thought (or close to one — see the pronoun note above). The body opens with a specific fact and closes with a CTA that is an invitation, not a conversion mechanism.
-
-The pronoun ambiguity in the headline is a platform fit concern specifically because Meta feed ads are read fast. A headline that requires a half-second of parsing loses that half-second. Deduction applied.
-
-**3. Specificity: 9/10**
-
-₹13 Cr — real, from the brief. ✓
-8,500 sq ft — real, from the brief. ✓
-Sindhu Bhavan Road — real, from the brief. ✓
-"A category that rarely announces itself" — this is specific to the ₹13 Cr / 8,500 sq ft combination at this address. It would not work for a ₹3 Cr apartment. The price point and scale together create the "category" claim, and both are grounded in real brief details.
-
-This is the only variant that uses the ₹13 Cr price point in the headline — a meaningful differentiator. The 5 BHK configuration is absent, but the price and scale together carry the specificity weight.
-
-**4. Luxury Signal: 9/10**
-
-This is the strongest luxury signal of the five variants. "A category that rarely announces itself" is the Pikorua technique at its best — exclusivity demonstrated through restraint, not claimed through assertion. "Reach out when you're ready" removes all urgency and places the buyer in control, which is exactly how a ₹13 Cr buyer wants to feel.
-
-The ₹13 Cr price in the headline is a bold choice — most luxury real estate copy avoids stating the price, preferring to imply it. Here, the price is used as a qualifier: it signals to the right buyer that this is their conversation, and signals to the wrong buyer that it is not. That is sophisticated targeting through copy, not through audience settings alone.
-
----
-
-**Overall: 8.5/10**
+**Overall: 8/10**
 **Status: PASS**
+
+---
+
+## Variant 5 — The Ground-Level Choice
+
+**Headline:** Ground level. No lift needed. *(29 chars)*
+**Body:** While Ahmedabad builds upward, a 3,600 sq ft bungalow in Shilaj with club amenities awaits a different kind of buyer. *(118 chars)*
+
+---
+
+### 1. Brand Voice Compliance: 7/10
+
+"Ground level. No lift needed." is a two-fragment contrast that works as a bungalow-vs-high-rise statement. It is specific and calm. The body's opening — "While Ahmedabad builds upward" — is a strong macro-contrast that grounds the property in a real market observation without inventing statistics.
+
+The problem is "a different kind of buyer." This phrase is doing the work of implying exclusivity, but it is a template construction — it appears in luxury copy across categories (cars, watches, hotels) and has lost its edge. It tells the reader they are special without showing them why. The brand voice reference is explicit: demonstrate exclusivity, do not state it. "A different kind of buyer" states it.
+
+Additionally, "awaits" is slightly passive — the property is waiting for the buyer, which is a mild reversal of the correct power dynamic. The buyer should feel they are choosing, not that the property is waiting.
+
+### 2. Platform Fit: 8/10
+
+Headline: 29 chars — within limit. Body: 118 chars — within limit. The headline is a two-fragment contrast, not a riddle. The body is one sentence with no CTA — same issue as Variant 3, but more significant here because the body ends on "a different kind of buyer" which is a characterisation of the reader, not an invitation. The absence of a CTA leaves the variant without a directional close.
+
+### 3. Specificity: 8/10
+
+"3,600 sq ft," "Shilaj," "club amenities" — all from the brief. "While Ahmedabad builds upward" is a real market observation (the drift toward high-rise is documented in the brand context). The variant uses three of the brief's real details in one sentence, which is efficient.
+
+What is missing: possession timeline. For a buyer who is planning around a one-year delivery, that is a significant omission.
+
+### 4. Luxury Signal: 6/10
+
+This is the weakest luxury signal in the batch. "A different kind of buyer" is the luxury signal — and it fails because it states the distinction rather than demonstrating it. A ₹6 Cr buyer reading this will feel categorised, not seen. The brand voice reference is clear: "Would a ₹7Cr+ buyer feel seen, or feel sold to?" This variant sells to the buyer's identity rather than speaking to their actual decision.
+
+"Ground level. No lift needed." is a stronger luxury signal than the body — it demonstrates the preference (bungalow living) rather than claiming it. The body should have continued that technique.
+
+---
+
+**Overall: 7.25/10**
+**Status: FLAG — Luxury Signal 6/10: "A different kind of buyer" states the buyer's distinction rather than demonstrating it. Replace the body's closing clause with a specific detail that shows why this bungalow is the right choice — possession timeline, the club amenity contrast, or the ground-level privacy — and let the reader draw the conclusion themselves.**
 
 ---
 
@@ -226,18 +199,24 @@ The ₹13 Cr price in the headline is a bold choice — most luxury real estate 
 
 | Variant | Brand Voice | Platform Fit | Specificity | Luxury Signal | Overall | Status |
 |---|---|---|---|---|---|---|
-| 1 — Size reframes identity | 8/10 | 9/10 | 9/10 | 8/10 | **8.5/10** | ✅ PASS |
-| 2 — No floor above | 7/10 | 6/10 | 6/10 | 8/10 | **6.75/10** | 🚩 FLAG |
-| 3 — NRI reconnection | 9/10 | 9/10 | 9/10 | 9/10 | **9.0/10** | ✅ PASS |
-| 4 — Every generation | 7/10 | 9/10 | 8/10 | 7/10 | **7.75/10** | ✅ PASS |
-| 5 — ₹13 Cr, considered | 8/10 | 8/10 | 9/10 | 9/10 | **8.5/10** | ✅ PASS |
+| V1 — The Scale Statement | 8/10 | 9/10 | 8/10 | 9/10 | **8.5/10** | ✅ PASS |
+| V2 — The Category Break | 8/10 | 8/10 | 8/10 | 8/10 | **8.0/10** | ✅ PASS |
+| V3 — The Life Calendar | 9/10 | 9/10 | 9/10 | 9/10 | **9.0/10** | ✅ PASS |
+| V4 — The Quiet Signal | 7/10 | 8/10 | 9/10 | 8/10 | **8.0/10** | ✅ PASS |
+| V5 — The Ground-Level Choice | 7/10 | 8/10 | 8/10 | 6/10 | **7.25/10** | 🚩 FLAG |
 
 ---
 
-**4/5 variants passed. 1 flagged for rewrite: Variant 2.**
-
-**Variant 2 — Rewrite reason:** Body is 132 characters, exceeding the 125-character Meta limit — the closing line ("how the rest of your life should feel") will be truncated in-feed, destroying the variant's strongest emotional beat. Secondary issue: the 8,500 sq ft detail — the property's single most differentiating fact — does not appear anywhere in the variant, holding specificity at 6/10. Trim the body to 125 characters and restore the square footage to resolve both failures in one pass.
+**5/5 variants passed initial hard-fail checks. 4/5 variants passed full scoring. 1 flagged for rewrite: Variant 5.**
 
 ---
 
-*Scorecard saved to: outputs/copy_scorecard.md*
+## Evaluator Notes for the Rewriter
+
+**Variant 3 is the benchmark for this property.** "A school, a return, a beginning" is the kind of line that earns a ₹6 Cr buyer's attention — it names real life moments without naming them explicitly. That technique should inform the rewrite of Variant 5.
+
+**Variant 5 rewrite direction:** Keep the headline ("Ground level. No lift needed." is strong). Rebuild the body around a specific detail — the one-year possession, the club amenity contrast, or the privacy of ground-level living — and remove "a different kind of buyer" entirely. The reader should arrive at that conclusion, not be told it.
+
+**Production note for Variant 1:** Body is 124 chars — one character from the platform limit. Verify rendering across Meta placements before publishing.
+
+**Variant 4 watch:** "One bungalow" is defensible but monitor for audience perception of scarcity signalling. If the campaign runs alongside other Shilaj inventory, this line may need adjustment.

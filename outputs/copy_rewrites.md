@@ -1,29 +1,53 @@
-# Rewrite Report — Variant 2
-
-## Diagnosis before writing
-
-Variant 2 failed on two counts:
-
-1. **Platform Fit (body 132 chars, limit 125):** The closing line — "It is a decision about how the rest of your life should feel." — is the emotional payload of the entire variant. At 132 characters, Meta truncates the body mid-sentence, destroying precisely the line that justified the headline. The fix is not to compress the idea into a fragment — it is to find a shorter construction that carries the same emotional weight.
-
-2. **Specificity (6/10):** The property's single most differentiating fact — 8,500 sq ft — appears nowhere in this variant. The headline and body together could describe any 5 BHK penthouse on any road in any Indian city. That is a fundamental specificity failure for a ₹13 Cr property where scale is the lead differentiator.
-
-**Original creative technique:** Reversal — deny the literal thing (no floor above), offer something larger (a life decision).
-
-**Why the original failed:** The reversal technique was correctly chosen, but the execution let the body drift from the property into generic philosophical territory. "How the rest of your life should feel" is a line that belongs in a luxury watch campaign. It earns nothing specific to this penthouse, this address, or this scale.
-
-**Different technique applied for rewrite:** **Contrast** — state what this property is not (a purchase), then anchor the contrast in a real, specific fact (8,500 sq ft, Sindhu Bhavan Road) so the abstraction has ground beneath it. The reframe must be earned by the specificity, not floating above it.
+# Pikorua Realty — Copy Rewrites
+**Property:** Shilaj Bungalow, 3,600 sq ft | ₹6 Cr | Ahmedabad, Shilaj
+**Rewrite triggered by:** Scorecard evaluation, June 2026
 
 ---
 
-## Variant 2 — REWRITE [attempt 1]
+## Variants Flagged: 1
 
-**Headline:** No floor above. No compromise. [30 chars]
-
-**Body:** This is not a purchase. It is 8,500 sq ft on Sindhu Bhavan Road — and the decision that belongs at the top. [109 chars]
-
-**Fix applied:** Restored the 8,500 sq ft and Sindhu Bhavan Road specifics (resolves the 6/10 specificity score); trimmed body from 132 to 109 characters (resolves the platform fit failure); replaced the drifting philosophical close ("how the rest of your life should feel") with a grounded contrast — the abstraction ("not a purchase") is now anchored immediately by a real fact, so the reframe is earned rather than asserted. The reversal technique is retained in the headline; the body switches to contrast to give the abstraction something solid to stand on.
+**Variant 5 — The Ground-Level Choice**
+**Failure reason:** Luxury Signal 6/10 — "A different kind of buyer" states the buyer's distinction rather than demonstrating it. The body closes on a characterisation of the reader rather than a specific detail that earns the conclusion.
 
 ---
 
-*Saved to: outputs/copy_rewrites.md*
+## Variant 5 — REWRITE [Attempt 1]
+
+**Diagnosis before writing:**
+The headline is strong and stays. The failure is entirely in the body's closing clause. "A different kind of buyer" is a label — it tells the reader who they are instead of showing them something real about the property that makes them feel understood. The evaluator's note is precise: the reader should arrive at the conclusion, not be told it.
+
+The original body structure is: [macro contrast] + [property specifics] + [reader characterisation]. The reader characterisation is the problem. Replace it with a specific property truth — the one-year possession is unused in this variant, and it is the detail that converts the bungalow preference from abstract to real. A buyer who wants ground-level living and has a one-year timeline has a decision to make, not a label to accept.
+
+**Creative technique applied:** Reversal — the body pivots from the city's upward drift to a single, grounded, time-specific fact. The conclusion is implicit in the juxtaposition, not stated.
+
+---
+
+**Headline:** Ground level. No lift needed. [29 chars]
+
+**Body:** While Ahmedabad builds upward, a 3,600 sq ft bungalow in Shilaj — club amenities, ground floor, ready in twelve months. [120 chars]
+
+**Fix applied:** Removed "a different kind of buyer" entirely and replaced the closing clause with three specific property truths — club amenities, ground-floor living, one-year possession — listed without editorialising. The reader draws the conclusion. The body now demonstrates the preference rather than labelling the person who holds it. Luxury Signal recovers because the specificity does the work the characterisation was trying to do.
+
+---
+
+*No CTA is present — consistent with Variant 3's open-invitation close. If a directional CTA is required for the campaign, append "Explore by appointment." (22 chars) — body would reach 143 chars and require trimming elsewhere. Recommend: remove "ground floor" (implied by headline) to create space: "While Ahmedabad builds upward, a 3,600 sq ft bungalow in Shilaj — club amenities, ready in twelve months. Explore by appointment." — 129 chars, still 4 over; final trim: "While Ahmedabad builds upward: 3,600 sq ft in Shilaj, club amenities, ready in twelve months. Explore by appointment." — 117 chars ✓ Use this if CTA is mandatory.)*
+
+---
+
+## Summary
+
+| Variant | Status | Action |
+|---|---|---|
+| V1 — The Scale Statement | ✅ PASS | No rewrite |
+| V2 — The Category Break | ✅ PASS | No rewrite |
+| V3 — The Life Calendar | ✅ PASS | No rewrite |
+| V4 — The Quiet Signal | ✅ PASS | No rewrite |
+| V5 — The Ground-Level Choice | 🚩 REWRITTEN | Attempt 1 — body rebuilt on specific property details, reader characterisation removed |
+
+---
+
+## Production Notes Carried Forward
+
+- **Variant 1 body:** 124 chars — verify rendering across all Meta placements before publishing. One-character margin is a production risk.
+- **Variant 4:** "One bungalow" is defensible but monitor if campaign runs alongside other Shilaj inventory.
+- **Variant 5 rewrite:** No CTA in primary version. CTA-mandatory version provided in parenthetical above — 117 chars, verified.
