@@ -313,6 +313,7 @@ def upload_crm_split_audiences(
             )
             if lal_resp.ok:
                 result["good_leads_lookalike_id"] = lal_resp.json().get("id")
+                result["good_lookalike_name"] = lal_payload["name"]
             else:
                 try:
                     lal_err = lal_resp.json().get("error", {}).get("message", lal_resp.text)
@@ -339,6 +340,7 @@ def upload_crm_split_audiences(
         else:
             result["bad_leads_audience_id"] = bad_ca_id
             result["bad_leads_uploaded"] = bad_count
+            result["bad_custom_audience_name"] = "PIKORUA CRM — Bad Leads (Exclusion)"
     elif bad_leads:
         result["bad_leads_note"] = (
             f"Only {len(bad_leads)} bad leads — below Meta's 100-record minimum for a Custom Audience. "

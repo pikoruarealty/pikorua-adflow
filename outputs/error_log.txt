@@ -42,3 +42,15 @@ POST act_207925274/adcreatives failed: {"message": "(#100) Param instagram_actor
 [2026-06-14T15:08:10] Meta optimise — targeting V2
 UPDATE 6999192451297 failed: {"message": "Invalid parameter", "type": "OAuthException", "code": 100, "error_data": "{\"blame_field_specs\":[[\"compliance_section\"]]}", "error_subcode": 3858550, "is_transient": false, "error_user_title": "No Singapore universal ads declaration", "error_user_msg": "Regional regulated categories value required: To publish ads that include locations in Singapore, use the following value for regional regulated categories: SINGAPORE_UNIVERSAL", "fbtrace_id": "A_VZGfpG27MM4p-DQlVP2Zn"}
 ------------------------------------------------------------
+
+[2026-06-15T13:17:20] CRM strategic insights
+Expecting property name enclosed in double quotes: line 71 column 33 (char 5389)
+------------------------------------------------------------
+
+[2026-06-15T15:12:27] CRM strategic insights
+Unterminated string starting at: line 69 column 16 (char 5289)
+------------------------------------------------------------
+
+[2026-06-15T15:45:25] CRM strategic insights
+Expecting ',' delimiter: line 65 column 25 (char 5578)
+------------------------------------------------------------

@@ -320,6 +320,13 @@ def build_targeting_spec(audience: dict) -> dict:
     if group:
         spec["flexible_spec"] = [group]
 
+    inc = [{"id": str(a["id"])} for a in audience.get("included_custom_audiences", []) if a.get("id")]
+    exc = [{"id": str(a["id"])} for a in audience.get("excluded_custom_audiences", []) if a.get("id")]
+    if inc:
+        spec["custom_audiences"] = inc
+    if exc:
+        spec["excluded_custom_audiences"] = exc
+
     return spec
 
 
@@ -331,6 +338,8 @@ def audience_summary(audience: dict) -> str:
     nri = audience.get("nri_countries") or []
     n_int = len(audience.get("interests", []))
     n_beh = len(audience.get("behaviours", []))
+    n_inc = len(audience.get("included_custom_audiences", []))
+    n_exc = len(audience.get("excluded_custom_audiences", []))
     bits = [geo]
     if nri:
         bits.append("+ " + ", ".join(nri))
@@ -339,4 +348,8 @@ def audience_summary(audience: dict) -> str:
         bits.append(f"{n_int} interest{'s' if n_int != 1 else ''}")
     if n_beh:
         bits.append(f"{n_beh} behaviour{'s' if n_beh != 1 else ''}")
+    if n_inc:
+        bits.append(f"{n_inc} custom audience{'s' if n_inc != 1 else ''}")
+    if n_exc:
+        bits.append(f"{n_exc} excluded")
     return " · ".join(bits)

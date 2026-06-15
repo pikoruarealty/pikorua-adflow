@@ -322,7 +322,7 @@ a:hover{color:var(--gold-deep);}
 
 /* ---- cards ---- */
 .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
-  box-shadow:var(--shadow);padding:1.8rem 2rem;}
+  box-shadow:var(--shadow);padding:1.8rem 2rem;box-sizing:border-box;max-width:100%;word-wrap:break-word;}
 .section{margin-top:1.8rem;}
 .section-title{font-family:'Cormorant Garamond',serif;font-size:1.25rem;color:var(--ink);
   margin-bottom:0.2rem;}
@@ -487,12 +487,12 @@ details.adv[open] > summary::before{content:'–';}
 }
 .theme-btn:hover{opacity:1;}
 
-/* logo — background-image zooms past PNG whitespace without growing navbar */
+/* logo */
 .logo-slot{
   display:block;width:210px;height:52px;
   background-repeat:no-repeat;
-  background-size:145% auto;
-  background-position:50% 46%;
+  background-size:contain;
+  background-position:left center;
   flex-shrink:0;
 }
 .logo-slot.logo-light{background-image:url('/logo/light');}
@@ -502,6 +502,138 @@ details.adv[open] > summary::before{content:'–';}
 @media(prefers-color-scheme:dark){
   :root:not([data-theme="light"]) .logo-slot.logo-light{display:none;}
   :root:not([data-theme="light"]) .logo-slot.logo-dark{display:block;}
+}
+
+/* ======================================================
+   APP LAYOUT — sidebar + content
+   ====================================================== */
+html,body{height:100%;}
+.app-layout{display:flex;min-height:100vh;}
+
+/* ---- sidebar ---- */
+.sidebar{
+  width:232px;flex-shrink:0;
+  background:var(--topbar-bg);
+  border-right:1px solid var(--topbar-border);
+  display:flex;flex-direction:column;
+  position:fixed;top:0;left:0;bottom:0;z-index:20;
+  overflow-y:auto;
+}
+.sidebar-logo{
+  padding:1.25rem 1.1rem 1rem;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+  flex-shrink:0;
+}
+.sidebar-section-label{
+  font-size:0.66rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;
+  color:rgba(255,255,255,0.22);padding:1rem 1.1rem 0.3rem;
+}
+.sidebar-nav{flex:1;padding:0.5rem 0.65rem;display:flex;flex-direction:column;gap:0.1rem;}
+.sidebar-link{
+  display:flex;align-items:center;gap:0.65rem;
+  padding:0.58rem 0.85rem;border-radius:8px;
+  font-size:0.86rem;font-weight:500;color:var(--navlink-txt);
+  transition:all .15s;text-decoration:none;
+}
+.sidebar-link:hover{background:var(--navlink-hover-bg);color:var(--navlink-hover-txt);}
+.sidebar-link.active{background:var(--navlink-active-bg);color:var(--navlink-active-txt);font-weight:600;}
+.sidebar-link:hover{color:var(--navlink-hover-txt);}
+.sidebar-icon{
+  width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;font-size:0.82rem;line-height:1;opacity:0.85;
+}
+.sidebar-footer{
+  padding:0.85rem 1rem;border-top:1px solid rgba(255,255,255,0.07);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.sidebar-footer-label{font-size:0.7rem;color:rgba(255,255,255,0.28);letter-spacing:0.03em;}
+
+/* ---- main content area ---- */
+.main-content{flex:1;margin-left:232px;min-height:100vh;display:flex;flex-direction:column;}
+
+/* ---- page header ---- */
+.page-header{
+  padding:1.7rem 2.2rem 1.3rem;
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:flex-end;justify-content:space-between;
+  gap:1rem;flex-wrap:wrap;
+  background:var(--paper);
+  flex-shrink:0;
+}
+.page-title{
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.85rem;font-weight:600;color:var(--ink);line-height:1.1;margin:0.2rem 0 0;
+}
+.page-subtitle{font-size:0.88rem;color:var(--ink-soft);margin-top:0.3rem;line-height:1.5;}
+
+/* ---- page body ---- */
+.page-body{flex:1;padding:1.8rem 2.2rem 4rem;}
+.page-body-narrow{flex:1;padding:1.8rem 2.2rem 4rem;max-width:820px;}
+
+/* ---- stat cards ---- */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:1rem;margin-bottom:1.8rem;}
+.stat-card{
+  background:var(--paper);border:1px solid var(--line);
+  border-radius:var(--radius);padding:1.1rem 1.35rem;box-shadow:var(--shadow);
+}
+.stat-label{font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:0.45rem;}
+.stat-number{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:700;color:var(--ink);line-height:1;}
+.stat-sub{font-size:0.76rem;color:var(--ink-soft);margin-top:0.25rem;}
+.stat-card.stat-ok .stat-number{color:var(--ok);}
+.stat-card.stat-warn .stat-number{color:var(--warn);}
+.stat-card.stat-danger .stat-number{color:var(--danger);}
+
+/* ---- content panel (card with header row) ---- */
+.content-panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:1.4rem;}
+.panel-head{padding:1rem 1.5rem;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
+.panel-title{font-size:0.88rem;font-weight:600;color:var(--ink);}
+.panel-sub{font-size:0.78rem;color:var(--muted);}
+.panel-body{padding:1.35rem 1.5rem;}
+
+/* ---- property tag pills ---- */
+.prop-tags{display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem;}
+.prop-tag{font-size:0.75rem;padding:0.18rem 0.55rem;border-radius:999px;background:var(--paper-warm);border:1px solid var(--line);color:var(--ink-soft);}
+
+/* ---- empty state ---- */
+.empty-state{text-align:center;padding:3.5rem 2rem;}
+.empty-icon{font-size:2.4rem;opacity:0.3;margin-bottom:0.8rem;}
+.empty-title{font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--ink-soft);margin-bottom:0.35rem;}
+.empty-body{font-size:0.88rem;color:var(--muted);max-width:38ch;margin:0 auto 1.3rem;line-height:1.65;}
+
+/* ---- campaigns table ---- */
+.campaigns-table{width:100%;border-collapse:collapse;background:var(--paper);border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);}
+.campaigns-table th{text-align:left;padding:0.8rem 1.1rem;font-size:0.7rem;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);background:var(--paper-warm);border-bottom:1px solid var(--line);font-weight:600;}
+.campaigns-table td{padding:0.9rem 1.1rem;font-size:0.9rem;vertical-align:middle;}
+.campaigns-table tr:not(:last-child) td{border-bottom:1px solid var(--line);}
+.campaigns-table tbody tr:hover td{background:var(--paper-warm);}
+.campaign-name{font-weight:600;color:var(--ink);font-size:0.93rem;margin-bottom:0.2rem;}
+.campaign-meta{font-size:0.76rem;color:var(--muted);}
+
+/* ---- form section card ---- */
+.form-section{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:1.2rem;overflow:hidden;}
+.form-section-head{padding:1.1rem 1.6rem;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:0.75rem;}
+.form-section-num{display:inline-flex;align-items:center;justify-content:center;width:1.6rem;height:1.6rem;border-radius:50%;background:var(--gold-soft);color:var(--gold-deep);font-size:0.8rem;font-weight:700;flex-shrink:0;}
+.form-section-title{font-family:'Cormorant Garamond',serif;font-size:1.15rem;color:var(--ink);font-weight:600;}
+.form-section-body{padding:1.4rem 1.6rem;}
+
+/* ── reassure banner ── */
+.reassure-bar{display:flex;gap:0.65rem;align-items:flex-start;background:var(--green-soft);border:1px solid rgba(46,87,64,0.25);border-radius:10px;padding:0.85rem 1.1rem;font-size:0.84rem;color:var(--green);margin-bottom:1.4rem;}
+.reassure-bar b{font-weight:600;}
+
+/* ── meta-row for results header ── */
+.prop-meta-row{display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;margin-top:0.5rem;}
+.prop-meta-dot{color:var(--line);margin:0 0.1rem;}
+
+/* ---- responsive ---- */
+@media(max-width:800px){
+  .sidebar{width:100%;position:relative;flex-direction:row;height:auto;bottom:auto;overflow-y:visible;}
+  .sidebar-nav{flex-direction:row;flex:unset;padding:0.3rem 0.4rem;flex-wrap:wrap;}
+  .sidebar-section-label,.sidebar-footer-label{display:none;}
+  .sidebar-footer{padding:0.5rem 0.7rem;}
+  .main-content{margin-left:0;}
+  .app-layout{flex-direction:column;}
+  .page-header,.page-body,.page-body-narrow{padding:1.1rem 1.1rem 3rem;}
+  .stat-row{grid-template-columns:repeat(2,1fr);}
 }
 """
 
@@ -557,6 +689,38 @@ def _topbar(active: str = "") -> str:
         '</nav>'
         '</header>'
     )
+
+
+def _sidebar(active: str = "") -> str:
+    """Persistent left sidebar — replaces topbar on all redesigned pages."""
+    def cls(name: str) -> str:
+        return "sidebar-link active" if name == active else "sidebar-link"
+
+    return (
+        _THEME_JS
+        + '<div class="app-layout">'
+        + '<aside class="sidebar">'
+        + '<div class="sidebar-logo">'
+        + '<a href="/portal" aria-label="PIKORUA">'
+        + '<span class="logo-slot logo-light" style="width:160px;height:40px;"></span>'
+        + '<span class="logo-slot logo-dark"  style="width:160px;height:40px;"></span>'
+        + '</a></div>'
+        + '<span class="sidebar-section-label">Workspace</span>'
+        + '<nav class="sidebar-nav">'
+        + f'<a class="{cls("new")}" href="/portal"><span class="sidebar-icon">✦</span>New campaign</a>'
+        + f'<a class="{cls("runs")}" href="/runs"><span class="sidebar-icon">≡</span>My campaigns</a>'
+        + f'<a class="{cls("crm")}" href="/crm-dashboard"><span class="sidebar-icon">◎</span>Lead insights</a>'
+        + '</nav>'
+        + '<div class="sidebar-footer">'
+        + '<span class="sidebar-footer-label">Pikorua AdFlow</span>'
+        + '<button class="theme-btn" onclick="_pikTheme()" title="Switch to dark mode" aria-label="Switch to dark mode">◐</button>'
+        + '</div>'
+        + '</aside>'
+        + '<div class="main-content">'
+    )
+
+
+_SIDEBAR_CLOSE = '</div></div>'  # closes .main-content + .app-layout
 
 
 @app.get("/brand.css")
@@ -636,20 +800,69 @@ def apply_logo_to_run(run_id: str):
     return {"ok": True, "count": count}
 
 
+_logo_cache: dict[str, bytes] = {}
+
+
+def _trimmed_png(path: Path, pad: int = 60) -> bytes:
+    """Return PNG bytes with whitespace/transparency trimmed and a small padding re-added."""
+    key = str(path)
+    if key in _logo_cache:
+        return _logo_cache[key]
+    from PIL import Image
+    import io
+    img = Image.open(path).convert("RGBA")
+    bbox = img.getbbox()
+    if bbox:
+        l, t, r, b = bbox
+        l = max(0, l - pad)
+        t = max(0, t - pad)
+        r = min(img.width, r + pad)
+        b = min(img.height, b + pad)
+        img = img.crop((l, t, r, b))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    data = buf.getvalue()
+    _logo_cache[key] = data
+    return data
+
+
+def _square_favicon(path: Path) -> bytes:
+    """Return a square PNG favicon with the content centred on a transparent background."""
+    key = f"__favicon__{path}"
+    if key in _logo_cache:
+        return _logo_cache[key]
+    from PIL import Image
+    import io
+    img = Image.open(path).convert("RGBA")
+    bbox = img.getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    side = max(img.width, img.height)
+    square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    paste_x = (side - img.width) // 2
+    paste_y = (side - img.height) // 2
+    square.paste(img, (paste_x, paste_y), img)
+    buf = io.BytesIO()
+    square.save(buf, format="PNG", optimize=True)
+    data = buf.getvalue()
+    _logo_cache[key] = data
+    return data
+
+
 @app.get("/logo/light")
 def logo_light():
     p = _LOGO_DIR / "without Sparkle Logo.png"
-    return Response(content=p.read_bytes(), media_type="image/png")
+    return Response(content=_trimmed_png(p), media_type="image/png")
 
 @app.get("/logo/dark")
 def logo_dark():
     p = _LOGO_DIR / "with Sparkle Logo.png"
-    return Response(content=p.read_bytes(), media_type="image/png")
+    return Response(content=_trimmed_png(p), media_type="image/png")
 
 @app.get("/favicon.ico")
 def favicon():
     p = _LOGO_DIR / "favicon.png"
-    return Response(content=p.read_bytes(), media_type="image/png")
+    return Response(content=_square_favicon(p), media_type="image/png")
 
 
 @app.get("/health")
@@ -747,6 +960,35 @@ def get_results(run_id: str):
     replicate_token = os.getenv("REPLICATE_API_TOKEN", "")
     together_key    = os.getenv("TOGETHER_API_KEY", "")
     deploy_html     = _build_deploy_html(run_id, run, brief)
+
+    _meta_ads_list  = run.get("meta_ads", [])
+    _dry_run        = os.getenv("DRY_RUN", "true").lower() == "true"
+    has_live_ads    = bool([a for a in _meta_ads_list if not a.get("dry_run") and a.get("ad_id")]) and not _dry_run
+    optimise_html   = _post_deploy_intel_html(run_id) if has_live_ads else ""
+    published_ads_html = _published_ads_html(run_id, run, brief) if has_live_ads else ""
+    optimise_tab_btn = (
+        "<button class='tab' onclick=\"showTab('optimise')\">Optimise</button>"
+        if has_live_ads else ""
+    )
+    published_tab_btn = (
+        "<button class='tab' onclick=\"showTab('published')\">Published ads</button>"
+        if has_live_ads else ""
+    )
+    optimise_tab_panel = (
+        '<div id="tab-optimise" class="panel">'
+        '<h2 style="margin-top:0.5rem;">Optimise</h2>'
+        '<p class="section-sub">Live ad intelligence — previews, audience signals,'
+        ' Meta recommendations, and AI feature toggles.</p>'
+        + optimise_html +
+        '</div>'
+    ) if has_live_ads else ""
+    published_tab_panel = (
+        '<div id="tab-published" class="panel">'
+        '<h2 style="margin-top:0.5rem;">Published ads</h2>'
+        '<p class="section-sub">Your live ads on Facebook &amp; Instagram — copy and basic performance.</p>'
+        + published_ads_html +
+        '</div>'
+    ) if has_live_ads else ""
 
     # Determine which variants to pre-check: top 2–3 PASS by avg score
     already_selected = run.get("selected_variants", [])
@@ -1067,10 +1309,11 @@ def get_results(run_id: str):
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   {_theme_fouc()}
   <title>PIKORUA — {_esc(brief.get('property_name','Campaign'))}</title>
+  <link rel="icon" type="image/png" href="/favicon.ico"/>
   <link rel="stylesheet" href="/brand.css"/>
   <style>
-    .meta-row{{font-size:0.9rem;color:var(--ink-soft);margin:0.3rem 0 0.5rem;}}
-    .meta-row .dot{{color:var(--line);margin:0 0.4rem;}}
+    .meta-row{{font-size:0.88rem;color:var(--ink-soft);margin:0.3rem 0 0.5rem;}}
+    .meta-row .dot{{color:var(--line);margin:0 0.35rem;}}
     .toast{{}} /* defined in brand.css */
     /* ── inline editing controls ── */
     .mini-btn{{background:var(--paper);border:1px solid var(--line);padding:5px 12px;
@@ -1109,70 +1352,88 @@ def get_results(run_id: str):
   </style>
 </head>
 <body>
-  {_topbar('runs')}
-  <div class="wrap-wide">
-  <div class="eyebrow">Campaign results</div>
-  <h1>{_esc(brief.get('property_name','Campaign'))}</h1>
-  <div class="meta-row">
-    {_esc(brief.get('city',''))}<span class="dot">·</span>
-    ₹{_esc(str(brief.get('price_cr','')))} Cr<span class="dot">·</span>
-    {_esc(brief.get('platform',''))}<span class="dot">·</span>
-    {_esc(brief.get('property_type',''))}
-    {f'<span class="dot">·</span><strong style="color:var(--green-mid);">{_esc(scorecard_summary)}</strong>' if scorecard_summary else ""}
+  {_sidebar('runs')}
+  <div class="page-header">
+    <div>
+      <div class="eyebrow">Campaign results</div>
+      <h1 class="page-title">{_esc(brief.get('property_name','Campaign'))}</h1>
+      <div class="prop-meta-row">
+        <span class="prop-tag">{_esc(brief.get('city',''))}</span>
+        <span class="prop-tag">₹{_esc(str(brief.get('price_cr','')))} Cr</span>
+        <span class="prop-tag">{_esc(brief.get('platform',''))}</span>
+        <span class="prop-tag">{_esc(brief.get('property_type',''))}</span>
+        {f'<span class="prop-tag" style="background:var(--green-soft);border-color:rgba(46,87,64,0.25);color:var(--green);">{_esc(scorecard_summary)}</span>' if scorecard_summary else ""}
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;">
+      {_build_logo_section_html(run_id)}
+      <a href="/runs" class="btn btn-ghost btn-sm">&#8592; All campaigns</a>
+    </div>
   </div>
 
-  {_build_logo_section_html(run_id)}
-
+  <div class="page-body">
   <div class="tab-bar">
-    <button class="tab active" onclick="showTab('meta')">Facebook &amp; Instagram ads</button>
+    <button class="tab active" onclick="showTab('meta')">Facebook &amp; Instagram</button>
     <button class="tab" onclick="showTab('other')">Google · WhatsApp · Email</button>
     <button class="tab" onclick="showTab('visuals')">Images</button>
     <button class="tab" onclick="showTab('audience')">Buyers &amp; targeting</button>
     <button class="tab" onclick="showTab('deploy')">Publish</button>
+    {published_tab_btn}
+    {optimise_tab_btn}
   </div>
 
   <div id="tab-meta" class="panel active">
-    <h2 style="margin-top:0.5rem;">Your ad versions</h2>
-    <p class="section-sub">Edit any headline, body or image to fine-tune a version — your changes save instantly and can be reverted. Pick the ones you like, then approve. We recommend launching 2–3.</p>
+    <div style="margin:0.4rem 0 1.2rem;">
+      <h2 style="margin:0 0 0.3rem;">Your ad versions</h2>
+      <p class="section-sub">Edit any headline or body to fine-tune a version — changes save instantly and can be reverted. Pick 2–3, then approve.</p>
+    </div>
     {add_variant_html}
-    {variant_cards_html if variant_cards_html else '<p style="color:var(--muted);font-size:0.9rem;">No ad copy found for this campaign.</p>'}
+    {variant_cards_html if variant_cards_html else '<div class="empty-state"><div class="empty-icon">✦</div><div class="empty-title">No ad copy yet</div><div class="empty-body">No ad copy was found for this campaign.</div></div>'}
     {approve_bar_html}
   </div>
 
   <div id="tab-other" class="panel">
-    <h2 style="margin-top:0.5rem;">WhatsApp, Email &amp; Google copy</h2>
-    <p class="section-sub">Edit any message below and click Save. Revert restores the original AI version.</p>
-    {other_copy_html if other_copy_html else '<p style="color:var(--muted);font-size:0.9rem;">No copy found for these channels.</p>'}
+    <div style="margin:0.4rem 0 1.2rem;">
+      <h2 style="margin:0 0 0.3rem;">WhatsApp, Email &amp; Google copy</h2>
+      <p class="section-sub">Edit any message and click Save. Revert restores the original AI version.</p>
+    </div>
+    {other_copy_html if other_copy_html else '<div class="empty-state"><div class="empty-icon">✉</div><div class="empty-title">No copy found</div><div class="empty-body">No copy was found for these channels.</div></div>'}
   </div>
 
   <div id="tab-visuals" class="panel">
-    <h2 style="margin-top:0.5rem;">Campaign images</h2>
-    <p class="section-sub">
-      We create a set of ad images for you — social banners with text, plus clean lifestyle shots.
-    </p>
+    <div style="margin:0.4rem 0 1.2rem;">
+      <h2 style="margin:0 0 0.3rem;">Campaign images</h2>
+      <p class="section-sub">Social banners with text overlay, plus clean lifestyle shots — ready to attach to your ads.</p>
+    </div>
     {_build_visuals_html(run_id, image_prompts, existing_images, ideogram_key, replicate_token, together_key, images_dir)}
   </div>
 
   <div id="tab-audience" class="panel">
-    <h2 style="margin-top:0.5rem;">Ideal buyer profile</h2>
-    <p class="section-sub">Market trends and the type of buyer most likely to enquire about this property.</p>
-    {persona_html if persona_html else '<p style="color:var(--muted);font-size:0.9rem;">No buyer profile found.</p>'}
-    <h2 style="margin-top:1.8rem;">Targeting plan</h2>
-    <p class="section-sub" style="margin-bottom:1rem;">Geo zones, demographics, platform strategies, and keyword lists for this campaign.</p>
-    {targeting_html if targeting_html else '<p style="color:var(--muted);font-size:0.9rem;">No targeting plan found.</p>'}
+    <div style="margin:0.4rem 0 1.2rem;">
+      <h2 style="margin:0 0 0.3rem;">Ideal buyer profile</h2>
+      <p class="section-sub">Market trends and the type of buyer most likely to enquire about this property.</p>
+    </div>
+    {persona_html if persona_html else '<div class="empty-state"><div class="empty-icon">◎</div><div class="empty-title">No buyer profile</div><div class="empty-body">No buyer profile was found for this campaign.</div></div>'}
+    <div style="margin:1.8rem 0 1.2rem;">
+      <h2 style="margin:0 0 0.3rem;">Targeting plan</h2>
+      <p class="section-sub">Geo zones, demographics, platform strategies, and keyword lists.</p>
+    </div>
+    {targeting_html if targeting_html else '<div class="empty-state"><div class="empty-icon">⊕</div><div class="empty-title">No targeting plan</div><div class="empty-body">No targeting plan was found.</div></div>'}
   </div>
 
   <div id="tab-deploy" class="panel">
-    <h2 style="margin-top:0.5rem;">Publish to Facebook &amp; Instagram</h2>
-    <p class="section-sub">Preview exactly how your ads will look before anything goes live.</p>
+    <div style="margin:0.4rem 0 1.2rem;">
+      <h2 style="margin:0 0 0.3rem;">Publish to Facebook &amp; Instagram</h2>
+      <p class="section-sub">Preview exactly how your ads will look before anything goes live.</p>
+    </div>
     {deploy_html}
   </div>
 
-  <p style="margin-top:2.4rem;font-size:0.9rem;">
-    <a href="/runs">&#8592; Back to my campaigns</a>
-  </p>
+  {published_tab_panel}
+  {optimise_tab_panel}
   </div>
   <div class="toast" id="copy-notice">Copied</div>
+  {_SIDEBAR_CLOSE}
 
   <script>
     function showTab(name) {{
@@ -1370,7 +1631,7 @@ def get_results(run_id: str):
     }}
 
     // ── Image assignment — pick any generated image for a variant ──
-    // imageStem is a string like "1" or "1_v2" matching the filename image_{stem}.png
+    // imageStem is a string like "1" or "1_v2" matching the filename image_{{stem}}.png
     async function assignImage(runId, variantNum, imageStem) {{
       const stem = imageStem || null;
       const status = document.getElementById('imgstatus-' + variantNum);
@@ -2787,6 +3048,8 @@ _AUDIENCE_PANEL_JS = r"""
     let bits = [geo, "Age " + (AUD.age_min||28) + "–" + (AUD.age_max||65)];
     if ((AUD.interests||[]).length) bits.push(AUD.interests.length + " interest" + (AUD.interests.length!=1?"s":""));
     if ((AUD.behaviours||[]).length) bits.push(AUD.behaviours.length + " behaviour" + (AUD.behaviours.length!=1?"s":""));
+    if ((AUD.included_custom_audiences||[]).length) bits.push((AUD.included_custom_audiences.length) + " custom audience" + (AUD.included_custom_audiences.length!=1?"s":""));
+    if ((AUD.excluded_custom_audiences||[]).length) bits.push((AUD.excluded_custom_audiences.length) + " excluded");
     return bits.join(" · ");
   }
 
@@ -2881,6 +3144,78 @@ _AUDIENCE_PANEL_JS = r"""
     paint();
   };
 
+  function savedChips(role){
+    const arr = (AUD[role + '_custom_audiences'])||[];
+    if(!arr.length) return '<span style="font-size:0.8rem;color:var(--muted);">None selected.</span>';
+    return arr.map((it,i)=>
+      '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--paper-warm);'
+      +'border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 12px;margin:0 6px 6px 0;'
+      +'font-size:0.8rem;color:var(--ink);">'
+      +'<span style="font-size:0.65rem;font-weight:700;letter-spacing:0.05em;color:var(--muted);'
+      +'text-transform:uppercase;margin-right:2px;">' + esc(it.subtype||'') + '</span>'
+      + esc(it.name)
+      +'<button onclick="audRemoveSaved(\''+role+'\','+i+')" title="Remove" '
+      +'style="border:none;background:var(--line);color:var(--ink-soft);border-radius:50%;width:18px;height:18px;'
+      +'line-height:1;cursor:pointer;font-size:0.75rem;">×</button></span>'
+    ).join('');
+  }
+
+  window.audRemoveSaved = function(role, i){
+    const key = role + '_custom_audiences';
+    AUD[key] = AUD[key]||[];
+    AUD[key].splice(i,1);
+    paintSaved();
+  };
+
+  window.audPickSaved = function(role, payload){
+    const it = JSON.parse(decodeURIComponent(payload));
+    const key = role + '_custom_audiences';
+    AUD[key] = AUD[key]||[];
+    if(!AUD[key].some(x=>String(x.id)===String(it.id))) AUD[key].push(it);
+    document.getElementById('aud-saved-picker').innerHTML = '';
+    paintSaved();
+  };
+
+  window.audLoadSaved = function(){
+    const box = document.getElementById('aud-saved-picker');
+    box.innerHTML = '<span style="font-size:0.8rem;color:var(--muted);">Loading from Meta…</span>';
+    fetch('/meta-saved-audiences')
+      .then(r=>r.json()).then(d=>{
+        const list = d.audiences||[];
+        if(!list.length){ box.innerHTML='<span style="font-size:0.8rem;color:var(--muted);">No custom audiences found.</span>'; return; }
+        box.innerHTML = '<div style="margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden;max-height:220px;overflow-y:auto;">'
+          + list.map(a=>{
+              const lbl = esc(a.name);
+              const sub = esc(a.subtype||'');
+              const cnt = a.approximate_count ? (' · ~' + Number(a.approximate_count).toLocaleString()) : '';
+              const pl_inc = encodeURIComponent(JSON.stringify({id:a.id,name:a.name,subtype:a.subtype||''}));
+              const pl_exc = encodeURIComponent(JSON.stringify({id:a.id,name:a.name,subtype:a.subtype||''}));
+              return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;'
+                + 'border-bottom:1px solid var(--line);font-size:0.82rem;color:var(--ink);">'
+                + '<span><strong>'+lbl+'</strong>'
+                + '<span style="margin-left:8px;font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">'+sub+'</span>'
+                + '<span style="margin-left:6px;font-size:0.72rem;color:var(--muted);">'+cnt+'</span></span>'
+                + '<span style="display:flex;gap:6px;flex-shrink:0;">'
+                + '<button onclick="audPickSaved(\'included\',\''+pl_inc+'\')" '
+                + 'style="border:1px solid var(--green);background:var(--green-soft);color:var(--green-mid);'
+                + 'border-radius:6px;padding:3px 9px;font-size:0.74rem;cursor:pointer;font-family:inherit;">+ Include</button>'
+                + '<button onclick="audPickSaved(\'excluded\',\''+pl_exc+'\')" '
+                + 'style="border:1px solid #e6b3ab;background:var(--danger-soft);color:var(--danger);'
+                + 'border-radius:6px;padding:3px 9px;font-size:0.74rem;cursor:pointer;font-family:inherit;">− Exclude</button>'
+                + '</span></div>';
+            }).join('')
+          + '</div>';
+      }).catch(e=>{ box.innerHTML='<span style="font-size:0.8rem;color:var(--danger);">Load failed: '+esc(e.message)+'</span>'; });
+  };
+
+  function paintSaved(){
+    const incEl = document.getElementById('aud-saved-inc');
+    const excEl = document.getElementById('aud-saved-exc');
+    if(incEl) incEl.innerHTML = savedChips('included');
+    if(excEl) excEl.innerHTML = savedChips('excluded');
+    document.getElementById('aud-summary').textContent = summary();
+  }
+
   window.audSave = function(){
     const st = document.getElementById('aud-save-status');
     st.textContent = 'Saving…';
@@ -2914,6 +3249,7 @@ _AUDIENCE_PANEL_JS = r"""
       '<input id="aud-q-cities" placeholder="Change city…" oninput="audSearch(\'cities\')" '
       + 'style="width:200px;margin-top:6px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font-size:0.82rem;">'
       + '<div id="aud-res-cities" style="max-width:260px;border:1px solid var(--line);border-top:none;max-height:160px;overflow:auto;"></div>';
+    paintSaved();
   }
 
   document.addEventListener('DOMContentLoaded', paint);
@@ -2964,6 +3300,27 @@ def _audience_panel_html(run_id: str, audience: dict) -> str:
         '<div id="aud-beh" style="margin-top:14px;"></div>'
         '</div>'
         '</div>'
+        # Saved audiences row (Include / Exclude)
+        '<div style="border-top:1px solid var(--line);margin-top:16px;padding-top:14px;">'
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
+        '<div>'
+        '<div class="eyebrow" style="margin-bottom:2px;">Custom &amp; Lookalike audiences</div>'
+        '<div style="font-size:0.75rem;color:var(--muted);">Upload CRM leads first, then include your lookalikes and exclude bad leads.</div>'
+        '</div>'
+        '<button class="btn btn-ghost btn-sm" onclick="audLoadSaved()" style="white-space:nowrap;flex-shrink:0;">Load from Meta</button>'
+        '</div>'
+        '<div id="aud-saved-picker"></div>'
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;">'
+        '<div>'
+        '<div class="eyebrow" style="margin-bottom:6px;color:var(--green-mid);">Include (reach these people)</div>'
+        '<div id="aud-saved-inc"></div>'
+        '</div>'
+        '<div>'
+        '<div class="eyebrow" style="margin-bottom:6px;color:var(--danger);">Exclude (hide ads from these)</div>'
+        '<div id="aud-saved-exc"></div>'
+        '</div>'
+        '</div>'
+        '</div>'
         '<div style="margin-top:12px;font-size:0.78rem;color:var(--muted);">'
         'Edits are saved to this campaign. Ads also run on Instagram under your page handle.</div>'
         '</div>'
@@ -2993,6 +3350,33 @@ def _post_deploy_intel_html(run_id: str) -> str:
     <div class="section-sub">Check your reach before switching the ads on.</div>
     <div id="mp-signals-wrap">
       <button class="btn btn-sm" id="mp-signals-btn" onclick="mpFetchSignals()">Check audience size</button>
+    </div>
+  </div>
+
+  <!-- Meta Recommendations -->
+  <div style="margin-bottom:28px;">
+    <div class="section-title">Meta recommendations</div>
+    <div class="section-sub">Suggestions from Ads Manager for this campaign — one-click to apply.</div>
+    <div id="mp-recs-wrap">
+      <button class="btn btn-sm" id="mp-recs-btn" onclick="mpFetchRecs()">Fetch recommendations</button>
+    </div>
+  </div>
+
+  <!-- Meta AI Features -->
+  <div style="margin-bottom:28px;">
+    <div class="section-title">Meta AI features</div>
+    <div class="section-sub">Toggles that let Meta's algorithm take over targeting or budgeting. Check trade-offs before enabling.</div>
+    <div id="mp-ai-wrap">
+      <button class="btn btn-sm" id="mp-ai-btn" onclick="mpFetchAI()">Load current state</button>
+    </div>
+  </div>
+
+  <!-- CRM Strategy — campaign-scoped insights with apply buttons -->
+  <div style="margin-bottom:28px;">
+    <div class="section-title">CRM strategy</div>
+    <div class="section-sub">Targeting and budget moves derived from your lead data — one click to apply to this campaign.</div>
+    <div id="mp-crm-strat-wrap">
+      <div class="mp-skel" style="height:70px;border-radius:10px;"></div>
     </div>
   </div>
 
@@ -3040,6 +3424,21 @@ def _post_deploy_intel_html(run_id: str) -> str:
   (function(){
     const RID = "__RUNID__";
 
+    // Desktop feed previews: Meta's CDN blocks the iframe with X-Frame-Options.
+    // We give the frame 4 s to load; if it never fires onload we show the fallback link.
+    const _mpFrameTimers = {};
+    window.mpFrameLoaded = function(uid){
+      clearTimeout(_mpFrameTimers[uid]);
+      const fb = document.getElementById(uid + '-fb');
+      if(fb) fb.style.display = 'none';
+    };
+    function mpArmFallback(uid){
+      _mpFrameTimers[uid] = setTimeout(function(){
+        const fb = document.getElementById(uid + '-fb');
+        if(fb){ fb.style.display = 'block'; }
+      }, 4000);
+    }
+
     async function loadPreviews(){
       const box = document.getElementById('mp-previews');
       try{
@@ -3053,13 +3452,28 @@ def _post_deploy_intel_html(run_id: str) -> str:
         const FMT = {MOBILE_FEED_STANDARD:'Facebook feed', INSTAGRAM_STANDARD:'Instagram feed',
                      INSTAGRAM_STORY:'Instagram story', DESKTOP_FEED_STANDARD:'Desktop feed'};
         let anyFrame = false;
+        // Extract the src URL from an iframe HTML string for fallback links.
+        function iframeSrc(html){ const m = html.match(/src="([^"]+)"/); return m ? m[1] : ''; }
+        // Wrap Meta's iframe HTML — for desktop feed, Meta's CDN blocks cross-origin
+        // embedding (X-Frame-Options: SAMEORIGIN). We add an onerror/onload check and
+        // fall back to a direct-link button if the frame doesn't load within 4 s.
+        function wrapFrame(fmt, frameHtml){
+          if(fmt !== 'DESKTOP_FEED_STANDARD') return frameHtml;
+          const src = iframeSrc(frameHtml);
+          const uid = 'mpf' + Math.random().toString(36).slice(2,8);
+          return frameHtml.replace('<iframe ', '<iframe id="'+uid+'" onload="mpFrameLoaded(\''+uid+'\')" ')
+            + (src ? '<div id="'+uid+'-fb" style="display:none;padding:12px 14px;font-size:0.82rem;">'
+              + 'Desktop preview blocked by Facebook. '
+              + '<a href="'+src+'" target="_blank" rel="noopener" '
+              + 'style="color:var(--gold-deep);text-decoration:underline;">Open in new tab →</a></div>' : '');
+        }
         d.previews.forEach(function(v){
           let cards = '';
           Object.keys(v.previews||{}).forEach(function(fmt){
             const frame = v.previews[fmt];
             if(!frame) return;
             anyFrame = true;
-            cards += '<div class="mp-prevcard"><div class="lbl">' + (FMT[fmt]||fmt) + '</div>' + frame + '</div>';
+            cards += '<div class="mp-prevcard"><div class="lbl">' + (FMT[fmt]||fmt) + '</div>' + wrapFrame(fmt, frame) + '</div>';
           });
           if(cards){
             html += '<div style="margin-bottom:18px;"><div style="font-size:0.72rem;'
@@ -3071,6 +3485,10 @@ def _post_deploy_intel_html(run_id: str) -> str:
           '<div style="padding:12px 14px;background:var(--warn-soft);border:1px solid #e6d28a;'
           + 'border-radius:10px;font-size:0.83rem;color:var(--warn);">Previews aren\'t available '
           + 'from Meta right now — they usually appear a few minutes after publishing.</div>';
+        // Arm fallback timers for all desktop frames just injected.
+        box.querySelectorAll('[id^="mpf"]').forEach(function(el){
+          if(el.id && !el.id.endsWith('-fb')) mpArmFallback(el.id);
+        });
       }catch(e){
         box.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Couldn\'t load previews.</p>';
       }
@@ -3158,6 +3576,45 @@ def _post_deploy_intel_html(run_id: str) -> str:
       }catch(e){ el.disabled = false; el.textContent = orig; alert('Failed: ' + e.message); }
     };
 
+    window.mpApplyCampaign = async function(el, action, variant, idx){
+      const rec = (window._mpCampaignRecs||[])[idx] || {};
+      const orig = el.textContent;
+      el.disabled = true; el.textContent = 'Applying…';
+      const _imp = rec.impact || {};
+      const params = Object.assign({}, rec.params || {}, {
+        label: rec.label || '',
+        basis_hint: _imp.basis || '',
+        raw_multiplier_hint: _imp.raw_multiplier != null ? _imp.raw_multiplier : null,
+      });
+      try{
+        const r = await fetch('/meta-optimize/' + RID, {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({action:action, variant:variant, params:params})});
+        const d = await r.json();
+        if(r.ok){
+          el.textContent = 'Applied ✓'; el.style.background = 'var(--green)';
+          const res = el.parentElement.querySelector('.mp-result');
+          const im = d.impact;
+          if(res && im && im.apply_error){
+            res.innerHTML = '<div class="mp-impact" style="color:var(--danger);">⚠ ' + im.apply_error + '</div>';
+          } else if(res && im && im.measurable_now && im.before && im.actual_after != null){
+            res.innerHTML = '<div class="mp-impact">' + mpMetricName(im.metric) + ' '
+              + fmtNum(im.before) + ' → ' + fmtNum(im.actual_after)
+              + ' <b>(actual ' + signed(im.actual_pct) + ')</b> · we predicted ' + signed(im.predicted_pct)
+              + (im.prediction_error_pp!=null ? ' · off by ' + im.prediction_error_pp + 'pp (noted for next time)' : '')
+              + '</div>';
+          } else if(res && im){
+            res.innerHTML = '<div class="mp-impact">Predicted ' + signed(im.predicted_pct) + ' '
+              + mpMetricName(im.metric) + ' — ' + (im.note || 'measured once the ad runs') + '</div>';
+          }
+          mpFetchHistory();
+        } else { el.disabled = false; el.textContent = orig;
+          el.parentElement.insertAdjacentHTML('beforeend',
+            '<span style="color:var(--danger);font-size:0.74rem;margin-left:6px;">'
+            + (d.detail || 'failed') + '</span>'); }
+      }catch(e){ el.disabled = false; el.textContent = orig; alert('Failed: ' + e.message); }
+    };
+
     window.mpRenderLearning = function(data){
       const box = document.getElementById('mp-learning'); if(!box) return;
       const recs = (data && data.records) || [];
@@ -3189,6 +3646,23 @@ def _post_deploy_intel_html(run_id: str) -> str:
       const wrap = document.getElementById('mp-perf-wrap');
       wrap.innerHTML = '<div class="mp-skel" style="height:90px;"></div>';
       window._mpRecs = window._mpRecs || {};
+      window._mpCampaignRecs = [];
+      function mpChip(rec, applyCall){
+        const apply = rec.action === 'note' ? '' :
+          '<button onclick="' + applyCall + '">Apply</button>';
+        let exp = '';
+        if(rec.impact && rec.impact.expected_pct != null){
+          const im = rec.impact;
+          const tip = im.calibrated ? ('learned from ' + im.n_samples + ' past outcome(s)')
+                                    : 'first-time estimate — self-corrects after we measure it';
+          exp = '<span class="mp-exp" title="' + tip + '">est. ' + signed(im.expected_pct)
+            + ' ' + mpMetricName(im.metric) + (im.calibrated ? ' ✦' : '') + '</span>';
+        }
+        const caNoteHtml = (rec.impact && rec.impact.custom_audience_note)
+          ? '<span class="mp-exp" title="' + (rec.impact.custom_audience_note||'') + '">+ custom ▴</span>' : '';
+        return '<span class="mp-chip ' + (rec.severity||'') + '" title="' + (rec.detail||'') + '">'
+          + rec.label + exp + caNoteHtml + apply + '<span class="mp-result"></span></span>';
+      }
       try{
         const r = await fetch('/meta-performance/' + RID);
         const d = await r.json();
@@ -3197,6 +3671,25 @@ def _post_deploy_intel_html(run_id: str) -> str:
             + (d.note || 'No performance data yet — ads need a little run time first.') + '</p>'; return;
         }
         let html = '';
+
+        // Campaign-wide recs (audience is shared — shown once above variant cards)
+        window._mpCampaignRecs = d.campaign_recs || [];
+        if(window._mpCampaignRecs.length){
+          let chips = '';
+          window._mpCampaignRecs.forEach(function(rec, i){
+            chips += mpChip(rec, 'mpApplyCampaign(this,\'' + rec.action + '\',' + (rec.apply_to_variant||1) + ',' + i + ')');
+          });
+          html += '<div class="card" style="margin:0 0 14px;background:var(--paper-warm);border:1px solid var(--border);">'
+            + '<div style="font-weight:600;color:var(--ink);">Campaign-wide · All variants</div>'
+            + '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">Audience targeting is shared — changes apply to all ad sets.</div>'
+            + '<div>' + chips + '</div></div>';
+        }
+
+        // Per-variant cards with rank badges and comparative suggestions
+        const RANK_STYLE = {
+          'Top performer': 'background:#e6f4ea;color:var(--green)',
+          'Underperforming': 'background:var(--danger-soft);color:var(--danger)',
+        };
         (d.variants||[]).forEach(function(v){
           const m = v.metrics || {};
           let mrow = '';
@@ -3211,27 +3704,21 @@ def _post_deploy_intel_html(run_id: str) -> str:
           } else {
             mrow = '<div style="font-size:0.8rem;color:var(--muted);margin:6px 0 10px;">No spend yet — metrics appear once the ad runs.</div>';
           }
+          const rankBadge = v.rank_label
+            ? '<span style="font-size:0.63rem;font-weight:700;letter-spacing:0.07em;padding:1px 7px;border-radius:4px;'
+              + 'margin-left:8px;vertical-align:middle;' + (RANK_STYLE[v.rank_label]||'background:var(--paper-warm);color:var(--muted)')
+              + ';">' + v.rank_label + '</span>' : '';
           let chips = '';
           (v.recommendations||[]).forEach(function(rec, i){
             const key = v.variant + ':' + i;
             window._mpRecs[key] = rec;
-            const apply = rec.action === 'note' ? '' :
-              '<button onclick="mpApply(this,\'' + rec.action + '\',' + v.variant + ',' + i + ')">Apply</button>';
-            let exp = '';
-            if(rec.impact && rec.impact.expected_pct != null){
-              const im = rec.impact;
-              const tip = im.calibrated ? ('learned from ' + im.n_samples + ' past outcome(s)')
-                                        : 'first-time estimate — self-corrects after we measure it';
-              exp = '<span class="mp-exp" title="' + tip + '">est. ' + signed(im.expected_pct)
-                + ' ' + mpMetricName(im.metric) + (im.calibrated ? ' ✦' : '') + '</span>';
-            }
-            chips += '<span class="mp-chip ' + (rec.severity||'') + '" title="' + (rec.detail||'') + '">'
-              + rec.label + exp + apply + '<span class="mp-result"></span></span>';
+            chips += mpChip(rec, 'mpApply(this,\'' + rec.action + '\',' + v.variant + ',' + i + ')');
           });
           if(!chips) chips = '<span style="font-size:0.8rem;color:var(--green);">Looking healthy — no changes needed.</span>';
           html += '<div class="card" style="margin:0 0 14px;"><div style="font-weight:600;color:var(--ink);">Version '
-            + v.variant + '</div>' + mrow + '<div>' + chips + '</div></div>';
+            + v.variant + rankBadge + '</div>' + mrow + '<div>' + chips + '</div></div>';
         });
+
         if(d.crm_signals && d.crm_signals.length){
           let crm = '';
           d.crm_signals.forEach(function(rec){
@@ -3249,11 +3736,431 @@ def _post_deploy_intel_html(run_id: str) -> str:
       }
     };
 
+    // ---- Meta Recommendations ------------------------------------------ //
+    window.mpFetchRecs = async function(){
+      const wrap = document.getElementById('mp-recs-wrap');
+      wrap.innerHTML = '<div class="mp-skel" style="height:60px;"></div>';
+      try{
+        const r = await fetch('/meta-recommendations/' + RID);
+        const d = await r.json();
+        const recs = d.recommendations || [];
+        if(!recs.length){
+          wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">'
+            + (d.note || 'No recommendations right now — Meta generates these after the campaign runs.') + '</p>';
+          return;
+        }
+        const IMP = {HIGH:'red', MEDIUM:'amber', LOW:''};
+        let html = '';
+        recs.forEach(function(rec){
+          const cls = IMP[rec.importance] || '';
+          const conf = rec.confidence != null ? Math.round(rec.confidence * 100) + '% confidence' : '';
+          const badge = rec.importance
+            ? '<span style="font-size:0.65rem;font-weight:700;letter-spacing:0.07em;padding:1px 6px;border-radius:4px;'
+              + 'background:' + (cls==='red'?'var(--danger-soft)':cls==='amber'?'var(--warn-soft)':'var(--paper-warm)')
+              + ';color:' + (cls==='red'?'var(--danger)':cls==='amber'?'var(--warn)':'var(--muted)')
+              + ';text-transform:uppercase;margin-left:6px;">' + rec.importance + '</span>' : '';
+          html += '<div class="card" style="margin:0 0 10px;">'
+            + '<div style="display:flex;align-items:center;gap:6px;font-weight:600;color:var(--ink);">'
+            + (rec.title || rec.recommendation_type || 'Recommendation') + badge + '</div>'
+            + (conf ? '<div style="font-size:0.72rem;color:var(--muted);margin:2px 0 6px;">' + conf + '</div>' : '')
+            + '<div style="font-size:0.82rem;color:var(--ink-soft);margin-bottom:10px;">' + (rec.message || '') + '</div>'
+            + '<button class="btn btn-sm" id="rec-btn-' + rec.id + '" onclick="mpApplyRec(\''
+            + (rec.id||'') + '\', this)">Apply</button>'
+            + '<span id="rec-res-' + rec.id + '" style="font-size:0.78rem;margin-left:8px;"></span>'
+            + '</div>';
+        });
+        wrap.innerHTML = html;
+      }catch(e){
+        wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Couldn\'t load recommendations.</p>';
+      }
+    };
+
+    window.mpApplyRec = async function(recId, btn){
+      const res = document.getElementById('rec-res-' + recId);
+      btn.disabled = true; btn.textContent = 'Applying…';
+      try{
+        const r = await fetch('/meta-apply-recommendation/' + RID, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({recommendation_id: recId})
+        });
+        const d = await r.json();
+        if(r.ok){ btn.textContent = 'Applied ✓'; btn.style.background = 'var(--green)';
+          if(res) res.innerHTML = '<span style="color:var(--green);">Done</span>';
+        } else {
+          btn.disabled = false; btn.textContent = 'Apply';
+          if(res) res.innerHTML = '<span style="color:var(--danger);">' + (d.detail||'failed') + '</span>';
+        }
+      }catch(e){ btn.disabled = false; btn.textContent = 'Apply';
+        if(res) res.innerHTML = '<span style="color:var(--danger);">Error: ' + e.message + '</span>';
+      }
+    };
+
+    // ---- Meta AI Features ---------------------------------------------- //
+    window._mpAI = {};   // stores {adset_ids, campaign_ids, advantage_on, cbo_on}
+
+    window.mpFetchAI = async function(){
+      const wrap = document.getElementById('mp-ai-wrap');
+      wrap.innerHTML = '<div class="mp-skel" style="height:80px;"></div>';
+      try{
+        const r = await fetch('/meta-recommendations/' + RID);
+        const d = await r.json();
+        if(d.note){ wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">' + d.note + '</p>'; return; }
+        window._mpAI = {
+          adset_ids: d.adset_ids || [],
+          campaign_ids: d.campaign_ids || [],
+          advantage_on: !!d.advantage_audience_on,
+          cbo_on: !!d.cbo_on,
+        };
+        mpRenderAI(wrap);
+      }catch(e){
+        wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Couldn\'t load AI features state.</p>';
+      }
+    };
+
+    function mpRenderAI(wrap){
+      const ai = window._mpAI;
+      function tog(label, desc, on, onclick){
+        return '<div class="card" style="margin:0 0 10px;display:flex;align-items:flex-start;gap:14px;">'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="font-weight:600;color:var(--ink);margin-bottom:3px;">' + label + '</div>'
+          + '<div style="font-size:0.8rem;color:var(--ink-soft);word-wrap:break-word;">' + desc + '</div>'
+          + '</div>'
+          + '<button class="btn btn-sm" id="ai-btn-'+label.replace(/\s/g,'_')+'" onclick="'+onclick+'"'
+          + ' style="flex-shrink:0;background:' + (on?'var(--green)':'var(--line)') + ';color:' + (on?'#fff':'var(--ink)') + ';">'
+          + (on ? 'On — Disable' : 'Off — Enable') + '</button>'
+          + '</div>';
+      }
+      wrap.innerHTML =
+        tog('Advantage+ Audience',
+            'Meta expands beyond your targeting to find likely converters. Good once you have lead-form history. Trade-off: you lose exact demographic control.',
+            ai.advantage_on,
+            'mpToggleAdvantage(this)')
+        + tog('Campaign Budget Optimisation (CBO)',
+            'Meta allocates the daily budget across versions in real-time, putting more behind what converts. Trade-off: low performers may get no spend before the algorithm has enough data.',
+            ai.cbo_on,
+            'mpToggleCBO(this)');
+    }
+
+    window.mpToggleAdvantage = async function(btn){
+      const ai = window._mpAI;
+      if(!ai.adset_ids || !ai.adset_ids.length){ alert('No ad sets found — fetch state first.'); return; }
+      const newVal = !ai.advantage_on;
+      btn.disabled = true; btn.textContent = 'Updating…';
+      try{
+        const r = await fetch('/meta-toggle-advantage/' + RID, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({adset_id: ai.adset_ids[0], enable: newVal})
+        });
+        const d = await r.json();
+        if(r.ok){
+          ai.advantage_on = newVal;
+          mpRenderAI(document.getElementById('mp-ai-wrap'));
+        } else { btn.disabled = false;
+          btn.textContent = ai.advantage_on ? 'On — Disable' : 'Off — Enable';
+          alert('Failed: ' + (d.detail||'unknown error'));
+        }
+      }catch(e){ btn.disabled = false;
+        btn.textContent = ai.advantage_on ? 'On — Disable' : 'Off — Enable';
+        alert('Error: ' + e.message);
+      }
+    };
+
+    window.mpToggleCBO = async function(btn){
+      const ai = window._mpAI;
+      if(!ai.campaign_ids || !ai.campaign_ids.length){ alert('No campaign found — fetch state first.'); return; }
+      const newVal = !ai.cbo_on;
+      btn.disabled = true; btn.textContent = 'Updating…';
+      try{
+        const r = await fetch('/meta-toggle-cbo/' + RID, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({campaign_id: ai.campaign_ids[0], enable: newVal})
+        });
+        const d = await r.json();
+        if(r.ok){
+          ai.cbo_on = newVal;
+          mpRenderAI(document.getElementById('mp-ai-wrap'));
+        } else { btn.disabled = false;
+          btn.textContent = ai.cbo_on ? 'On — Disable' : 'Off — Enable';
+          alert('Failed: ' + (d.detail||'unknown error'));
+        }
+      }catch(e){ btn.disabled = false;
+        btn.textContent = ai.cbo_on ? 'On — Disable' : 'Off — Enable';
+        alert('Error: ' + e.message);
+      }
+    };
+
+    // ---- CRM Strategy (campaign-scoped insights) ---------------------------
+    window._mpCSI = [];
+    async function mpFetchCRMStrategy(){
+      const wrap = document.getElementById('mp-crm-strat-wrap');
+      try{
+        const r = await fetch('/crm-strategic-insights');
+        const d = await r.json();
+        window._mpCSI = (d.insights||[]).filter(function(ins){ return ins.scope === 'campaign'; });
+        if(!window._mpCSI.length){
+          wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No campaign-specific CRM insights available — generate them from the Lead Insights page first.</p>';
+          return;
+        }
+        const CONF_CL = {HIGH:'green',MEDIUM:'amber',SPECULATIVE:''};
+        let html = '';
+        window._mpCSI.forEach(function(ins,idx){
+          const conf = (ins.confidence||'MEDIUM').toUpperCase();
+          const cls = CONF_CL[conf]||'';
+          const confBadge = '<span style="font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase;margin-left:6px;'
+            +(cls==='green'?'background:var(--green-soft,#e8f4ec);color:var(--green);'
+              :cls==='amber'?'background:var(--warn-soft,#fdf7e0);color:var(--warn,#7a5e00);'
+              :'background:var(--paper-warm);color:var(--muted);')
+            +'">'+conf+'</span>';
+          const catTag = '<span style="font-size:0.7rem;color:var(--muted);margin-left:auto;text-transform:uppercase;letter-spacing:0.05em;">'+(ins.category||'')+'</span>';
+          const hasParams = ins.params && Object.keys(ins.params).length>0;
+          const applyBtn = hasParams
+            ? '<button class="btn btn-sm" style="margin-top:10px;" id="csi-btn-'+idx+'" onclick="mpApplyCSI(this,'+idx+')">Apply to campaign</button>'
+              +'<span id="csi-res-'+idx+'" style="font-size:0.78rem;margin-left:8px;color:var(--muted);"></span>'
+            : '';
+          html += '<div class="card" style="margin:0 0 10px;">'
+            +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;font-weight:600;color:var(--ink);">'
+            +(ins.title||'')+confBadge+catTag+'</div>'
+            +'<p style="margin:6px 0 4px;font-size:0.85rem;color:var(--ink);">'+(ins.finding||'')+'</p>'
+            +'<p style="margin:0;font-size:0.82rem;color:var(--ink-soft);font-style:italic;">'+(ins.action||'')+'</p>'
+            +applyBtn+'</div>';
+        });
+        wrap.innerHTML = html;
+      }catch(e){
+        wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Could not load CRM strategy.</p>';
+      }
+    }
+    window.mpApplyCSI = async function(btn, idx){
+      const ins = (window._mpCSI||[])[idx];
+      if(!ins||!ins.params) return;
+      const resEl = document.getElementById('csi-res-'+idx);
+      btn.disabled = true; btn.textContent = 'Applying…';
+      let action, params;
+      if(ins.category === 'targeting'){
+        action = 'add_interests';
+        params = ins.params;
+      } else if(ins.category === 'budget'){
+        action = 'budget';
+        params = ins.params;
+      } else {
+        btn.disabled = false; return;
+      }
+      try{
+        const r = await fetch('/meta-optimize/'+RID, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({action: action, variant: 1, params: params})
+        });
+        const d = await r.json();
+        if(!r.ok) throw new Error(d.detail||'Error');
+        btn.textContent = '✓ Applied';
+        const imp = d.impact||{};
+        if(resEl && imp.predicted_pct != null){
+          resEl.textContent = 'est. '+(imp.predicted_pct>0?'+':'')+imp.predicted_pct+'% '+imp.metric;
+        }
+      }catch(e){
+        btn.disabled = false; btn.textContent = 'Apply to campaign';
+        if(resEl){ resEl.style.color='var(--danger)'; resEl.textContent=e.message; }
+      }
+    };
+
     loadPreviews();
+    mpFetchCRMStrategy();
   })();
   </script>
 """
     return template.replace("__RUNID__", run_id)
+
+
+def _published_ads_html(run_id: str, run: dict, brief: dict) -> str:
+    """Published Ads tab — copy cards for each live ad + JS-loaded analytics row."""
+    from pathlib import Path as _Path
+
+    rf_str = run.get("review_folder")
+    rf     = _Path(rf_str) if rf_str else None
+    meta_copy = _effective_meta(rf) if rf else {}
+    meta_ads  = run.get("meta_ads", [])
+    prop      = brief.get("property_name", "Campaign")
+    page_name = brief.get("company_name", "").strip() or "Pikorua Realty"
+
+    def _copy(v):
+        c = meta_copy.get(v, {})
+        return c.get("headline", ""), c.get("body", "")
+
+    cards_html = ""
+    for result in meta_ads:
+        if result.get("dry_run"):
+            continue
+        v      = result.get("variant", "?")
+        h, b   = _copy(v)
+        cid    = result.get("campaign_id", "—")
+        asid   = result.get("adset_id", "—")
+        aid    = result.get("ad_id", "—")
+        # Default is PAUSED (all ads created paused); updated when user toggles.
+        status = (result.get("status") or "PAUSED").upper()
+        is_active = status == "ACTIVE"
+
+        headline_html = (
+            f'<div style="font-size:1rem;font-weight:700;color:var(--ink);line-height:1.35;margin-bottom:6px;">'
+            f'{_esc(h)}</div>' if h else
+            '<div style="font-size:0.85rem;color:var(--muted);margin-bottom:6px;">(no headline)</div>'
+        )
+        body_html = (
+            f'<div style="font-size:0.85rem;color:var(--ink-soft);line-height:1.6;margin-bottom:10px;">'
+            f'{_esc(b)}</div>' if b else ''
+        )
+
+        if is_active:
+            status_badge = ('<span id="pub-badge-{v}" style="background:#e6f4ea;color:#1a7a3c;'
+                            'border:1px solid #a9cbb4;padding:2px 9px;border-radius:999px;'
+                            'font-size:0.72rem;">&#9654; Running</span>').format(v=v)
+            toggle_btn = (
+                f'<button id="pub-toggle-{v}" class="btn btn-sm" '
+                f'style="background:var(--warn-soft);color:var(--warn);border:1px solid #e6d28a;" '
+                f'onclick="pubToggle({v}, \'pause\')">'
+                f'&#9646;&#9646; Pause ad</button>'
+            )
+        else:
+            status_badge = ('<span id="pub-badge-{v}" style="background:var(--paper-warm);color:var(--muted);'
+                            'border:1px solid var(--line);padding:2px 9px;border-radius:999px;'
+                            'font-size:0.72rem;">&#9646;&#9646; Paused</span>').format(v=v)
+            toggle_btn = (
+                f'<button id="pub-toggle-{v}" class="btn btn-sm" '
+                f'style="background:var(--green-soft);color:var(--green);border:1px solid #a9cbb4;" '
+                f'onclick="pubToggle({v}, \'resume\')">'
+                f'&#9654; Go live</button>'
+            )
+
+        cards_html += (
+            f'<div style="border:1px solid var(--line);border-radius:10px;padding:18px 20px;'
+            f'margin-bottom:16px;background:var(--paper);">'
+            # header row
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'flex-wrap:wrap;gap:8px;margin-bottom:12px;">'
+            f'<div style="font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">'
+            f'Version {v} &middot; {_esc(page_name)}</div>'
+            f'<div style="display:flex;align-items:center;gap:8px;">'
+            + status_badge + toggle_btn +
+            f'</div></div>'
+            # copy
+            + headline_html + body_html +
+            # analytics row (skeleton, filled by JS)
+            f'<div id="pub-analytics-{v}" style="background:var(--paper-warm);border-radius:8px;'
+            f'padding:10px 14px;font-size:0.82rem;color:var(--muted);margin-bottom:10px;">'
+            f'<span class="pub-skel" style="display:inline-block;width:60%;height:14px;'
+            f'border-radius:4px;"></span>'
+            f'</div>'
+            # reference IDs
+            f'<details>'
+            f'<summary style="cursor:pointer;font-size:0.74rem;color:var(--muted);">Meta IDs</summary>'
+            f'<div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">'
+            f'Campaign {_esc(cid)} &middot; Ad set {_esc(asid)} &middot; Ad {_esc(aid)}</div>'
+            f'</details>'
+            f'</div>'
+        )
+
+    if not cards_html:
+        cards_html = '<p style="color:var(--muted);font-size:0.9rem;">No live ads found.</p>'
+
+    optimise_cta = (
+        '<div style="margin-top:6px;padding:14px 18px;background:var(--paper-warm);'
+        'border:1px solid var(--line);border-radius:10px;display:flex;align-items:center;'
+        'justify-content:space-between;flex-wrap:wrap;gap:10px;">'
+        '<div style="font-size:0.88rem;color:var(--ink);">'
+        '<strong>Ready to optimise?</strong> Check Meta recommendations, audience signals, '
+        'and CRM-driven suggestions.</div>'
+        '<button class="btn btn-sm" onclick="showTab(\'optimise\')">Open Optimise tab &#8594;</button>'
+        '</div>'
+    )
+
+    script = f"""
+<style>
+  .pub-skel{{background:linear-gradient(90deg,var(--cream) 25%,var(--paper-warm) 50%,var(--cream) 75%);
+    background-size:200% 100%;animation:pubsk 1.3s infinite;}}
+  @keyframes pubsk{{0%{{background-position:200% 0;}}100%{{background-position:-200% 0;}}}}
+</style>
+<script>
+(function(){{
+  window.pubToggle = async function(variant, action){{
+    const isResume = action === 'resume';
+    const msg = isResume
+      ? 'Go live with Version ' + variant + '? The ad will start spending immediately.'
+      : 'Pause Version ' + variant + '? The ad will stop spending immediately.';
+    if(!confirm(msg)) return;
+    const btn = document.getElementById('pub-toggle-' + variant);
+    const badge = document.getElementById('pub-badge-' + variant);
+    if(btn) {{ btn.disabled = true; btn.textContent = isResume ? 'Going live…' : 'Pausing…'; }}
+    try{{
+      const r = await fetch('/meta-optimize/{run_id}', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{action: action, variant: variant}})
+      }});
+      const d = await r.json();
+      if(!r.ok) throw new Error(d.detail || 'Request failed');
+      if(isResume){{
+        if(badge) {{ badge.id = 'pub-badge-' + variant;
+          badge.style.cssText = 'background:#e6f4ea;color:#1a7a3c;border:1px solid #a9cbb4;padding:2px 9px;border-radius:999px;font-size:0.72rem;';
+          badge.innerHTML = '&#9654; Running'; }}
+        if(btn) {{ btn.style.cssText = 'background:var(--warn-soft);color:var(--warn);border:1px solid #e6d28a;';
+          btn.innerHTML = '&#9646;&#9646; Pause ad'; btn.disabled = false;
+          btn.setAttribute('onclick', 'pubToggle(' + variant + ", 'pause')"); }}
+      }} else {{
+        if(badge) {{ badge.style.cssText = 'background:var(--paper-warm);color:var(--muted);border:1px solid var(--line);padding:2px 9px;border-radius:999px;font-size:0.72rem;';
+          badge.innerHTML = '&#9646;&#9646; Paused'; }}
+        if(btn) {{ btn.style.cssText = 'background:var(--green-soft);color:var(--green);border:1px solid #a9cbb4;';
+          btn.innerHTML = '&#9654; Go live'; btn.disabled = false;
+          btn.setAttribute('onclick', 'pubToggle(' + variant + ", 'resume')"); }}
+      }}
+    }} catch(e){{
+      alert('Could not ' + action + ' Version ' + variant + ': ' + e.message);
+      if(btn) {{ btn.disabled = false; btn.textContent = isResume ? '&#9654; Go live' : '&#9646;&#9646; Pause ad'; }}
+    }}
+  }};
+
+  async function loadPublishedAnalytics(){{
+    let d;
+    try{{
+      const r = await fetch('/meta-performance/{run_id}');
+      d = await r.json();
+    }} catch(e){{ return; }}
+    const variants = d.variants || [];
+    variants.forEach(function(v){{
+      const box = document.getElementById('pub-analytics-' + v.variant);
+      if(!box) return;
+      const imp  = v.impressions != null ? v.impressions.toLocaleString() : '—';
+      const clk  = v.clicks      != null ? v.clicks.toLocaleString()      : '—';
+      const ctr  = v.ctr         != null ? (v.ctr * 100).toFixed(2) + '%' : '—';
+      const cpl  = v.cpl         != null ? '₹' + Math.round(v.cpl)        : '—';
+      const spend= v.spend       != null ? '₹' + Math.round(v.spend)      : '—';
+      const leads= v.leads       != null ? v.leads.toLocaleString()        : '—';
+      box.innerHTML =
+        '<span style="margin-right:18px;"><b>' + imp  + '</b> <span style="color:var(--muted);">impressions</span></span>' +
+        '<span style="margin-right:18px;"><b>' + clk  + '</b> <span style="color:var(--muted);">clicks</span></span>' +
+        '<span style="margin-right:18px;"><b>' + ctr  + '</b> <span style="color:var(--muted);">CTR</span></span>' +
+        '<span style="margin-right:18px;"><b>' + leads+ '</b> <span style="color:var(--muted);">leads</span></span>' +
+        '<span style="margin-right:18px;"><b>' + cpl  + '</b> <span style="color:var(--muted);">CPL</span></span>' +
+        '<span><b>' + spend + '</b> <span style="color:var(--muted);">spent</span></span>';
+      if(v.rank_label){{
+        const clr = v.rank_label === 'Top performer' ? 'var(--green)' : 'var(--danger)';
+        box.insertAdjacentHTML('afterbegin',
+          '<span style="font-size:0.7rem;font-weight:700;color:' + clr + ';margin-right:12px;">'
+          + v.rank_label + '</span>');
+      }}
+    }});
+    if(d.note && !variants.length){{
+      document.querySelectorAll('[id^="pub-analytics-"]').forEach(function(b){{
+        b.innerHTML = '<span style="color:var(--muted);font-style:italic;">' + d.note + '</span>';
+      }});
+    }}
+  }}
+  if(document.readyState === 'loading'){{
+    document.addEventListener('DOMContentLoaded', loadPublishedAnalytics);
+  }} else {{
+    loadPublishedAnalytics();
+  }}
+}})();
+</script>"""
+
+    return cards_html + optimise_cta + script
 
 
 def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C901
@@ -3489,59 +4396,42 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
             'the declaration in Meta Ads Manager and add the location to the ad set there.</div>'
         )
 
-    cards = ""
+    # Build a compact published summary — no mock-up frames here.
+    live_rows = ""
     for result in meta_ads:
-        v  = result.get("variant", "?")
+        v = result.get("variant", "?")
         h, b = _copy(v)
-
         if result.get("dry_run"):
-            wd      = result.get("would_create", {}) or {}
-            cr      = wd.get("creative", {}) or {}
-            ad_info = wd.get("adset", {}) or {}
-            # prefer copy from ad_copy.md; fall back to would_create creative
+            wd = result.get("would_create", {}) or {}
+            cr = wd.get("creative", {}) or {}
             if not h: h = cr.get("headline", "")
-            if not b: b = cr.get("body", "")
-            bgt = ad_info.get("daily_budget_inr", budget)
-            badge = ('<span style="background:var(--warn-soft);color:var(--warn);border:1px solid #e6d28a;'
-                     'padding:3px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;">'
-                     'Preview</span>')
-            struct = (
-                f'<div style="margin-top:10px;padding:12px 14px;background:var(--paper-warm);'
-                f'border:1px solid var(--line);border-radius:10px;font-size:0.8rem;'
-                f'color:var(--ink-soft);line-height:1.9;">'
-                f'<div class="eyebrow" style="margin-bottom:4px;">What will be set up</div>'
-                f'<div><strong>Ad</strong> &nbsp;{_esc(prop)} &#8212; V{v} &nbsp;&middot;&nbsp; '
-                f'collect enquiries &nbsp;&middot;&nbsp; <span class="badge badge-muted">starts paused</span></div>'
-                f'<div><strong>Audience</strong> &nbsp;₹{bgt}/day &nbsp;&middot;&nbsp; '
-                f'{_esc(ad_info.get("geo") or "India")}</div>'
-                f'<div><strong>Button</strong> &nbsp;{_esc(cta_lbl)}</div>'
-                f'<div><strong>After enquiry</strong> &nbsp;{_esc(lp)}</div>'
-                f'</div>'
-            )
+            status_badge = ('<span style="background:var(--warn-soft);color:var(--warn);'
+                            'border:1px solid #e6d28a;padding:2px 9px;border-radius:999px;'
+                            'font-size:0.72rem;font-weight:600;">Preview</span>')
         else:
             cid  = result.get("campaign_id", "—")
             asid = result.get("adset_id", "—")
             aid  = result.get("ad_id", "—")
-            badge = ('<span style="background:var(--green-soft);color:var(--green);border:1px solid #a9cbb4;'
-                     'padding:3px 10px;border-radius:999px;font-size:0.72rem;">&#10003; Paused</span>')
-            struct = (
-                f'<div style="margin-top:10px;padding:12px 14px;background:var(--green-soft);'
-                f'border:1px solid #bcd6c4;border-radius:10px;font-size:0.8rem;'
-                f'color:var(--green);line-height:1.9;">'
-                f'<div class="eyebrow" style="color:var(--green-mid);margin-bottom:4px;">Set up on Meta — paused</div>'
-                f'<div>Your ad is ready in Meta Ads Manager and will not spend until you switch it on.</div>'
-                f'<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:0.76rem;color:var(--green-mid);">Reference IDs</summary>'
-                f'<div style="font-size:0.72rem;color:var(--ink-soft);margin-top:4px;">'
-                f'Campaign {_esc(cid)} &middot; Ad set {_esc(asid)} &middot; Ad {_esc(aid)}</div></details>'
-                f'</div>'
-            )
-
-        cards += _ad_card(v, h, b, badge, struct)
-
-    # Live-only intelligence (previews + signals + performance/optimisation).
-    real_ads = [a for a in meta_ads if not a.get("dry_run") and a.get("ad_id")]
-    if real_ads and not dry_run:
-        cards += _post_deploy_intel_html(run_id)
+            status_badge = ('<span style="background:var(--green-soft);color:var(--green);'
+                            'border:1px solid #a9cbb4;padding:2px 9px;border-radius:999px;'
+                            'font-size:0.72rem;">&#10003; Paused</span>')
+            ref_ids = (f'<span style="font-size:0.72rem;color:var(--muted);margin-left:8px;">'
+                       f'Campaign {_esc(cid)} &middot; Ad set {_esc(asid)} &middot; Ad {_esc(aid)}</span>')
+        headline_text = _esc(h) if h else '<em style="color:var(--muted);">(no headline)</em>'
+        live_rows += (
+            f'<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;'
+            f'border-bottom:1px solid var(--line);">'
+            f'<div style="min-width:80px;font-size:0.72rem;letter-spacing:0.1em;'
+            f'text-transform:uppercase;color:var(--muted);padding-top:2px;">Version {v}</div>'
+            f'<div style="flex:1;">'
+            f'<div style="font-size:0.92rem;font-weight:600;color:var(--ink);margin-bottom:3px;">'
+            f'{headline_text}</div>'
+            + (f'<div style="font-size:0.82rem;color:var(--ink-soft);">{_esc(b[:90])}{"…" if len(b)>90 else ""}</div>' if b else '') +
+            (ref_ids if not result.get("dry_run") else '') +
+            f'</div>'
+            f'<div style="flex-shrink:0;">{status_badge}</div>'
+            f'</div>'
+        )
 
     for err in dep_errors:
         v = err.get("variant", "?")
@@ -3552,15 +4442,30 @@ def _build_deploy_html(run_id: str, run: dict, brief: dict) -> str:  # noqa: C90
             hint = '<div style="margin-top:4px;font-size:0.8rem;color:var(--warn);">&#8594; You can fix this — adjust the setting and try again.</div>'
         else:
             hint = '<div style="margin-top:4px;font-size:0.8rem;color:var(--ink-soft);">&#8594; Saved to developer log — no action needed from you.</div>'
-        cards += (
-            f'<div style="margin-bottom:16px;padding:14px 16px;background:var(--danger-soft);'
-            f'border:1px solid #e6bdb6;border-radius:10px;font-size:0.85rem;color:var(--danger);">'
-            f'<strong>Version {v} couldn\'t be published.</strong><br>'
+        live_rows += (
+            f'<div style="padding:12px 0;border-bottom:1px solid var(--line);">'
+            f'<strong style="color:var(--danger);">Version {v} couldn\'t be published.</strong><br>'
             f'<span style="color:var(--ink);font-size:0.85rem;">{_esc(msg)}</span>'
             f'{hint}</div>'
         )
 
-    return top_note + cards
+    nav_to_published = (
+        '<div style="margin-top:18px;">'
+        '<button class="btn btn-sm" onclick="showTab(\'published\')">'
+        'View published ads &amp; analytics &#8594;</button>'
+        '</div>'
+    ) if not dry_run else ""
+
+    summary_box = (
+        f'<div style="background:var(--paper-warm);border:1px solid var(--line);'
+        f'border-radius:10px;padding:16px 20px;margin-bottom:16px;">'
+        f'<div class="eyebrow" style="margin-bottom:10px;">What was published</div>'
+        + live_rows +
+        nav_to_published +
+        f'</div>'
+    )
+
+    return top_note + summary_box
 
 
 _IDEOGRAM_SPEEDS = {"TURBO", "DEFAULT", "QUALITY"}
@@ -4197,10 +5102,12 @@ class AudienceSave(BaseModel):
     radius_km: int = 25
     age_min: int = 28
     age_max: int = 65
-    interests: list[dict] = Field(default_factory=list)   # [{id, name}]
-    behaviours: list[dict] = Field(default_factory=list)   # [{id, name}]
-    nri_countries: list[str] = Field(default_factory=list) # ISO-2 codes, e.g. ["AE","US","GB"]
-    end_time: str = ""                                     # ISO 8601, optional
+    interests: list[dict] = Field(default_factory=list)                    # [{id, name}]
+    behaviours: list[dict] = Field(default_factory=list)                   # [{id, name}]
+    nri_countries: list[str] = Field(default_factory=list)                 # ISO-2 codes
+    end_time: str = ""                                                     # ISO 8601, optional
+    included_custom_audiences: list[dict] = Field(default_factory=list)    # [{id, name, subtype}]
+    excluded_custom_audiences: list[dict] = Field(default_factory=list)    # [{id, name, subtype}]
 
 
 @app.get("/audience/{run_id}")
@@ -4242,6 +5149,40 @@ def audience_search(q: str, type: str = "interest"):
         return {"results": _mt.search_interests(q, token)}
     except Exception as exc:
         return {"results": [], "error": str(exc)}
+
+
+@app.get("/meta-saved-audiences")
+def meta_saved_audiences():
+    """Fetch custom audiences from the Meta ad account for the audience picker."""
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
+    ad_account_id = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+    if not ad_account_id:
+        raise HTTPException(status_code=503, detail="META_AD_ACCOUNT_ID not set.")
+    from pikorua_adflow.tools import meta_tool as _mtt
+    try:
+        data = _mtt._get(
+            f"act_{ad_account_id}/customaudiences",
+            token,
+            params={"fields": "id,name,subtype,approximate_count_lower_bound", "limit": "100"},
+        )
+        # Sort: LOOKALIKE first, then CUSTOM, alphabetical within each group
+        rows = sorted(
+            data.get("data", []),
+            key=lambda x: (x.get("subtype") != "LOOKALIKE", x.get("name", "").lower()),
+        )
+        return {"audiences": [
+            {
+                "id": str(a["id"]),
+                "name": a.get("name", ""),
+                "subtype": a.get("subtype", ""),
+                "approximate_count": a.get("approximate_count_lower_bound", 0),
+            }
+            for a in rows
+        ]}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 @app.post("/deploy-to-meta/{run_id}")
@@ -4564,6 +5505,7 @@ def _targeting_basis(before_spec: dict, after_spec: dict) -> tuple[str, float]:
     Naive on purpose — the optimization_tracker learns the correction factor:
       - adding countries → assume reach roughly doubles (raw 2.0)
       - changing the city radius → reach scales with the area ratio (r2/r1)^2
+      - adding custom/lookalike audiences → minor raw reach change but higher relevance
     """
     before_c, after_c = _spec_countries(before_spec), _spec_countries(after_spec)
     if after_c - before_c:
@@ -4571,6 +5513,12 @@ def _targeting_basis(before_spec: dict, after_spec: dict) -> tuple[str, float]:
     rb, ra = _spec_radius(before_spec), _spec_radius(after_spec)
     if rb and ra and rb != ra:
         return "radius_scale", (ra / rb) ** 2
+    before_custom = {a.get("id") for a in (before_spec.get("custom_audiences") or [])}
+    after_custom = {a.get("id") for a in (after_spec.get("custom_audiences") or [])}
+    if after_custom - before_custom:
+        # Custom/lookalike audiences don't expand reach but concentrate delivery to
+        # higher-intent users — the tracker will learn the CPL improvement over time.
+        return "add_custom_audience", 1.05
     return "targeting_other", 1.0
 
 
@@ -4598,6 +5546,7 @@ def meta_performance(run_id: str):
     from pikorua_adflow.tools.meta_tool import (fetch_insights,
                                                 fetch_relevance_diagnostics,
                                                 fetch_reach_estimate)
+    from pikorua_adflow.analytics import optimization_tracker as _tracker
     token = os.getenv("META_ACCESS_TOKEN", "")
     account = os.getenv("META_AD_ACCOUNT_ID", "")
     rf = Path(run["review_folder"])
@@ -4605,9 +5554,10 @@ def meta_performance(run_id: str):
     base_audience = _effective_audience(rf, brief)
     base_budget = int(brief.get("daily_budget_inr", 1000))
 
-    # One reach estimate for the shared audience drives broaden/narrow recs.
+    # One reach estimate for the shared audience (all variants share targeting).
     reach = fetch_reach_estimate(account, _mt.build_targeting_spec(base_audience), token)
     reach_mau = reach.get("estimate_mau", 0)
+    base_spec = _mt.build_targeting_spec(base_audience)
 
     diagnostics = fetch_relevance_diagnostics([a["ad_id"] for a in ads], token)
 
@@ -4632,75 +5582,159 @@ def meta_performance(run_id: str):
             aud["interests"] = resolved
         return _mt.build_targeting_spec(aud)
 
-    variants_out = []
+    def _attach_impact(rec: dict) -> None:
+        """Attach a predicted impact dict to a rec in-place."""
+        if rec["action"] == "targeting" and rec["params"].get("targeting_spec"):
+            ts = rec["params"]["targeting_spec"]
+            basis, raw = _targeting_basis(base_spec, ts)
+            pred = _tracker.predict(basis, raw, reach_mau)
+            has_custom = bool(ts.get("custom_audiences") or ts.get("excluded_custom_audiences"))
+            rec["impact"] = {
+                "metric": "reach", "before": reach_mau, "measurable_now": True, **pred,
+                **({"custom_audience_note": "Custom audience adds ad relevance — actual CPL "
+                    "improvement may exceed reach estimate"} if has_custom else {}),
+            }
+        elif rec["action"] == "budget":
+            new_b = int(rec["params"].get("daily_budget_inr", base_budget))
+            pred = _tracker.predict("budget_linear", new_b / max(base_budget, 1), None)
+            rec["impact"] = {"metric": "leads", "before": None, "measurable_now": False, **pred}
+
+    # --- Campaign-level recs (audience is shared — shown once, not per variant) ---
+    campaign_recs: list[dict] = []
+    first_variant = ads[0].get("variant", 1) if ads else 1
+    if reach_mau and reach_mau < 100_000:
+        rec = {"source": "meta", "action": "targeting", "severity": "red",
+               "label": "Broaden audience (+15km)",
+               "detail": f"Audience is only ~{reach_mau:,} people — widen the radius for all variants.",
+               "params": {"targeting_spec": _spec_with(radius_delta=15)},
+               "apply_to_variant": first_variant}
+        _attach_impact(rec)
+        campaign_recs.append(rec)
+    elif reach_mau and reach_mau > 4_000_000:
+        rec = {"source": "meta", "action": "targeting", "severity": "amber",
+               "label": "Narrow audience (−10km)",
+               "detail": f"Audience is ~{reach_mau:,} people — tighten the radius for all variants.",
+               "params": {"targeting_spec": _spec_with(radius_delta=-10)},
+               "apply_to_variant": first_variant}
+        _attach_impact(rec)
+        campaign_recs.append(rec)
+
+    # --- Pass 1: collect raw metrics for all variants ---
+    _raw: list[dict] = []
     for a in ads:
-        vnum = a.get("variant")
-        ad_id = a["ad_id"]
-        adset_id = a.get("adset_id", "")
-        insights = fetch_insights(ad_id, token)
+        insights = fetch_insights(a["ad_id"], token)
         metrics = _metrics_from_insight(insights[0]) if insights else {}
-        diag = diagnostics.get(ad_id, {})
-        quality = diag.get("quality_ranking", "")
+        _raw.append({
+            "variant": a.get("variant"), "ad_id": a["ad_id"],
+            "adset_id": a.get("adset_id", ""),
+            "metrics": metrics, "diag": diagnostics.get(a["ad_id"], {}),
+        })
+
+    # --- Cross-variant stats (only for variants that have actual spend) ---
+    _with_spend = [r for r in _raw if (r["metrics"].get("impressions") or 0) > 0]
+    avg_cpl: float | None = None
+    avg_ctr: float | None = None
+    best_cpl_v: int | None = None
+    best_ctr_v: int | None = None
+
+    if len(_with_spend) >= 2:
+        cpl_pairs = [(r["variant"], r["metrics"]["cpl"])
+                     for r in _with_spend if r["metrics"].get("cpl") is not None]
+        ctr_pairs = [(r["variant"], float(r["metrics"].get("ctr") or 0))
+                     for r in _with_spend]
+        if cpl_pairs:
+            avg_cpl = sum(c[1] for c in cpl_pairs) / len(cpl_pairs)
+            best_cpl_v = min(cpl_pairs, key=lambda x: x[1])[0]
+        if ctr_pairs:
+            avg_ctr = sum(c[1] for c in ctr_pairs) / len(ctr_pairs)
+            best_ctr_v = max(ctr_pairs, key=lambda x: x[1])[0]
+
+    # --- Pass 2: per-variant recs using cross-variant context ---
+    variants_out: list[dict] = []
+    for r in _raw:
+        vnum = r["variant"]
+        metrics = r["metrics"]
+        quality = r["diag"].get("quality_ranking", "")
+        cpl = metrics.get("cpl")
+        ctr = float(metrics.get("ctr") or 0)
+        freq = float(metrics.get("frequency") or 0)
+        has_spend = (metrics.get("impressions") or 0) > 0
 
         recs: list[dict] = []
-        if reach_mau and reach_mau < 100_000:
-            recs.append({"source": "meta", "action": "targeting", "severity": "red",
-                         "label": "Broaden audience (+15km)",
-                         "detail": f"Audience is only ~{reach_mau:,} people — widen the radius.",
-                         "params": {"targeting_spec": _spec_with(radius_delta=15)}})
-        elif reach_mau and reach_mau > 4_000_000:
-            recs.append({"source": "meta", "action": "targeting", "severity": "amber",
-                         "label": "Narrow audience (−10km)",
-                         "detail": f"Audience is ~{reach_mau:,} people — tighten the radius.",
-                         "params": {"targeting_spec": _spec_with(radius_delta=-10)}})
-        if quality == "BELOW_AVERAGE_10" or quality == "BELOW_AVERAGE":
+        rank_label: str | None = None
+        cpl_rec_added = False
+
+        # -- Comparative recs (only when ≥2 variants have actual spend) --
+        if len(_with_spend) >= 2 and has_spend:
+            if avg_cpl is not None and cpl is not None:
+                if cpl > 2.0 * avg_cpl:
+                    recs.append({
+                        "source": "comparative", "action": "pause", "severity": "red",
+                        "label": f"₹{round(cpl)} CPL — {round(cpl / avg_cpl, 1)}× campaign average",
+                        "detail": (f"V{vnum} costs ₹{round(cpl)} per enquiry vs ₹{round(avg_cpl)} average."
+                                   + (f" Reallocate budget to V{best_cpl_v}." if best_cpl_v and best_cpl_v != vnum else "")),
+                        "params": {},
+                    })
+                    rank_label = "Underperforming"
+                    cpl_rec_added = True
+                elif cpl < 0.65 * avg_cpl and quality in ("ABOVE_AVERAGE",):
+                    recs.append({
+                        "source": "comparative", "action": "budget", "severity": "green",
+                        "label": "Best CPL — scale up 20%",
+                        "detail": (f"V{vnum} at ₹{round(cpl)}/enquiry is "
+                                   f"{round(avg_cpl / cpl, 1)}× better than average."),
+                        "params": {"daily_budget_inr": int(base_budget * 1.2),
+                                   "base_budget": base_budget},
+                    })
+                    rank_label = "Top performer"
+                    cpl_rec_added = True
+
+            if avg_ctr is not None and avg_ctr > 0 and not rank_label and ctr > 0:
+                if ctr < 0.5 * avg_ctr and vnum != best_ctr_v:
+                    recs.append({
+                        "source": "comparative", "action": "note", "severity": "amber",
+                        "label": f"CTR {round(ctr, 2)}% — {round(avg_ctr / ctr, 1)}× below average",
+                        "detail": (f"V{vnum} click-through ({ctr}%) is well below the campaign average "
+                                   f"({round(avg_ctr, 2)}%). Swap the image or headline."),
+                        "params": {},
+                    })
+
+        # -- Individual recs (not audience-level — those live in campaign_recs) --
+        if quality in ("BELOW_AVERAGE_10", "BELOW_AVERAGE"):
             recs.append({"source": "meta", "action": "note", "severity": "amber",
                          "label": "Swap the creative",
                          "detail": "Quality ranking is below average — try a fresh image/headline "
                                    "from the Image Prompts tab, then re-publish.",
                          "params": {}})
-        if metrics.get("frequency", 0) > 3.0:
+        if freq > 3.0:
             recs.append({"source": "meta", "action": "targeting", "severity": "amber",
                          "label": "Expand to NRI countries",
-                         "detail": f"Frequency is {metrics['frequency']} — the same people are "
+                         "detail": f"Frequency is {freq} — the same people are "
                                    "seeing it too often. Widen the audience.",
                          "params": {"targeting_spec": _spec_with(add_nri=True)}})
-        cpl = metrics.get("cpl")
-        if cpl is not None and cpl > 500:
+        if cpl is not None and cpl > 500 and not cpl_rec_added:
             recs.append({"source": "meta", "action": "pause", "severity": "red",
                          "label": "Pause this variant",
                          "detail": f"Cost per enquiry is ₹{cpl} — above the ₹500 ceiling.",
                          "params": {}})
-        if quality in ("ABOVE_AVERAGE",) and cpl is not None and cpl < 300:
+        if quality in ("ABOVE_AVERAGE",) and cpl is not None and cpl < 300 and not cpl_rec_added:
             recs.append({"source": "meta", "action": "budget", "severity": "green",
                          "label": "Scale up 20%",
                          "detail": f"Strong quality and ₹{cpl} per enquiry — give it more budget.",
                          "params": {"daily_budget_inr": int(base_budget * 1.2),
                                     "base_budget": base_budget}})
 
-        # Attach a PREDICTED impact (calibrated heuristic) to each actionable rec
-        # so the user sees the expected change before clicking Apply.
-        from pikorua_adflow.analytics import optimization_tracker as _tracker
-        base_spec = _mt.build_targeting_spec(base_audience)
         for rec in recs:
-            if rec["action"] == "targeting" and rec["params"].get("targeting_spec"):
-                basis, raw = _targeting_basis(base_spec, rec["params"]["targeting_spec"])
-                pred = _tracker.predict(basis, raw, reach_mau)
-                rec["impact"] = {"metric": "reach", "before": reach_mau,
-                                 "measurable_now": True, **pred}
-            elif rec["action"] == "budget":
-                new_b = int(rec["params"].get("daily_budget_inr", base_budget))
-                pred = _tracker.predict("budget_linear", new_b / max(base_budget, 1), None)
-                rec["impact"] = {"metric": "leads", "before": None,
-                                 "measurable_now": False, **pred}
+            _attach_impact(rec)
 
         variants_out.append({
-            "variant": vnum, "ad_id": ad_id, "adset_id": adset_id,
-            "metrics": metrics, "diagnostics": diag, "recommendations": recs,
+            "variant": vnum, "ad_id": r["ad_id"], "adset_id": r["adset_id"],
+            "metrics": metrics, "diagnostics": r["diag"],
+            "recommendations": recs, "rank_label": rank_label,
         })
 
-    from pikorua_adflow.analytics import optimization_tracker as _tracker
-    return {"variants": variants_out, "crm_signals": _crm_optimisation_signals(),
+    return {"variants": variants_out, "campaign_recs": campaign_recs,
+            "crm_signals": _crm_optimisation_signals(),
             "reach_mau": reach_mau, "learning": _tracker.history(run_id)}
 
 
@@ -4738,8 +5772,82 @@ def meta_optimize(run_id: str, req: MetaOptimizeReq):
         elif req.action == "resume":
             _mtool.resume_variant(ad_id, token)
             ad["status"] = "ACTIVE"
+        elif req.action == "add_interests":
+            from pikorua_adflow.tools import meta_targeting as _mt
+            from pikorua_adflow.tools.meta_tool import fetch_reach_estimate
+            from pikorua_adflow.analytics import optimization_tracker as _tracker
+            rf = Path(run["review_folder"])
+            brief = run.get("brief", {})
+            base_audience = dict(_effective_audience(rf, brief))
+            # Dispatch on params.action for special cases, otherwise treat as interest list.
+            special = req.params.get("action", "")
+            interests = req.params.get("add_interests", req.params.get("interests", []))
+            if special == "add_nri":
+                base_audience["nri_countries"] = list(dict.fromkeys(
+                    (base_audience.get("nri_countries") or []) + ["AE", "US", "GB"]
+                ))
+                label = "Expand to NRI countries (UAE/US/GB)"
+            elif special == "broaden_radius":
+                cur = int(base_audience.get("radius_km") or _mt.DEFAULT_RADIUS_KM)
+                base_audience["radius_km"] = min(_mt._RADIUS_MAX_KM, cur + 15)
+                label = "Broaden geo radius +15km"
+            elif interests:
+                resolved = list(base_audience.get("interests") or [])
+                for nm in interests:
+                    try:
+                        hits = _mt.search_interests(nm, token, limit=1)
+                    except Exception:
+                        hits = []
+                    if hits:
+                        resolved.append({"id": hits[0]["id"], "name": hits[0]["name"]})
+                base_audience["interests"] = resolved
+                label = "Add interests: " + ", ".join(interests)
+            else:
+                raise HTTPException(status_code=400, detail="No interests supplied.")
+            spec = _mt.build_targeting_spec(base_audience)
+            live_spec = _live_adset_targeting(adset_id, token)
+            before_reach = 0
+            try:
+                before_reach = fetch_reach_estimate(
+                    account, live_spec if live_spec else spec, token
+                ).get("estimate_mau", 0)
+            except Exception:
+                pass
+            basis, raw = _targeting_basis(live_spec if live_spec else spec, spec)
+            pred = _tracker.predict(basis, raw, before_reach)
+            rid = _tracker.open_record(
+                run_id=run_id, variant=req.variant, action="targeting",
+                basis=basis, metric="reach",
+                label=label,
+                before=before_reach, raw_multiplier=raw, expected=pred,
+            )
+            apply_error: str | None = None
+            try:
+                _mtool.update_adset_targeting(adset_id, spec, token)
+            except Exception as _ae:
+                from pikorua_adflow.tools.errors import humanize as _humanize
+                apply_error = _humanize(_ae)["message"]
+            after_reach: int | None = None
+            if not apply_error:
+                try:
+                    after_reach = fetch_reach_estimate(
+                        account, spec, token
+                    ).get("estimate_mau", 0)
+                except Exception:
+                    pass
+            if after_reach is not None:
+                _tracker.settle(rid, after_reach)
+            impact = {
+                "metric": "reach", "measurable_now": True,
+                "before": before_reach, "actual_after": after_reach,
+                "predicted_pct": pred["expected_pct"],
+                "apply_error": apply_error,
+            }
         elif req.action == "budget":
             budget = int(req.params.get("daily_budget_inr", 0))
+            if not budget and req.params.get("change_pct") is not None:
+                base = int(run.get("brief", {}).get("daily_budget_inr", 1000))
+                budget = round(base * (1 + float(req.params["change_pct"]) / 100))
             if budget <= 0:
                 raise HTTPException(status_code=400, detail="No budget supplied.")
             # Lead-volume impact can't be measured until the ad spends; record the
@@ -4832,6 +5940,127 @@ def meta_optimize_history(run_id: str):
     """Predicted-vs-actual log + learned calibration for this run's optimisations."""
     from pikorua_adflow.analytics import optimization_tracker as _tracker
     return _tracker.history(run_id)
+
+
+# --------------------------------------------------------------------------- #
+# Phase 2: Meta recommendations + Advantage+ feature toggles
+# --------------------------------------------------------------------------- #
+
+class ApplyRecommendationReq(BaseModel):
+    recommendation_id: str
+
+
+class AdvantageToggleReq(BaseModel):
+    adset_id: str
+    enable: bool
+
+
+class CboToggleReq(BaseModel):
+    campaign_id: str
+    enable: bool
+
+
+@app.get("/meta-recommendations/{run_id}")
+def meta_recommendations_endpoint(run_id: str):
+    """Fetch Meta Ads Manager recommendations filtered to this campaign's ad sets.
+    Also returns Advantage+ Audience state for the first ad set."""
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    ads = _real_meta_ads(run)
+    if not ads:
+        return {"recommendations": [], "note": "Publish live ads first to fetch recommendations."}
+
+    import os
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    ad_account_id = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+    if not token or not ad_account_id:
+        raise HTTPException(status_code=503, detail="META credentials not configured.")
+
+    from pikorua_adflow.tools.meta_tool import fetch_recommendations, _get as _mt_get
+
+    adset_ids = [a["adset_id"] for a in ads if a.get("adset_id")]
+    campaign_ids = list({a["campaign_id"] for a in ads if a.get("campaign_id")})
+
+    recs = fetch_recommendations(ad_account_id, token, adset_ids)
+
+    # Read Advantage+ Audience state from first ad set.
+    advantage_on = False
+    if adset_ids:
+        try:
+            td = _mt_get(adset_ids[0], token, {"fields": "targeting_automation"})
+            advantage_on = td.get("targeting_automation", {}).get("advantage_audience", 0) == 1
+        except Exception:
+            pass
+
+    # Read CBO state from campaign.
+    cbo_on = False
+    if campaign_ids:
+        try:
+            cd = _mt_get(campaign_ids[0], token, {"fields": "is_adset_budget_sharing_enabled"})
+            cbo_on = bool(cd.get("is_adset_budget_sharing_enabled", False))
+        except Exception:
+            pass
+
+    return {
+        "recommendations": recs,
+        "advantage_audience_on": advantage_on,
+        "cbo_on": cbo_on,
+        "adset_ids": adset_ids,
+        "campaign_ids": campaign_ids,
+    }
+
+
+@app.post("/meta-apply-recommendation/{run_id}")
+def meta_apply_recommendation(run_id: str, req: ApplyRecommendationReq):
+    """Apply a Meta recommendation by its ID."""
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    import os
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
+    from pikorua_adflow.tools.meta_tool import apply_recommendation
+    ok, data = apply_recommendation(req.recommendation_id, token)
+    if ok:
+        return {"ok": True}
+    err = data.get("error", data)
+    raise HTTPException(status_code=400, detail=err.get("message", json.dumps(err)))
+
+
+@app.post("/meta-toggle-advantage/{run_id}")
+def meta_toggle_advantage(run_id: str, req: AdvantageToggleReq):
+    """Toggle Advantage+ Audience on/off for a specific ad set."""
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    import os
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
+    from pikorua_adflow.tools.meta_tool import toggle_advantage_audience
+    ok = toggle_advantage_audience(req.adset_id, req.enable, token)
+    if ok:
+        return {"ok": True, "advantage_audience": req.enable}
+    raise HTTPException(status_code=400, detail="Failed to toggle Advantage+ Audience.")
+
+
+@app.post("/meta-toggle-cbo/{run_id}")
+def meta_toggle_cbo(run_id: str, req: CboToggleReq):
+    """Toggle Campaign Budget Optimisation on/off."""
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    import os
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
+    from pikorua_adflow.tools.meta_tool import toggle_cbo
+    ok = toggle_cbo(req.campaign_id, req.enable, token)
+    if ok:
+        return {"ok": True, "cbo": req.enable}
+    raise HTTPException(status_code=400, detail="Failed to toggle CBO.")
 
 
 @app.get("/image/{run_id}/{filename}")
@@ -4958,6 +6187,29 @@ def upload_crm_audience(req: CRMAudienceRequest):
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
 
+    # Persist returned audience IDs to a registry so they can be loaded into
+    # the audience picker without a round-trip to Meta each time.
+    _AUDIENCES_REGISTRY = Path("outputs") / "meta_audiences_registry.json"
+    try:
+        existing: list[dict] = json.loads(_AUDIENCES_REGISTRY.read_text()) if _AUDIENCES_REGISTRY.exists() else []
+    except (ValueError, OSError):
+        existing = []
+    new_entries: list[dict] = []
+    for key in ("custom_audience_id", "lookalike_id",
+                "good_custom_audience_id", "good_lookalike_id", "bad_custom_audience_id"):
+        aid = result.get(key)
+        name = result.get(key.replace("_id", "_name"), key.replace("_id", "").replace("_", " ").title())
+        if aid and not any(e.get("id") == str(aid) for e in existing):
+            entry = {"id": str(aid), "name": str(name), "subtype": "LOOKALIKE" if "lookalike" in key else "CUSTOM"}
+            existing.append(entry)
+            new_entries.append(entry)
+    try:
+        _AUDIENCES_REGISTRY.parent.mkdir(parents=True, exist_ok=True)
+        _AUDIENCES_REGISTRY.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+    except OSError:
+        pass
+    result["registry_saved"] = len(new_entries)
+
     return result
 
 
@@ -4991,6 +6243,216 @@ def _crm_report(force: bool = False) -> dict:
     return report
 
 
+# --------------------------------------------------------------------------- #
+# Phase 4 — CRM Strategic Insights (Claude API, cached 4h)
+# --------------------------------------------------------------------------- #
+_INSIGHTS_PATH = Path("outputs") / "crm_strategic_insights.json"
+_INSIGHTS_TTL_SECS = 4 * 60 * 60
+
+
+def _insights_cache_valid() -> bool:
+    if not _INSIGHTS_PATH.exists():
+        return False
+    try:
+        data = json.loads(_INSIGHTS_PATH.read_text(encoding="utf-8"))
+        ts = datetime.fromisoformat(data.get("generated_at", "2000-01-01"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - ts).total_seconds() < _INSIGHTS_TTL_SECS
+    except Exception:
+        return False
+
+
+def _build_crm_summary_text(rep: dict) -> str:
+    """Condense full_report() into a compact text brief for the Claude prompt."""
+    lines = [
+        f"Total leads: {rep.get('total_leads', 0)}",
+    ]
+    trend = rep.get("volume_trend", {})
+    if trend.get("peak_month"):
+        lines.append(f"Peak month: {trend['peak_month']} ({trend.get('peak_count', 0)} leads)")
+    if trend.get("growth_rate") is not None:
+        lines.append(f"Recent growth: {trend['growth_rate']:+g}% vs prior month")
+
+    geo = rep.get("geography", {})
+    top_cities = geo.get("top_cities", [])[:5]
+    if top_cities:
+        lines.append("Top cities: " + ", ".join(f"{c} ({n})" for c, n in top_cities))
+
+    seg = rep.get("budget_segments", {})
+    seg_parts = []
+    for b in ["<5Cr", "5–7Cr", "7–10Cr", "10Cr+", "Unknown"]:
+        d = seg.get(b, {})
+        if d.get("count"):
+            seg_parts.append(f"{b}: {d['count']} leads ({d.get('pct', 0):g}%, quality {d.get('avg_quality_score', 0):g}%)")
+    if seg_parts:
+        lines.append("Budget segments:\n  " + "\n  ".join(seg_parts))
+
+    profs = rep.get("professions", {}).get("industries", [])[:8]
+    if profs:
+        prof_parts = [f"{p['industry']}: {p['count']} ({p.get('quality_rate', 0):g}% quality)" for p in profs]
+        lines.append("Top professions:\n  " + "\n  ".join(prof_parts))
+
+    funnel = rep.get("lead_quality", {}).get("stages", [])
+    if funnel:
+        funnel_parts = [f"{s['stage']}: {s['count']}" for s in funnel]
+        lines.append("Lead funnel: " + " → ".join(funnel_parts))
+
+    attr = rep.get("attribution", {})
+    attr_parts = []
+    for name, d in list(attr.items())[:8]:
+        attr_parts.append(f"{name}: {d['count']} leads, quality {d.get('quality_rate', 0):g}%")
+    if attr_parts:
+        lines.append("Campaign attribution:\n  " + "\n  ".join(attr_parts))
+
+    profiles = rep.get("top_profiles", [])[:5]
+    if profiles:
+        prof_lines = []
+        for p in profiles:
+            pr = p.get("profile", {})
+            prof_lines.append(
+                f"{pr.get('industry','?')}, ₹{pr.get('budget','?')}, {pr.get('city','?')}: "
+                f"{p['count']} leads, {p.get('quality_rate', 0):g}% quality"
+            )
+        lines.append("Top converting profiles:\n  " + "\n  ".join(prof_lines))
+
+    return "\n".join(lines)
+
+
+@app.get("/crm-strategic-insights")
+def crm_strategic_insights(force: bool = False):
+    """5–7 visionary CRM insights from Claude via OpenRouter, cached 4h to disk."""
+    if not force and _insights_cache_valid():
+        try:
+            return json.loads(_INSIGHTS_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    rep = _crm_report()
+    if not rep or rep.get("total_leads", 0) == 0:
+        return {"error": "No CRM data available. Load leads first.", "insights": []}
+
+    summary = _build_crm_summary_text(rep)
+
+    system_prompt = (
+        "You are a razor-sharp chief marketing strategist advising Pikorua Realty — "
+        "a luxury real estate broker in India (₹2Cr+ properties, HNI and NRI buyers). "
+        "Your job is to read CRM data cold and surface the non-obvious moves a Steve Jobs "
+        "or Elon Musk would make: contrarian bets, segments to go all-in on, segments to cull, "
+        "10× leverage ideas, and product-framing shifts that change how the brand is perceived. "
+        "You think in first principles, not marketing platitudes."
+    )
+
+    user_prompt = f"""Here is the current CRM intelligence snapshot for Pikorua Realty:
+
+{summary}
+
+CONTEXT YOU MUST FACTOR IN (do not surface these as insights — they are already known):
+- Pikorua deliberately targets Ahmedabad. Geographic concentration there is intentional, not a risk.
+- Pikorua sells ₹5Cr+ luxury properties. That budget segment dominating is expected, not an insight.
+- The charts already show: budget distribution, city split, profession breakdown, and funnel stage counts. Do NOT restate any of these as standalone insights — the user can already see them.
+- Any insight that simply describes what is visible in a single metric (e.g. "most leads are from Ahmedabad", "₹5Cr+ dominates") is useless. Reject it.
+
+WHAT MAKES A REAL INSIGHT:
+- A finding that requires crossing two or more dimensions (e.g. a profession segment that has high volume but zero quality conversion — that is a budget/targeting leak)
+- An anomaly that contradicts expectations (e.g. a normally strong segment that is now underperforming)
+- A comparison between segments that reveals a counter-intuitive gap (e.g. ₹7–10Cr vs ₹10Cr+ quality rates diverge unexpectedly)
+- A funnel breakdown (e.g. why a specific stage has a cliff-drop)
+- An absence that matters (e.g. a segment present in volume but absent in quality)
+
+Give me 6–8 strategic insights split into two scopes:
+
+- scope "campaign": 2–3 insights directly applicable to the Meta ad campaign (targeting or budget changes only). These will surface in the live campaign optimisation panel with one-click apply buttons.
+- scope "strategic": 4–5 insights the business must act on physically — messaging rewrites, product positioning, channel mix, timing strategy, or operations/process fixes. These appear on the CRM dashboard as read-only intelligence.
+
+Each insight must have ALL of these fields:
+1. "title": punchy 3–6 word title (ALL CAPS)
+2. "finding": the specific cross-dimensional or anomalous finding (1 sentence, must cite actual numbers from the data)
+3. "action": the specific action it implies (1–2 sentences, written as a direct instruction)
+4. "confidence": HIGH / MEDIUM / SPECULATIVE
+5. "category": targeting | budget | messaging | product | channel | timing | process
+6. "scope": "campaign" or "strategic"
+7. "params": REQUIRED for scope "campaign" only — structured action parameters:
+   - For targeting category: {{"add_interests": ["interest name", ...]}} to add Meta audience interests, OR {{"action": "add_nri"}} to expand to NRI countries, OR {{"action": "broaden_radius"}} to widen geo radius
+   - For budget category: {{"change_pct": 20}} (positive = increase %, negative = decrease %)
+   Omit "params" entirely for strategic scope.
+
+Format as JSON array. Return ONLY the JSON array. No preamble, no markdown, no explanation.
+[
+  {{
+    "title": "TITLE HERE",
+    "finding": "The cross-dimensional or anomalous finding with specific numbers...",
+    "action": "What to do about it...",
+    "confidence": "HIGH|MEDIUM|SPECULATIVE",
+    "category": "targeting|messaging|budget|product|channel|timing|process",
+    "scope": "campaign|strategic",
+    "params": {{}}
+  }},
+  ...
+]"""
+
+    or_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not or_key:
+        return {"error": "OPENROUTER_API_KEY not set in .env", "insights": []}
+
+    try:
+        import urllib.request as _urlreq
+        payload = json.dumps({
+            "model": "anthropic/claude-sonnet-4-6",
+            "max_tokens": 3000,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }).encode("utf-8")
+        req = _urlreq.Request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {or_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://pikorua.in",
+                "X-Title": "Pikorua CRM Strategic Insights",
+            },
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=60) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        raw = body["choices"][0]["message"]["content"].strip()
+        # Strip accidental markdown fences
+        raw = re.sub(r"^```[a-z]*\n?", "", raw, flags=re.MULTILINE)
+        raw = re.sub(r"\n?```\s*$", "", raw)
+        # Extract just the JSON array in case of surrounding text
+        m = re.search(r"\[.*\]", raw, re.DOTALL)
+        if m:
+            raw = m.group(0)
+        # Fix common LLM JSON issues: trailing commas before ] or }
+        raw = re.sub(r",\s*([}\]])", r"\1", raw)
+        # Replace curly/smart quotes that break JSON parsing
+        raw = raw.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+        insights = json.loads(raw)
+    except Exception as exc:
+        try:
+            from pikorua_adflow.tools.errors import explain_and_log
+            explain_and_log("CRM strategic insights", exc)
+        except Exception:
+            pass
+        return {"error": str(exc), "insights": []}
+
+    result = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "total_leads": rep.get("total_leads", 0),
+        "insights": insights,
+    }
+    try:
+        _INSIGHTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _INSIGHTS_PATH.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+    return result
+
+
 @app.get("/crm-analytics/summary")
 def crm_analytics_summary():
     """Full CRM analytics report (cached, 4h TTL)."""
@@ -5000,6 +6462,11 @@ def crm_analytics_summary():
 @app.get("/crm-analytics/refresh")
 def crm_analytics_refresh():
     """Re-fetch Supabase and bust the cache, then return the fresh report."""
+    if _INSIGHTS_PATH.exists():
+        try:
+            _INSIGHTS_PATH.unlink()
+        except Exception:
+            pass
     return _crm_report(force=True)
 
 
@@ -5121,7 +6588,7 @@ def crm_dashboard():
     # --- Budget segments ---
     seg = rep["budget_segments"]
     seg_items = [(b, seg[b]["count"], f'{seg[b]["count"]} · {seg[b]["pct"]:g}% · {seg[b]["avg_quality_score"]:g}% qual')
-                 for b in ["<1Cr", "1–2Cr", "2–5Cr", "5Cr+", "Unknown"] if seg[b]["count"]]
+                 for b in ["<5Cr", "5–7Cr", "7–10Cr", "10Cr+", "Unknown"] if seg[b]["count"]]
     budget_svg = _svg_hbars(seg_items, color="#C9A84C")
 
     # --- Top professions ---
@@ -5187,6 +6654,20 @@ def crm_dashboard():
     </div>
   </div>
 
+  <!-- Strategic Intelligence (Phase 4) — lazy-loaded via JS -->
+  <div class="card" id="si-card" style="margin-bottom:1.4rem;padding:1.3rem 1.5rem;">
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <div style="flex:1;">
+        <div class="section-title" style="margin-bottom:0.2rem;">Strategic Intelligence</div>
+        <div class="section-sub" style="margin:0;">AI-generated insights from your CRM data</div>
+      </div>
+      <button class="btn btn-sm" id="si-refresh-btn" onclick="siLoad(true)" style="white-space:nowrap;">Regenerate</button>
+    </div>
+    <div id="si-body" style="margin-top:1.1rem;">
+      <span style="color:var(--ink-soft);font-size:0.9rem;">Loading insights…</span>
+    </div>
+  </div>
+
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:1.4rem;">
     <div class="card">
       <div class="section-title">Lead funnel</div>
@@ -5237,17 +6718,21 @@ def _crm_dashboard_page(body: str, source: str) -> str:
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   {_theme_fouc()}
   <title>PIKORUA — Lead Insights</title>
+  <link rel="icon" type="image/png" href="/favicon.ico"/>
   <link rel="stylesheet" href="/brand.css"/>
 </head><body>
-  {_topbar('crm')}
-  <div class="wrap-wide">
-    <div style="margin-bottom:1.6rem;">
+  {_sidebar('crm')}
+  <div class="page-header">
+    <div>
       <div class="eyebrow">Customer intelligence</div>
-      <h1 style="margin:0.1rem 0 0;">Lead insights</h1>
-      <p class="lede">Deep analytics across your CRM — geography, budget, profession, funnel and the profiles that convert best.</p>
+      <h1 class="page-title">Lead insights</h1>
+      <p class="page-subtitle">Geography, budget segments, professions, funnel and the profiles that convert best.</p>
     </div>
+  </div>
+  <div class="page-body">
     {body}
   </div>
+  {_SIDEBAR_CLOSE}
   <script>
     async function refreshCRM(btn) {{
       const original = btn.textContent;
@@ -5260,6 +6745,60 @@ def _crm_dashboard_page(body: str, source: str) -> str:
         alert('Could not refresh: ' + e.message);
       }}
     }}
+
+    const _CONF_COLOR = {{HIGH:'var(--ok,#1F7A4A)',MEDIUM:'var(--warn-text,#7A5E00)',SPECULATIVE:'var(--ink-soft)'}};
+    const _CAT_ICON = {{targeting:'🎯',messaging:'✍️',budget:'💰',product:'🏛️',channel:'📡',timing:'⏱️'}};
+
+    function _siRender(d) {{
+      const el = document.getElementById('si-body');
+      if (d.error) {{
+        el.innerHTML = '<p style="color:var(--danger);">'+d.error+'</p>';
+        return;
+      }}
+      const insights = (d.insights || []).filter(ins => (ins.scope || 'strategic') !== 'campaign');
+      if (!insights.length) {{
+        el.innerHTML = '<p style="color:var(--muted);">No insights returned.</p>';
+        return;
+      }}
+      const ts = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
+      let html = `<div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.9rem;">Generated ${{ts}} · based on ${{d.total_leads||0}} leads</div>`;
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">';
+      insights.forEach(ins => {{
+        const conf = (ins.confidence||'MEDIUM').toUpperCase();
+        const cat = (ins.category||'').toLowerCase();
+        const icon = _CAT_ICON[cat] || '◆';
+        const color = _CONF_COLOR[conf] || _CONF_COLOR.MEDIUM;
+        html += `<div style="background:var(--bg-soft,#F9F6F1);border:1px solid var(--line);border-radius:10px;padding:1rem 1.1rem;">
+          <div style="display:flex;align-items:flex-start;gap:0.5rem;margin-bottom:0.5rem;">
+            <span style="font-size:1.1rem;">${{icon}}</span>
+            <div style="font-weight:700;font-size:0.88rem;letter-spacing:0.04em;color:var(--ink);flex:1;">${{ins.title||''}}</div>
+            <span style="font-size:0.7rem;font-weight:600;color:${{color}};white-space:nowrap;margin-top:2px;">${{conf}}</span>
+          </div>
+          <p style="margin:0 0 0.5rem;font-size:0.88rem;color:var(--ink);line-height:1.5;">${{ins.finding||''}}</p>
+          <p style="margin:0;font-size:0.82rem;color:var(--ink-soft);line-height:1.45;font-style:italic;">${{ins.action||''}}</p>
+        </div>`;
+      }});
+      html += '</div>';
+      el.innerHTML = html;
+    }}
+
+    async function siLoad(force=false) {{
+      const btn = document.getElementById('si-refresh-btn');
+      const el = document.getElementById('si-body');
+      if (btn) {{ btn.disabled = true; btn.textContent = force ? 'Generating…' : 'Loading…'; }}
+      el.innerHTML = '<span style="color:var(--ink-soft);font-size:0.9rem;">'+( force ? 'Calling AI — this takes ~10s…' : 'Loading cached insights…')+'</span>';
+      try {{
+        const r = await fetch('/crm-strategic-insights' + (force ? '?force=true' : ''));
+        const d = await r.json();
+        _siRender(d);
+      }} catch(e) {{
+        el.innerHTML = '<p style="color:var(--danger);">Could not load insights: '+e.message+'</p>';
+      }} finally {{
+        if (btn) {{ btn.disabled = false; btn.textContent = 'Regenerate'; }}
+      }}
+    }}
+
+    document.addEventListener('DOMContentLoaded', () => siLoad(false));
   </script>
 </body></html>"""
 
@@ -5291,17 +6830,22 @@ def list_runs():
 
     active_run_ids = json.dumps([rid for rid, r in rows if r.get("status") not in ("complete", "failed")])
 
+    # Stat counts for the header row
+    total_count   = len(rows)
+    running_count = sum(1 for _, r in rows if r.get("status", "").startswith("running_") or r.get("status") == "queued")
+    ready_count   = sum(1 for _, r in rows if r.get("status") == "complete")
+    failed_count  = sum(1 for _, r in rows if r.get("status") == "failed")
+
     run_rows = ""
     for run_id, run in rows:
         brief = run.get("brief", {})
         scorecard = run.get("copy_scorecard_summary", "")
-        scorecard_html = f'<div style="font-size:0.78rem;color:var(--ink-soft);margin-top:4px;">{scorecard}</div>' if scorecard else ""
-        folder_html = ""
+        scorecard_html = f'<div class="campaign-meta" style="margin-top:3px;">{scorecard}</div>' if scorecard else ""
         approved = run.get("approved", False)
         approve_cell = ""
         if run.get("status") == "complete":
             if approved:
-                approve_cell = '<span style="color:var(--green);font-size:0.82rem;">&#10003; Approved</span>'
+                approve_cell = '<span style="color:var(--ok);font-size:0.82rem;font-weight:600;">&#10003; Approved</span>'
             else:
                 approve_cell = (
                     f'<button onclick="approveRun(\'{run_id}\')" id="approve-{run_id}" '
@@ -5318,29 +6862,38 @@ def list_runs():
         delete_cell = "" if is_running else (
             f'<button onclick="deleteRun(\'{run_id}\')" '
             f'title="Remove from list" '
-            f'style="background:none;border:none;color:var(--muted);font-size:1rem;'
-            f'cursor:pointer;padding:2px 6px;line-height:1;" '
+            f'style="background:none;border:none;color:var(--muted);font-size:1.1rem;'
+            f'cursor:pointer;padding:2px 6px;line-height:1;border-radius:4px;transition:color .15s;" '
             f'onmouseover="this.style.color=\'var(--danger)\'" '
             f'onmouseout="this.style.color=\'var(--muted)\'">&times;</button>'
         )
-        view_cell = ('<a href="/results/' + run_id + '">Open &rarr;</a>'
+        view_cell = (f'<a href="/results/{run_id}" class="btn btn-ghost btn-sm">Open &rarr;</a>'
                      if run.get("status") == "complete" else "")
+        date_str = run.get('created_at', '')[:16].replace('T', ' ')
+        city_price = f"{brief.get('city','')} · ₹{brief.get('price_cr','')} Cr · {brief.get('platform','')}"
         run_rows += f"""
         <tr id="row-{run_id}">
           <td>
-            <div style="font-weight:600;color:var(--ink);">{brief.get('property_name','—')}</div>
-            <span style="font-size:0.78rem;color:var(--muted);">{brief.get('city','')} · ₹{brief.get('price_cr','')} Cr · {brief.get('platform','')}</span>
+            <div class="campaign-name">{brief.get('property_name','—')}</div>
+            <div class="campaign-meta">{city_price}</div>
             {scorecard_html}
-            {folder_html}
           </td>
           <td id="status-{run_id}">{status_badge(run.get('status',''))}</td>
-          <td style="font-size:0.82rem;color:var(--ink-soft);white-space:nowrap;">
-            {run.get('created_at','')[:16].replace('T',' ')}
-          </td>
+          <td style="color:var(--ink-soft);font-size:0.82rem;white-space:nowrap;">{date_str}</td>
           <td>{approve_cell}{rerun_cell}</td>
           <td>{view_cell}</td>
           <td style="text-align:center;">{delete_cell}</td>
         </tr>"""
+
+    empty_rows = (
+        '<tr><td colspan="6">'
+        '<div class="empty-state">'
+        '<div class="empty-icon">✦</div>'
+        '<div class="empty-title">No campaigns yet</div>'
+        '<div class="empty-body">Create your first campaign and we\'ll research the right buyers and write your ads.</div>'
+        '<a href="/portal" class="btn">Start a campaign</a>'
+        '</div></td></tr>'
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -5348,43 +6901,80 @@ def list_runs():
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   {_theme_fouc()}
   <title>PIKORUA — My Campaigns</title>
+  <link rel="icon" type="image/png" href="/favicon.ico"/>
   <link rel="stylesheet" href="/brand.css"/>
 </head><body>
-  {_topbar('runs')}
-  <div class="wrap-wide">
-  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:1.6rem;flex-wrap:wrap;">
+  {_sidebar('runs')}
+  <div class="page-header">
     <div>
       <div class="eyebrow">Your work</div>
-      <h1 style="margin:0.1rem 0 0;">My campaigns</h1>
+      <h1 class="page-title">My campaigns</h1>
     </div>
     <a href="/portal" class="btn">+ New campaign</a>
   </div>
 
-  <div class="card" style="padding:1.1rem 1.3rem;margin-bottom:1.4rem;display:flex;
-      flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between;">
-    <div>
-      <div style="font-weight:600;color:var(--ink);font-size:0.95rem;">Find more buyers like your past leads</div>
-      <div style="font-size:0.82rem;color:var(--muted);max-width:48ch;">Use your existing enquiry list to find similar people on Facebook &amp; Instagram.</div>
+  <div class="page-body">
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">Total</div>
+      <div class="stat-number">{total_count}</div>
+      <div class="stat-sub">all time</div>
     </div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-      <div style="display:flex;gap:8px;">
-        <button id="crm-split" class="btn btn-sm" onclick="uploadCRMAudiences(true)">Find similar buyers</button>
-        <button id="crm-all" class="btn btn-ghost btn-sm" onclick="uploadCRMAudiences(false)">All leads</button>
-      </div>
-      <div id="crm-result" style="font-size:0.78rem;color:var(--ink-soft);text-align:right;max-width:340px;"></div>
+    <div class="stat-card stat-warn">
+      <div class="stat-label">Running</div>
+      <div class="stat-number">{running_count}</div>
+      <div class="stat-sub">in progress</div>
+    </div>
+    <div class="stat-card stat-ok">
+      <div class="stat-label">Ready</div>
+      <div class="stat-number">{ready_count}</div>
+      <div class="stat-sub">to review</div>
+    </div>
+    <div class="stat-card{" stat-danger" if failed_count else ""}">
+      <div class="stat-label">Failed</div>
+      <div class="stat-number">{failed_count}</div>
+      <div class="stat-sub">needs attention</div>
     </div>
   </div>
 
-  <table>
-    <thead><tr>
-      <th>Campaign</th><th>Status</th><th>Started</th><th>Approve</th><th>Details</th><th></th>
-    </tr></thead>
-    <tbody>{run_rows if run_rows else '<tr><td colspan="6" style="padding:1.4rem;color:var(--muted);">No campaigns yet. <a href="/portal">Create your first one &rarr;</a></td></tr>'}</tbody>
-  </table>
-  <p style="margin-top:1.4rem;font-size:0.9rem;">
-    <a href="/portal">&#8592; Create a new campaign</a>
-  </p>
+  <div class="content-panel" style="margin-bottom:1.2rem;">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Find more buyers like your past leads</div>
+        <div class="panel-sub">Splits your CRM into promising buyers and cold leads, then creates two Meta audiences.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+        <button id="crm-split" class="btn btn-sm" onclick="uploadCRMAudiences()">Find similar buyers</button>
+        <div id="crm-result" style="font-size:0.78rem;color:var(--ink-soft);text-align:right;max-width:340px;"></div>
+      </div>
+    </div>
+    <div id="crm-audiences-created" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:14px;">
+      <div class="eyebrow" style="margin-bottom:10px;">Created audiences — add these in your campaign's Audience panel</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="border:1px solid var(--line);border-radius:8px;padding:12px;">
+          <div style="font-size:0.72rem;font-weight:600;color:var(--green-mid);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Include → Lookalike</div>
+          <div id="crm-aud-good-name" style="font-size:0.85rem;font-weight:500;"></div>
+          <div id="crm-aud-good-count" style="font-size:0.75rem;color:var(--muted);margin-top:2px;"></div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:8px;padding:12px;">
+          <div style="font-size:0.72rem;font-weight:600;color:var(--danger);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Exclude → Cold leads</div>
+          <div id="crm-aud-bad-name" style="font-size:0.85rem;font-weight:500;"></div>
+          <div id="crm-aud-bad-count" style="font-size:0.75rem;color:var(--muted);margin-top:2px;"></div>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <table class="campaigns-table">
+    <thead><tr>
+      <th>Campaign</th><th>Status</th><th>Started</th><th>Approve</th><th>View</th><th></th>
+    </tr></thead>
+    <tbody>{run_rows if run_rows else empty_rows}</tbody>
+  </table>
+
+  </div>
+  {_SIDEBAR_CLOSE}
   <script>
     async function rerunCampaign(runId) {{
       const btn = document.getElementById('rerun-' + runId);
@@ -5448,53 +7038,48 @@ def list_runs():
         alert('Request failed: ' + e.message);
       }}
     }}
-    async function uploadCRMAudiences(split) {{
-      const splitBtn = document.getElementById('crm-split');
-      const allBtn   = document.getElementById('crm-all');
-      const result   = document.getElementById('crm-result');
-      const activeBtn = split ? splitBtn : allBtn;
-      const origText  = activeBtn.textContent;
-      [splitBtn, allBtn].forEach(b => b && (b.disabled = true));
-      activeBtn.textContent = 'Uploading…';
+    async function uploadCRMAudiences() {{
+      const btn    = document.getElementById('crm-split');
+      const result = document.getElementById('crm-result');
+      btn.disabled = true;
+      btn.textContent = 'Uploading…';
       result.textContent = '';
+      result.style.color = 'var(--ink-soft)';
       try {{
         const res = await fetch('/upload-crm-audience', {{
           method: 'POST',
           headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify({{split: split}})
+          body: JSON.stringify({{split: true}})
         }});
         const data = await res.json();
+        btn.disabled = false;
+        btn.textContent = 'Find similar buyers';
         if (res.ok) {{
+          const good = data.good_leads_count || 0;
+          const bad  = data.bad_leads_count  || 0;
           result.style.color = 'var(--green)';
-          if (split) {{
-            const good = data.good_leads_count || 0;
-            const bad  = data.bad_leads_count  || 0;
-            const lal  = data.good_leads_lookalike_id ? '✓ similar-buyers audience ready' : (data.lookalike_error || '');
-            const exc  = data.bad_leads_audience_id  ? '✓ excluded cold leads' : (data.bad_leads_note || data.bad_leads_error || '');
-            result.innerHTML = (
-              `<strong>Done</strong> · ${{data.total_leads}} leads processed<br>` +
-              `Promising buyers: ${{good}} · ${{lal}}<br>` +
-              `Cold leads: ${{bad}} · ${{exc}}`
-            );
-          }} else {{
-            result.textContent = `✓ ${{data.leads_uploaded}} leads synced · similar-buyers audience ${{data.lookalike_audience_id ? 'ready' : 'n/a'}}`;
+          result.innerHTML = `<strong>Done</strong> · ${{data.total_leads}} leads processed · ${{good}} promising, ${{bad}} cold`;
+          // Show the created-audiences cards
+          const panel = document.getElementById('crm-audiences-created');
+          if (panel) {{
+            document.getElementById('crm-aud-good-name').textContent = data.good_lookalike_name || 'Pikorua Good Leads – Lookalike';
+            document.getElementById('crm-aud-good-count').textContent = `Source: ${{good}} leads`;
+            document.getElementById('crm-aud-bad-name').textContent  = data.bad_custom_audience_name || 'Pikorua Bad Leads – Exclude';
+            document.getElementById('crm-aud-bad-count').textContent  = `Source: ${{bad}} leads`;
+            panel.style.display = '';
           }}
-          [splitBtn, allBtn].forEach(b => b && (b.disabled = false));
-          if (split) splitBtn.textContent = 'Find similar buyers';
-          else allBtn.textContent = 'All leads';
         }} else {{
-          [splitBtn, allBtn].forEach(b => b && (b.disabled = false));
-          activeBtn.textContent = origText;
           result.style.color = 'var(--danger)';
           result.textContent = 'Error: ' + (data.detail || 'Unknown error');
         }}
       }} catch(e) {{
-        [splitBtn, allBtn].forEach(b => b && (b.disabled = false));
-        activeBtn.textContent = origText;
+        document.getElementById('crm-split').disabled = false;
+        document.getElementById('crm-split').textContent = 'Find similar buyers';
         result.style.color = 'var(--danger)';
         result.textContent = 'Request failed: ' + e.message;
       }}
     }}
+
 
     // Auto-update status badges for running runs without full page reload
     (function() {{

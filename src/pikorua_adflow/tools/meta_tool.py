@@ -656,3 +656,62 @@ def swap_ad_creative(ad_id: str, ad_account_id: str,
     new_creative_id = creative["id"]
     _patch(ad_id, {"creative": {"creative_id": new_creative_id}}, token)
     return {"creative_id": new_creative_id, "ad_id": ad_id}
+
+
+# ---- Phase 2: Meta Recommendations ---------------------------------------- #
+
+def fetch_recommendations(
+    ad_account_id: str,
+    token: str,
+    ad_set_ids: list[str] | None = None,
+) -> list[dict]:
+    """Fetch Meta Ads Manager recommendations for the ad account, optionally
+    filtered to ad sets belonging to a specific campaign. Never raises."""
+    try:
+        data = _get(
+            f"act_{ad_account_id}/recommendations",
+            token,
+            {
+                "fields": (
+                    "recommendation_type,title,message,importance,confidence,"
+                    "custom_audiences_specs,ad_set_ids"
+                ),
+                "limit": "50",
+            },
+        )
+        recs: list[dict] = data.get("data", [])
+        if ad_set_ids:
+            ids = {str(a) for a in ad_set_ids}
+            recs = [
+                r for r in recs
+                if not r.get("ad_set_ids")
+                or ids.intersection(str(x) for x in r.get("ad_set_ids", []))
+            ]
+        return recs
+    except Exception:
+        return []
+
+
+def apply_recommendation(recommendation_id: str, token: str) -> tuple[bool, dict]:
+    """Apply a Meta recommendation by its ID. Returns (ok, response_dict)."""
+    return _do_post(f"{recommendation_id}/apply", {}, token)
+
+
+def toggle_advantage_audience(adset_id: str, enable: bool, token: str) -> bool:
+    """Toggle Advantage+ Audience on a single ad set (targeting_automation field)."""
+    ok, _ = _do_patch(
+        adset_id,
+        {"targeting_automation": {"advantage_audience": 1 if enable else 0}},
+        token,
+    )
+    return ok
+
+
+def toggle_cbo(campaign_id: str, enable: bool, token: str) -> bool:
+    """Toggle Campaign Budget Optimisation on the campaign."""
+    ok, _ = _do_patch(
+        campaign_id,
+        {"is_adset_budget_sharing_enabled": enable},
+        token,
+    )
+    return ok

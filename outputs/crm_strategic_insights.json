@@ -1,0 +1,86 @@
+{
+  "generated_at": "2026-06-15T10:20:39.456863+00:00",
+  "total_leads": 874,
+  "insights": [
+    {
+      "title": "IT/TECH IS YOUR ONLY REAL BUYER",
+      "finding": "IT/Tech professionals represent just 49 leads (5.6% of volume) yet convert at 2%, while Business/Entrepreneur leads are 424 strong but convert at only 0.5% — IT/Tech is 4× more efficient per lead despite being almost entirely ignored in targeting.",
+      "action": "Shift at least 30% of Meta ad spend toward IT/Tech interest clusters (software engineers, startup founders, SaaS, product managers) in Ahmedabad. The ₹5–7Cr price point is the confirmed sweet spot for this cohort — lock that combination in as your primary ad set.",
+      "confidence": "HIGH",
+      "category": "targeting",
+      "scope": "campaign",
+      "params": {
+        "add_interests": [
+          "software engineers",
+          "startup founders",
+          "SaaS professionals",
+          "product managers",
+          "tech entrepreneurs",
+          "IT professionals India"
+        ]
+      }
+    },
+    {
+      "title": "10CR+ SEGMENT IS DEAD WEIGHT",
+      "finding": "The ₹10Cr+ budget segment has 150 leads — the second largest volume bracket — yet registers 0% quality conversion, meaning zero leads from this segment have progressed beyond received status, making it a pure cost sink.",
+      "action": "Cut Meta spend targeting ultra-HNI signals (private banking, luxury lifestyle, UHNI audiences) by 40% immediately. Reallocate that budget entirely to ₹5–7Cr IT/Tech targeting where conversion proof exists.",
+      "confidence": "HIGH",
+      "category": "budget",
+      "scope": "campaign",
+      "params": {
+        "change_pct": -40
+      }
+    },
+    {
+      "title": "LARGE APARTMENTS PUNCHES ABOVE ITS WEIGHT",
+      "finding": "The Large Apartments campaign generated only 80 leads but converts at 2.5% — more than 3.5× the Bungalows campaign (0.7%) which consumed 583 leads, meaning Bungalows is generating 7× more volume for proportionally far worse returns.",
+      "action": "Double Meta budget allocation to Large Apartments creative sets immediately. Simultaneously audit Bungalows campaign creative and audience — either retool its targeting to mirror Large Apartments audience signals or begin a phased spend reduction.",
+      "confidence": "HIGH",
+      "category": "budget",
+      "scope": "campaign",
+      "params": {
+        "change_pct": 100
+      }
+    },
+    {
+      "title": "FUNNEL HAS A CONVERSATION WALL",
+      "finding": "Of 874 leads received, only 47 (5.4%) were ever spoken to, zero reached Home/Walk/Call stage, and only 6 are exploring — meaning the bottleneck is not lead quality but the human handoff process between received and first contact.",
+      "action": "Implement a sub-24-hour call SLA with a dedicated inside sales rep for every lead that clears basic qualification (profession + budget signals present). The funnel is not leaking at the top — it is stalling at the first human touchpoint, which is an operations failure, not a marketing failure.",
+      "confidence": "HIGH",
+      "category": "process",
+      "scope": "strategic"
+    },
+    {
+      "title": "REAL ESTATE PROFESSIONALS ARE A WASTED SEGMENT",
+      "finding": "Real Estate and Finance/Banking leads together total 46 leads and convert at exactly 0% quality — these are almost certainly industry observers, competitors, or agents researching inventory, not genuine buyers, yet they consume CRM bandwidth equal to paying prospects.",
+      "action": "Create a hard filter in the CRM intake form that flags and deprioritises leads self-identifying as Real Estate or Finance/Banking profession. Route them to a separate drip sequence rather than live sales rep time, freeing bandwidth for IT/Tech and qualified Business leads.",
+      "confidence": "HIGH",
+      "category": "process",
+      "scope": "strategic"
+    },
+    {
+      "title": "₹7–10CR VOLUME-TO-ZERO CONVERSION PARADOX",
+      "finding": "Business/Entrepreneur leads in the ₹7–10Cr bracket represent 79 leads and convert at 1.3%, but the ₹10Cr+ bracket — which theoretically contains more financially capable buyers — produces zero conversions across 150 leads, suggesting the upper bracket is attracting aspirational or misqualified leads, not genuine UHNIs.",
+      "action": "Reframe all ₹10Cr+ property messaging to filter intent rather than attract volume — use language that assumes ownership complexity (second home, portfolio diversification, legacy asset) rather than aspiration language. The goal is to repel unqualified leads before they enter the funnel, not after.",
+      "confidence": "MEDIUM",
+      "category": "messaging",
+      "scope": "strategic"
+    },
+    {
+      "title": "MAY SPIKE WAS A MIRAGE — FIND THE CAUSE",
+      "finding": "Peak volume hit 400 leads in May 2026 followed by a -60.5% crash the following month, which is not organic market behaviour — it points to a one-time campaign burst (paid spike, event, or viral push) that generated unqualified volume rather than sustained pipeline.",
+      "action": "Audit the May campaign settings, creative, and audience targeting to identify what drove the spike and confirm its quality rate. If quality was equally low in May, stop treating volume as a success metric entirely and restructure campaign KPIs around cost-per-qualified-lead rather than cost-per-lead.",
+      "confidence": "MEDIUM",
+      "category": "timing",
+      "scope": "strategic"
+    },
+    {
+      "title": "NRI CHANNEL ENTIRELY ABSENT FROM DATA",
+      "finding": "Pikorua targets HNI and NRI buyers but zero NRI-attributed leads appear in the CRM, suggesting either NRI campaigns have never been run or NRI leads are not being tracked with a separate source tag — a critical blind spot given Gujarat diaspora concentration in the US, UK, and Canada.",
+      "action": "Launch a dedicated NRI Meta campaign targeting Gujarati diaspora in the US, UK, UAE, Canada, and Australia with creative centred on Ahmedabad hometown connection and rupee-denominated asset safety — and ensure NRI source tagging is live in CRM before launch so attribution is measurable from day one.",
+      "confidence": "SPECULATIVE",
+      "category": "channel",
+      "scope": "strategic"
+    }
+  ]
+}

@@ -15,3 +15,6 @@ project_context/ad_images_examples/
 project_context/*.jpeg
 project_context/*.jpg
 project_context/*.png
+
+# Graphify knowledge graph — local only, not for repo
+graphify-out/

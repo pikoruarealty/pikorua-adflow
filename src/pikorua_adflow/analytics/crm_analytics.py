@@ -108,7 +108,7 @@ def _quality_rate(norm_rows: list[dict]) -> float:
 # --------------------------------------------------------------------------- #
 # Budget parsing
 # --------------------------------------------------------------------------- #
-_BUDGET_BUCKETS = ["<1Cr", "1–2Cr", "2–5Cr", "5Cr+", "Unknown"]
+_BUDGET_BUCKETS = ["<5Cr", "5–7Cr", "7–10Cr", "10Cr+", "Unknown"]
 _NUM_UNIT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|l)?")
 
 
@@ -151,13 +151,13 @@ def budget_bucket(raw: str) -> str:
     cr = parse_budget_cr(raw)
     if cr is None:
         return "Unknown"
-    if cr < 1:
-        return "<1Cr"
-    if cr < 2:
-        return "1–2Cr"
     if cr < 5:
-        return "2–5Cr"
-    return "5Cr+"
+        return "<5Cr"
+    if cr < 7:
+        return "5–7Cr"
+    if cr < 10:
+        return "7–10Cr"
+    return "10Cr+"
 
 
 # --------------------------------------------------------------------------- #
