@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    image: pikorua-adflow:local
+    ports:
+      - "8000:8000"
+    volumes:
+      # Bind-mount outputs/ so generated files are directly accessible on host
+      - ./outputs:/app/outputs
+      # Named volume for the fastembed model cache — avoids re-downloading on restart
+      - fastembed_cache:/root/.cache/fastembed
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  fastembed_cache:

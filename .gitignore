@@ -1,20 +1,43 @@
+# Secrets
 .env
-.env.example
+.env.*
+!.env.example
+
+# Python
 __pycache__/
-lib/
-.DS_Store
-outputs/pending_review/*/
-logs/*.log
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtualenvs
 venv/
 .venv/
-CLIENT_REQUIREMENTS.md
+lib/
 
-# Project context media — reference images and logos; not needed in repo
+# OS
+.DS_Store
+
+# Runtime outputs — volume-mounted in production; too large for git
+outputs/
+src/outputs/
+
+# Sensitive project context
+project_context/crm_export.csv
+project_context/campaign_data.csv
+
+# Project context media — reference images; not needed in repo
 project_context/ad_images_examples/
 project_context/*.jpeg
 project_context/*.jpg
 project_context/*.png
 
-# Graphify knowledge graph — local only, not for repo
+# Graphify knowledge graph — local only
 graphify-out/
+
+# Editor
+.vscode/
+.idea/
+logs/*.log
+CLIENT_REQUIREMENTS.md

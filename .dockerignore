@@ -1,0 +1,37 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Runtime data — mounted as a volume in production, not baked into the image
+outputs/
+src/outputs/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.github/
+
+# Dev tooling
+graphify-out/
+.vscode/
+.idea/
+*.log
+
+# Sensitive project context
+project_context/crm_export.csv
+
+# Large reference images that are not served by the app
+project_context/WhatsApp*.jpeg
+project_context/ad_images_examples/WhatsApp*.jpeg

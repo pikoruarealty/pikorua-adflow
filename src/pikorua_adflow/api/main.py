@@ -3509,17 +3509,22 @@ def _post_deploy_intel_html(run_id: str) -> str:
         const col = C[d.reach.color] || 'var(--ink)';
         let dlv = '';
         (d.delivery||[]).forEach(function(x){
-          dlv += '<div style="font-size:0.82rem;color:var(--ink-soft);margin-top:4px;">Version '
-            + x.variant + ': ' + (x.daily_range || 'estimate forming…') + '</div>';
+          if(x.daily_range){
+            dlv += '<div style="font-size:0.82rem;color:var(--ink-soft);margin-top:4px;">Version '
+              + x.variant + ': ' + x.daily_range + '</div>';
+          }
         });
+        if(!dlv){
+          dlv = '<div style="font-size:0.82rem;color:var(--muted);margin-top:4px);">Per-variant delivery estimates will appear once the ads have run briefly.</div>';
+        }
         wrap.innerHTML = '<div class="card" style="margin:0;">'
           + '<div style="font-size:0.8rem;color:var(--muted);">' + (d.reach.audience_summary||'') + '</div>'
           + '<div style="font-size:1.4rem;font-weight:700;color:var(--ink);margin-top:4px;">'
           + d.reach.estimate_mau.toLocaleString() + ' people '
           + '<span class="badge" style="background:transparent;border:1px solid ' + col + ';color:' + col
           + ';vertical-align:middle;">' + d.reach.status_label + '</span></div>'
-          + '<div style="margin-top:8px;">' + (dlv || '') + '</div>'
-          + '<button class="btn btn-sm" style="margin-top:12px;" onclick="mpFetchPerformance()">See optimisation tips →</button>'
+          + '<div style="margin-top:8px;">' + dlv + '</div>'
+          + '<button class="btn btn-sm" style="margin-top:12px;" onclick="mpFetchPerformance();document.getElementById(\'mp-perf-wrap\').scrollIntoView({behavior:\'smooth\',block:\'start\'})">See optimisation tips →</button>'
           + '</div>';
       }catch(e){
         btn.disabled = false; btn.textContent = 'Check audience size';
@@ -5371,8 +5376,9 @@ def meta_signals(run_id: str):
     mau = reach.get("estimate_mau", 0)
     label, color = _reach_status(mau)
 
-    delivery = []
-    for a in ads:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _fetch_delivery(a: dict) -> dict:
         de = fetch_delivery_estimate(a["adset_id"], token)
         daily = ""
         curve = de.get("daily_outcomes_curve") or []
@@ -5380,8 +5386,14 @@ def meta_signals(run_id: str):
             reaches = [pt.get("reach", 0) for pt in curve if pt.get("reach")]
             if reaches:
                 daily = f"{min(reaches):,}–{max(reaches):,}/day"
-        delivery.append({"variant": a.get("variant"), "daily_range": daily,
-                         "estimate_ready": de.get("estimate_ready", False)})
+        return {"variant": a.get("variant"), "daily_range": daily,
+                "estimate_ready": de.get("estimate_ready", False)}
+
+    delivery = []
+    with ThreadPoolExecutor(max_workers=len(ads) or 1) as pool:
+        futures = {pool.submit(_fetch_delivery, a): a for a in ads}
+        results = {f.result()["variant"]: f.result() for f in as_completed(futures)}
+    delivery = [results[a.get("variant")] for a in ads if a.get("variant") in results]
 
     return {
         "reach": {"estimate_mau": mau, "estimate_dau": reach.get("estimate_dau", 0),

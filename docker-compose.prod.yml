@@ -1,0 +1,34 @@
+# Production compose file — used on the server.
+# Does NOT build from source; pulls the pre-built image from ghcr.io.
+#
+# Usage on server:
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Or symlink this to docker-compose.yml on the server so the CI deploy script
+# works without the -f flag:
+#   ln -s docker-compose.prod.yml docker-compose.yml
+
+services:
+  app:
+    image: ghcr.io/pikoruarealty/pikorua-adflow:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      # Named volume keeps runs, images, Qdrant DB across container restarts
+      - outputs_data:/app/outputs
+      # Named volume keeps fastembed model across container restarts
+      - fastembed_cache:/root/.cache/fastembed
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  outputs_data:
+  fastembed_cache:
