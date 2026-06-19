@@ -67,6 +67,7 @@ class ImageGenReq(BaseModel):
     ratio: str = "4x5"
     ratios: dict[int, str] = Field(default_factory=dict)
     quality: str = "high"
+    backend: str = "ideogram"  # "ideogram" | "gpt-image-1"
     custom_prompts: dict[int, str] = Field(default_factory=dict)
     sample_ready: bool = False
 

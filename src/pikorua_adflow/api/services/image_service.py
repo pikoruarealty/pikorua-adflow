@@ -372,30 +372,26 @@ PALETTE_CONFIGS: dict[str, str] = {
 # They differ in how information is composed across the frame, not how much.
 AD_STRUCTURES: dict[str, str] = {
     "bordered_campaign": (
-        "• Large hero property photograph occupying the canvas\n"
-        "• Elegant gold hairline border framing the full composition\n"
-        "• Eyebrow line — small, spaced uppercase immediately inside the upper border\n"
-        "• Location name — the largest text element; bold gold tracked serif; dominant\n"
-        "• City name — directly below the location, lighter weight, subordinate\n"
-        "• Lifestyle headline — one line, readable serif weight, below the city\n"
-        "• Luxury pricing panel — gold-bordered container with price figure, 'ONWARDS' beneath\n"
-        "• Bottom information strip: three distinct property modules (configuration, price, USP)\n"
-        "• Sample apartment badge — centred, above the bottom strip (only if applicable)\n"
+        "• Full-bleed hero property photograph filling the entire canvas\n"
+        "• Elegant gold hairline border framing the composition edge-to-edge\n"
+        "• Strong visual hierarchy with editorial typography overlaid on the photograph's "
+        "natural dark areas — sky, shadow zones, ground\n"
+        "• Large location name as the primary typographic element — bold gold, all-caps\n"
+        "• Secondary location descriptor and lifestyle headline\n"
+        "• Dedicated luxury pricing panel\n"
+        "• Premium sample apartment badge (only if applicable)\n"
+        "• Bottom information strip containing property modules\n"
         "• One corner kept completely clean — reserved for logo compositing\n"
-        "• Every element feels agency-designed, not automatically placed"
+        "• All information elements feel agency-designed, not automatically placed"
     ),
     "structured_split": (
-        "• Full-bleed hero photograph commanding the upper 60% of the frame, no border\n"
-        "• Clear information zone in the lower 40% — backed in the chosen palette colour\n"
-        "• Lifestyle headline — the transition element at the boundary of photo and info zone\n"
-        "• Location name — large, gold, dominant within the information zone\n"
-        "• City name — below the location, lighter weight\n"
-        "• Pricing module embedded in the information zone — price figure prominent, clearly readable\n"
-        "• Configuration and key property details — structured, grid-aligned in the info zone\n"
+        "• Hero photograph filling the upper portion of the frame — no border\n"
+        "• Structured information zone beneath — backed in the chosen palette colour\n"
+        "• Location name dominant within the information zone — bold gold, all-caps\n"
+        "• Lifestyle headline as the transition between photo and info zone\n"
+        "• Pricing module and property details in the information zone\n"
         "• Sample apartment badge within the information zone (only if applicable)\n"
-        "• One corner kept completely clean — reserved for logo compositing\n"
-        "• If a specific element has no natural space in this composition it may be omitted —\n"
-        "  but the default is to include the full hierarchy"
+        "• One corner kept completely clean — reserved for logo compositing"
     ),
     "immersive_fullbleed": (
         "• Full-bleed hero photograph, completely edge-to-edge, no border, no solid backing zones\n"
@@ -431,6 +427,8 @@ def _select_structure(variant_key: str, tone_tag: str) -> str:
 def _build_typography_block(entry: dict, brief: dict) -> str:
     """
     Build the Typography hierarchy section from property brief data.
+    Each text line is on its own quoted line so gpt-image-1 stacks them as
+    distinct typographic layers within each module (not a single run-on string).
     All values come from brief — nothing invented.
     """
     locality = (brief.get("locality") or brief.get("city") or "").upper()
@@ -438,27 +436,78 @@ def _build_typography_block(entry: dict, brief: dict) -> str:
     price_cr = str(brief.get("price_cr") or "").strip()
     config_val = str(brief.get("config") or brief.get("configuration") or "").strip()
     sample_ready = bool(brief.get("sample_ready"))
-    sample_cta = (brief.get("sample_ready_cta") or "SAMPLE APARTMENT READY — VISIT TODAY").strip()
     headline = (entry.get("headline") or "").strip()
     eyebrow = (entry.get("eyebrow") or "").strip()
 
-    lines = ["Typography hierarchy:"]
-    if eyebrow:
-        lines.append(f'Eyebrow (small, spaced uppercase): "{eyebrow}"')
-    lines.append(f'Location (largest text, bold gold, ALL CAPS): "{locality}"')
-    if city and city != locality:
-        lines.append(f'City (subordinate): "{city}"')
-    if headline:
-        lines.append(f'Lifestyle Headline: "{headline}"')
-    if price_cr:
-        lines.append(f'Price panel: "₹{price_cr} Cr / ONWARDS"')
-        if config_val:
-            lines.append(f'Left Module: "{config_val} RESIDENCES"')
-            lines.append(f'Centre Module: "STARTING AT / ₹{price_cr} Cr"')
-    if sample_ready:
-        lines.append(f'Sample Badge: "{sample_cta}"')
+    # USP for right module — check common field names
+    usps = (
+        brief.get("usps")
+        or brief.get("key_selling_points")
+        or brief.get("key_usps")
+        or []
+    )
+    if isinstance(usps, str):
+        usps = [usps]
+    usp = usps[0].strip() if usps else ""
 
-    lines.append("")
+    lines = ["Typography hierarchy:", ""]
+
+    if eyebrow:
+        lines += ["Top Eyebrow:", f'"{eyebrow}"', ""]
+
+    lines += ["Primary Headline:", f'"{locality}"', ""]
+
+    if city and city != locality:
+        lines += ["City:", f'"{city}"', ""]
+
+    if headline:
+        lines += ["Lifestyle Headline:", f'"{headline}"', ""]
+
+    if price_cr:
+        lines += ["Pricing Module:", f'"₹{price_cr} Cr"', '"ONWARDS"', ""]
+
+    # Bottom information band — only if we have at least config or price
+    has_band = bool(config_val or price_cr or usp)
+    if has_band:
+        lines.append("Bottom Information Band:")
+        lines.append("")
+        if config_val:
+            # Split "3 & 4 BHK" into two stacked lines: "3 & 4" / "BHK RESIDENCES"
+            # rsplit from right so last word (BHK, VILLA, etc.) is the type line
+            parts = config_val.rsplit(" ", maxsplit=1)
+            top_part = parts[0]                      # e.g. "3 & 4"
+            bottom_part = parts[1] if len(parts) > 1 else ""  # e.g. "BHK"
+            lines.append("Left Module:")
+            lines.append(f'"{top_part}"')
+            if bottom_part:
+                lines.append(f'"{bottom_part} RESIDENCES"')
+            lines.append("")
+
+        if price_cr:
+            lines += [
+                "Centre Module:",
+                '"STARTING AT"',
+                f'"₹{price_cr} Cr"',
+                "",
+            ]
+
+        if usp:
+            # Split on "/" if present, else use as single line
+            usp_parts = [p.strip() for p in usp.split("/", 1)] if "/" in usp else [usp]
+            lines.append("Right Module:")
+            for part in usp_parts:
+                lines.append(f'"{part}"')
+            lines.append("")
+
+    if sample_ready:
+        lines += [
+            "Centre Floating Badge:",
+            '"SAMPLE APARTMENT"',
+            '"READY"',
+            '"VISIT TODAY"',
+            "",
+        ]
+
     lines.append(
         "NOTE: Render ONLY the text elements listed above — do not invent any additional "
         "text, numbers, phone numbers, sq ft, URLs, or property details."
@@ -504,10 +553,18 @@ def build_gpt_image_prompt(entry: dict, brief: dict, variant_key: str) -> str:
         f"{palette_config}\n\n"
         "Design treatment:\n"
         "• Premium serif typography throughout — bold or medium weight, never ultra-light\n"
+        "• Rich serif typography hierarchy — headline weight anchors the composition, "
+        "body weight carries the detail\n"
+        "• Real estate brochure quality — print-ready, not digital-casual\n"
+        "• High-end luxury developer advertisement — Lodha / Shivalik / Swati campaign standard\n"
         "• Structured spacing — clear grid alignment, marketing-agency level composition\n"
-        "• Every text element legible at mobile thumbnail size within 2 seconds\n"
+        "• Every text element perfectly legible at mobile thumbnail size within 2 seconds\n"
+        "• Every module in the bottom strip distinct and readable at mobile size\n"
         "• Information modules feel designed by an agency, not automatically placed\n"
-        "• No logos. No watermarks. No invented text — render only what is listed above.\n\n"
+        "• No random decorative clutter — every graphic element serves the hierarchy\n"
+        "• Professional sales campaign aesthetic throughout\n"
+        "• No logos. No watermarks. No random icons or decorative symbols.\n"
+        "• No invented text — render ONLY the text strings listed in Typography hierarchy above.\n\n"
         "Aspect ratio 4:5."
     )
 
@@ -633,7 +690,7 @@ def call_ideogram_v3(
 def call_ideogram(
     prompt: str, key: str, speed: str = "QUALITY", aspect: str = "4x5"
 ) -> bytes:
-    """Ideogram 4.0 API — JSON payload.  Best text rendering for banners."""
+    """Ideogram 4.0 API — multipart/form-data payload."""
     import time
     import urllib.error
     import urllib.request
@@ -644,20 +701,34 @@ def call_ideogram(
         "4x5": "1792x2240",
         "16x9": "2560x1440",
         "9x16": "1440x2560",
+        "2x3": "1664x2496",
+        "3x2": "2496x1664",
     }
     clean_aspect = aspect.lower().replace(":", "x") if aspect else "4x5"
-    resolution = _RESOLUTION_MAP.get(clean_aspect, "1024x1280")
+    resolution = _RESOLUTION_MAP.get(clean_aspect, "1792x2240")
 
-    payload = {
-        "text_prompt": prompt,
-        "resolution": resolution,
-        "rendering_speed": speed,
-    }
-    body = json.dumps(payload).encode("utf-8")
+    # v4 API requires multipart/form-data, not application/json
+    boundary = "----PikoruaBoundary7Ma4YWxkTrZu0gW"
+    def _field(name: str, value: str) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n"
+        ).encode("utf-8")
+
+    body = (
+        _field("text_prompt", prompt)
+        + _field("resolution", resolution)
+        + _field("rendering_speed", speed)
+        + f"--{boundary}--\r\n".encode("utf-8")
+    )
     req = urllib.request.Request(
         "https://api.ideogram.ai/v1/ideogram-v4/generate",
         data=body,
-        headers={"Api-Key": key, "Content-Type": "application/json"},
+        headers={
+            "Api-Key": key,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
         method="POST",
     )
 

@@ -86,6 +86,7 @@ def compose_description(
     variant_key: str,
     prior_scene_tags: Optional[list] = None,
     prior_tone_tags: Optional[list] = None,
+    prior_palette_tags: Optional[list] = None,
 ) -> str:
     """
     Build the task description for one variant.
@@ -120,6 +121,8 @@ def compose_description(
         f"  Prior tone tags (this property, this variant): {prior_tone_tags or []}\n"
         f"  Default tone bias: {variant['default_tone_bias']}\n"
         f"  Allowed palette tags — pick exactly one: {allowed_palettes}\n"
+        f"  Palette tags already used in this batch: {prior_palette_tags or []}\n"
+        "  → Choose a palette_tag NOT in the 'already used' list above if one is available.\n"
     )
 
     instruction_tail = (
@@ -137,11 +140,15 @@ def compose_description(
         "describing. Use the exact words — do not paraphrase.\n\n"
         "OUTPUT — respond with ONLY valid JSON, no markdown fences, no preamble:\n"
         "{\n"
-        '  "scene_prose": "<60-80 word photography description. Camera body + lens '
-        'spec, shooting angle, focal distance, light quality (colour temperature, '
-        'direction, quality), material details (exact surface finishes), atmospheric '
-        'imperfection (lens flare, grain, haze). SCENE PHOTOGRAPHY ONLY — no ad '
-        'layout, no text placement, no typography instructions.>",\n'
+        '  "scene_prose": "<TWO PARAGRAPHS (120-140 words total). '
+        'Para 1 (50-60 words): camera body + lens + shooting angle + focal distance + '
+        'light quality (colour temperature, direction, character of light) + time of day + '
+        'one natural photographic imperfection. '
+        'Para 2 (50-70 words): the subject\'s architectural or material character — '
+        'for exteriors: facade glazing type, spandrel material, balcony profile, stone/metal/timber '
+        'details, landscaping; for interiors: floor material+finish, ceiling height+feature, '
+        'dominant furniture profile, surface finish hierarchy, signature architectural detail. '
+        'SCENE PHOTOGRAPHY ONLY — no ad layout, no text placement, no typography.>",\n'
         '  "headline": "<one headline from the copy output, exact words>",\n'
         '  "eyebrow": "<optional short aspirational line, or empty string if none>",\n'
         '  "palette_tag": "<one of the allowed_palettes listed above>",\n'

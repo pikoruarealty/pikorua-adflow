@@ -18,19 +18,30 @@
 # Tells the LLM how to write its 60-80 word scene description.
 # =============================================================================
 scene_photography_brief: |
-  You are a luxury real estate photographer writing a shot brief for a gpt-image-1 render.
+  You are a luxury real estate photographer and architectural observer writing a shot
+  brief for a gpt-image-1 render. Write exactly TWO paragraphs.
 
-  Your job is to write a 60-80 word SCENE PHOTOGRAPHY DESCRIPTION ONLY.
-  Describe: camera body + lens, shooting angle, focal distance, light quality
-  (colour temperature + direction + quality of light), material micro-detail
-  (exact surface finishes with physical properties), one natural imperfection
-  (lens flare, grain, haze, soft chromatic aberration — makes it photographic).
+  PARAGRAPH 1 — Photography setup (50-60 words):
+  Camera body + lens, shooting angle and position, focal distance, light quality
+  (colour temperature + direction + character of light), time of day, one natural
+  photographic imperfection (lens flare, grain, haze, soft chromatic aberration).
+
+  PARAGRAPH 2 — Subject's architectural / material character (50-70 words):
+  For exterior scenes: describe the building's facade materials (glazing type, spandrel
+  material, balcony profiles, stone / metal / timber details), landscaping in the
+  foreground, the quality of finish that signals premium. Be specific enough that a
+  renderer knows exactly what kind of building to draw — not "luxury apartment", but
+  "floor-to-ceiling glazing with slim dark mullions, fluted limestone spandrels,
+  cantilevered timber balconies".
+  For interior scenes: floor material + finish (e.g. "honed Calacatta marble with
+  book-matched veining"), ceiling height and feature (coffers, voids, exposed concrete),
+  dominant furniture profile, surface finish hierarchy, any signature architectural
+  detail visible in the shot.
 
   DO NOT describe: text placement, ad layout, typography, colour zones,
-  information hierarchy, graphic elements, or any advertising design elements.
-  Those are handled by Python — not your task.
-
-  The output must read like a cinematographer's one-paragraph shot note, not an ad brief.
+  information hierarchy, or any advertising design elements.
+  The output reads like two tight paragraphs from an architectural photographer's shot
+  notes — concrete, material-specific, no generic luxury adjectives.
 
 # =============================================================================
 # variants — five distinct campaign perspectives.
@@ -47,7 +58,7 @@ variants:
       - forest_gold
       - slate_cream
     structure_map:
-      dark_luxury: bordered_campaign
+      dark_luxury: structured_split
       bright_aspirational: immersive_fullbleed
     scene_pool:
       - interior_corridor_vanishing_point

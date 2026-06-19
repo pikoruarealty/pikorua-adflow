@@ -154,15 +154,20 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
                 "prompt": i, "backend": "none", "fixable": False,
                 "error": (
                     "No image service is connected yet. Add an OPENAI_API_KEY "
-                    "(preferred) or IDEOGRAM_API_KEY to generate images."
+                    "or IDEOGRAM_API_KEY to generate images."
                 ),
             })
             continue
 
         speed = payload.speeds.get(i) or payload.speed
         aspect = payload.ratios.get(i) or payload.ratio
-        # gpt-image-1 is preferred when available — superior text rendering for ads
-        backend = "gpt-image-1" if openai_key else "ideogram"
+        # Use backend chosen in the UI; fall back to whichever key is available
+        requested_backend = payload.backend or "ideogram"
+        if requested_backend == "gpt-image-1" and not openai_key:
+            requested_backend = "ideogram"
+        if requested_backend == "ideogram" and not ideogram_key:
+            requested_backend = "gpt-image-1"
+        backend = requested_backend
 
         # Prefer custom prompt override → user-saved edit → AI-generated prompt
         custom_or_saved = (
