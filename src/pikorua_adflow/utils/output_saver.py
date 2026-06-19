@@ -3,8 +3,30 @@ Saves crew outputs to a timestamped folder under outputs/pending_review/.
 Each run gets its own folder so nothing is overwritten.
 """
 import json
+import re
 import pathlib
 from datetime import datetime
+
+
+# Mapping from @task method name → variant_key (canonical order)
+_VISUAL_TASK_TO_VARIANT = {
+    "architectural_perspective_task": "architectural_perspective",
+    "lifestyle_moment_task": "lifestyle_moment",
+    "iconic_representation_task": "iconic_representation",
+    "exterior_establishing_shot_task": "exterior_establishing_shot",
+    "interior_signature_moment_task": "interior_signature_moment",
+}
+_VARIANT_ORDER = list(_VISUAL_TASK_TO_VARIANT.values())
+
+AD_COPY_TASKS = {
+    "write_meta_ads", "write_google_ads", "write_whatsapp_script",
+    "write_email", "format_for_api",
+}
+AD_COPY_DESC_HINTS = (
+    "write_meta", "write_google", "write_whatsapp", "write_email",
+    "format_for_api", "meta ad copy", "google search ad",
+    "whatsapp business", "email for",
+)
 
 
 def get_review_folder() -> pathlib.Path:
@@ -19,6 +41,27 @@ def get_review_folder() -> pathlib.Path:
     return folder
 
 
+def _extract_pydantic_or_json(task_out) -> dict | None:
+    """Try pydantic output first; fall back to parsing JSON from the raw string."""
+    pydantic_out = getattr(task_out, "pydantic", None)
+    if pydantic_out is not None:
+        try:
+            return pydantic_out.model_dump()
+        except Exception:
+            pass
+    raw = getattr(task_out, "raw", "") or str(task_out)
+    # Strip markdown fences if the model wrapped its JSON anyway
+    raw_clean = re.sub(r"```(?:json)?\s*", "", raw).strip("`").strip()
+    # Find the first {...} block
+    m = re.search(r"\{[\s\S]*\}", raw_clean)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except Exception:
+            pass
+    return None
+
+
 def save_for_review(content_result, audience_result=None) -> pathlib.Path:
     folder = get_review_folder()
     outputs_root = pathlib.Path(__file__).parent.parent.parent.parent / "outputs"
@@ -26,18 +69,9 @@ def save_for_review(content_result, audience_result=None) -> pathlib.Path:
     if audience_result is not None:
         (folder / "persona.md").write_text(str(audience_result), encoding="utf-8")
 
-    # Extract per-task outputs from CrewAI result if available
     ad_copy_sections = []
-    banner_prompts = ""
-    render_prompts = ""
-    AD_COPY_TASKS = {"write_meta_ads", "write_google_ads", "write_whatsapp_script", "write_email", "format_for_api"}
-    BANNER_TASK = "generate_banner_prompts"
-    RENDER_TASK = "generate_render_prompts"
-
-    BANNER_DESC_HINTS = ("ideogram", "banner prompt", "generate_banner")
-    RENDER_DESC_HINTS = ("flux", "render prompt", "generate_render", "exterior render")
-    AD_COPY_DESC_HINTS = ("write_meta", "write_google", "write_whatsapp", "write_email", "format_for_api",
-                          "meta ad copy", "google search ad", "whatsapp business", "email for")
+    # Collect visual outputs keyed by variant_key; preserve canonical order
+    visual_by_variant: dict[str, dict] = {}
 
     tasks_output = getattr(content_result, "tasks_output", None)
     if tasks_output:
@@ -50,40 +84,41 @@ def save_for_review(content_result, audience_result=None) -> pathlib.Path:
             if name in AD_COPY_TASKS or any(h in tag for h in AD_COPY_DESC_HINTS):
                 label = (name or "ad copy").replace("_", " ").title()
                 ad_copy_sections.append(f"## {label}\n\n{raw}")
-            elif name == BANNER_TASK or any(h in tag for h in BANNER_DESC_HINTS):
-                banner_prompts = raw
-            elif name == RENDER_TASK or any(h in tag for h in RENDER_DESC_HINTS):
-                render_prompts = raw
+
+            elif name in _VISUAL_TASK_TO_VARIANT:
+                variant_key = _VISUAL_TASK_TO_VARIANT[name]
+                parsed = _extract_pydantic_or_json(task_out)
+                if parsed:
+                    visual_by_variant[variant_key] = parsed
 
     if ad_copy_sections:
-        (folder / "ad_copy.md").write_text("\n\n---\n\n".join(ad_copy_sections), encoding="utf-8")
+        (folder / "ad_copy.md").write_text(
+            "\n\n---\n\n".join(ad_copy_sections), encoding="utf-8"
+        )
     else:
-        # Fallback: write the raw crew result (last task output)
         (folder / "ad_copy.md").write_text(str(content_result), encoding="utf-8")
 
-    if banner_prompts or render_prompts:
-        combined = "\n\n".join(filter(None, [banner_prompts, render_prompts]))
-        (folder / "visual_brief.md").write_text(combined, encoding="utf-8")
-        (outputs_root / "visual_brief.md").write_text(combined, encoding="utf-8")
+    if visual_by_variant:
+        # Build ordered list of visual_prompts.json entries
+        entries = []
+        for i, vk in enumerate(_VARIANT_ORDER, 1):
+            if vk in visual_by_variant:
+                entry = {"variant_key": vk, "prompt_num": i}
+                entry.update(visual_by_variant[vk])
+                entries.append(entry)
+
+        json_str = json.dumps(entries, indent=2, ensure_ascii=False)
+        (folder / "visual_prompts.json").write_text(json_str, encoding="utf-8")
+        (outputs_root / "visual_prompts.json").write_text(json_str, encoding="utf-8")
 
     # Copy evaluator + CRM outputs into the review folder if written this run
-    for filename in ("targeting_brief.md", "copy_scorecard.md", "copy_rewrites.md",
-                     "crm_insights.md", "crm_signal.md"):
+    for filename in (
+        "targeting_brief.md", "copy_scorecard.md", "copy_rewrites.md",
+        "crm_insights.md", "crm_signal.md",
+    ):
         src = outputs_root / filename
         if src.exists():
             (folder / filename).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-    # Fallback: combine from output files if task-level capture missed them
-    if not (banner_prompts or render_prompts):
-        banner_src = outputs_root / "visual_brief.md"
-        render_src = outputs_root / "render_prompts.md"
-        parts = []
-        if banner_src.exists():
-            parts.append(banner_src.read_text(encoding="utf-8"))
-        if render_src.exists():
-            parts.append(render_src.read_text(encoding="utf-8"))
-        if parts:
-            combined = "\n\n".join(parts)
-            (folder / "visual_brief.md").write_text(combined, encoding="utf-8")
 
     print(f"\n{'='*60}")
     print(f"  REVIEW REQUIRED")

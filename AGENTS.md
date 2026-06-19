@@ -107,7 +107,9 @@ my_crew/
 │   │   ├── agents.yaml       # Agent definitions (role, goal, backstory)
 │   │   └── tasks.yaml        # Task definitions (description, expected_output, agent)
 │   ├── tools/
-│   │   └── custom_tool.py    # Custom tool implementations
+│   │   ├── meta_tool.py      # Meta Ads API client (campaigns, ads, insights)
+│   │   ├── meta_targeting.py # Audience/geo resolution + targeting specs
+│   │   └── search_tool.py    # Web search for trend hooks
 │   ├── crew.py               # Crew orchestration class
 │   └── main.py               # Entry point with inputs
 ├── knowledge/                 # Knowledge base resources

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}PIKORUA — My Campaigns{% endblock %}
+
+{% block content %}
+<header class="flex justify-between items-end mb-8 border-b border-outline-variant pb-6">
+  <div>
+    <p class="label-caps text-outline mb-2">Your work</p>
+    <h1 class="font-display text-4xl md:text-5xl">My campaigns</h1>
+  </div>
+  <a href="/portal" class="bg-primary text-on-primary label-caps px-6 py-3 hover:bg-surface-tint transition-colors">+ New campaign</a>
+</header>
+
+<!-- Stat row -->
+<div id="stat-row" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"></div>
+
+<!-- CRM lookalike sync -->
+<div class="border border-outline-variant p-5 mb-8">
+  <div class="flex justify-between items-start gap-4 flex-wrap">
+    <div>
+      <h3 class="font-headline text-xl">Find more buyers like your past leads</h3>
+      <p class="text-sm text-on-surface-variant mt-1">Splits your CRM into promising and cold leads, then creates two Meta audiences.</p>
+    </div>
+    <div class="flex flex-col items-end gap-2">
+      <button id="crm-split" onclick="uploadCRMAudiences()" class="border border-primary text-primary label-caps px-5 py-2 hover:bg-primary hover:text-on-primary transition-colors">Find similar buyers</button>
+      <div id="crm-result" class="text-sm text-on-surface-variant text-right max-w-sm"></div>
+    </div>
+  </div>
+  <div id="crm-created" class="hidden mt-4 pt-4 border-t border-outline-variant grid md:grid-cols-2 gap-3">
+    <div class="border border-outline-variant p-3">
+      <p class="label-caps text-ok">Include → Lookalike</p>
+      <p id="crm-good-name" class="text-sm font-medium mt-1"></p>
+      <p id="crm-good-count" class="text-xs text-outline"></p>
+    </div>
+    <div class="border border-outline-variant p-3">
+      <p class="label-caps text-error">Exclude → Cold leads</p>
+      <p id="crm-bad-name" class="text-sm font-medium mt-1"></p>
+      <p id="crm-bad-count" class="text-xs text-outline"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign table -->
+<div class="border border-outline-variant">
+  <table class="w-full">
+    <thead>
+      <tr class="border-b border-outline-variant label-caps text-outline text-left">
+        <th class="p-4">Campaign</th><th class="p-4">Status</th><th class="p-4">Started</th><th class="p-4">Budget</th><th class="p-4"></th><th class="p-4"></th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STATUS = {
+  complete: ['Ready', 'text-ok'], failed: ['Failed', 'text-error'],
+  running_stage1: ['Researching', 'text-warn'], running_stage2: ['Writing', 'text-warn'],
+  running_stage3: ['Polishing', 'text-warn'], queued: ['Starting', 'text-outline'],
+};
+function badge(s) {
+  const [label, cls] = STATUS[s] || [s.replace(/_/g, ' '), 'text-outline'];
+  return '<span class="label-caps ' + cls + '">' + label + '</span>';
+}
+
+let activeIds = [];
+
+function render(rows) {
+  const tbody = document.getElementById('rows');
+  let total = rows.length, running = 0, ready = 0, failed = 0;
+  activeIds = [];
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="p-10 text-center text-on-surface-variant">' +
+      'No campaigns yet. <a href="/portal" class="text-primary hover:underline">Start your first campaign</a></td></tr>';
+  } else {
+    tbody.innerHTML = '';
+    rows.forEach(([id, run]) => {
+      const b = run.brief || {};
+      const s = run.status || '';
+      if (s.startsWith('running_') || s === 'queued') { running++; activeIds.push(id); }
+      if (s === 'complete') ready++;
+      if (s === 'failed') failed++;
+      const meta = esc((b.city || '') + ' · ₹' + (b.price_cr || '') + ' Cr · ' + (b.platform || ''));
+      let action = '';
+      if (s === 'complete') action = run.approved
+        ? '<span class="text-ok label-caps">✓ Approved</span>'
+        : '<button onclick="approveRun(\'' + id + '\')" class="border border-primary text-primary label-caps px-3 py-1 hover:bg-primary hover:text-on-primary transition-colors">Approve</button>';
+      else if (s === 'failed') action = '<button onclick="rerun(\'' + id + '\')" class="label-caps text-primary">Try again</button>';
+      const view = s === 'complete' ? '<a href="/results/' + id + '" class="label-caps border border-primary text-primary px-3 py-1.5 hover:bg-primary hover:text-on-primary transition-colors">Open campaign</a>' : '';
+      const del = (s.startsWith('running_') || s === 'queued') ? '' :
+        '<button onclick="delRun(\'' + id + '\')" title="Remove" class="text-outline hover:text-error text-lg leading-none">×</button>';
+      tbody.insertAdjacentHTML('beforeend',
+        '<tr id="row-' + id + '" class="border-b border-outline-variant hover:bg-surface-container-low transition-colors">' +
+        '<td class="p-4"><div class="text-base font-semibold">' + esc(b.property_name || '—') + '</div>' +
+          '<div class="text-xs text-outline mt-0.5">' + meta + '</div></td>' +
+        '<td class="p-4" id="status-' + id + '">' + badge(s) + '</td>' +
+        '<td class="p-4 text-sm text-on-surface-variant whitespace-nowrap">' + fmtISTdate(run.created_at) + '</td>' +
+        '<td class="p-4 text-sm font-medium">' + fmtINR(b.budget_inr) + '</td>' +
+        '<td class="p-4"><div class="flex items-center gap-4">' + action + view + '</div></td>' +
+        '<td class="p-4 text-center">' + del + '</td></tr>');
+    });
+  }
+  document.getElementById('stat-row').innerHTML = [
+    ['Total', total, 'all time'], ['Running', running, 'in progress'],
+    ['Ready', ready, 'to review'], ['Failed', failed, 'needs attention'],
+  ].map(([l, n, sub]) =>
+    '<div class="border border-outline-variant p-4"><p class="label-caps text-outline">' + l + '</p>' +
+    '<p class="font-display text-3xl mt-1">' + n + '</p><p class="text-xs text-outline">' + sub + '</p></div>'
+  ).join('');
+}
+
+function load() { api('/runs/json').then(render).catch(() => {}); }
+
+function approveRun(id) {
+  api('/approve/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(load).catch(e => alert('Error: ' + e.message));
+}
+function rerun(id) { api('/rerun/' + id, { method: 'POST' }).then(() => setTimeout(load, 600)).catch(e => alert(e.message)); }
+function delRun(id) {
+  if (!confirm('Remove this campaign from the list? (Your files are kept on disk.)')) return;
+  api('/run/' + id, { method: 'DELETE' }).then(() => document.getElementById('row-' + id)?.remove()).catch(e => alert(e.message));
+}
+
+function uploadCRMAudiences() {
+  const btn = document.getElementById('crm-split'), result = document.getElementById('crm-result');
+  btn.disabled = true; btn.textContent = 'Uploading…'; result.textContent = '';
+  api('/upload-crm-audience', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ split: true }) })
+    .then(data => {
+      btn.disabled = false; btn.textContent = 'Find similar buyers';
+      const good = data.good_leads_count || 0, bad = data.bad_leads_count || 0;
+      result.className = 'text-sm text-ok text-right';
+      result.innerHTML = '<strong>Done</strong> · ' + (data.total_leads || 0) + ' leads · ' + good + ' promising, ' + bad + ' cold';
+      const panel = document.getElementById('crm-created');
+      document.getElementById('crm-good-name').textContent = data.good_lookalike_name || 'Pikorua Good Leads – Lookalike';
+      document.getElementById('crm-good-count').textContent = 'Source: ' + good + ' leads';
+      document.getElementById('crm-bad-name').textContent = data.bad_custom_audience_name || 'Pikorua Bad Leads – Exclude';
+      document.getElementById('crm-bad-count').textContent = 'Source: ' + bad + ' leads';
+      panel.classList.remove('hidden');
+    })
+    .catch(e => { btn.disabled = false; btn.textContent = 'Find similar buyers'; result.className = 'text-sm text-error text-right'; result.textContent = 'Error: ' + e.message; });
+}
+
+load();
+setInterval(() => { if (activeIds.length) load(); }, 4000);
+</script>
+{% endblock %}

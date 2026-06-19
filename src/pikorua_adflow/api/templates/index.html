@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}PIKORUA — New Campaign{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+
+  <header class="mb-8">
+    <p class="label-caps text-outline mb-2">New campaign</p>
+    <h1 class="font-display text-4xl md:text-5xl text-on-background">Create a campaign</h1>
+    <p class="text-on-surface-variant mt-3 max-w-2xl">We'll research the right buyers and write your ads, WhatsApp messages, emails, and visuals — ready to review in a few minutes.</p>
+  </header>
+
+  <div class="flex items-start gap-3 border border-primary-container/50 bg-primary-fixed/30 p-4 mb-6">
+    <span class="material-symbols-outlined text-primary">lock</span>
+    <p class="text-sm text-on-surface-variant"><b class="text-on-background">Nothing goes live automatically.</b> Everything we create is a draft for you to read, pick from, and approve. No ads are published until you say so.</p>
+  </div>
+
+  <div id="trend-stale-bar" class="hidden items-center gap-2 border border-warn/40 bg-warn/10 text-warn p-3 mb-6 text-sm">
+    <span class="material-symbols-outlined text-base">warning</span>
+    <span id="trend-stale-msg"></span>
+  </div>
+
+  <form id="brief-form" class="space-y-10">
+
+    <!-- 1. The property -->
+    <section>
+      <div class="flex items-center gap-3 mb-4 border-b border-outline-variant pb-3">
+        <span class="w-7 h-7 flex items-center justify-center bg-primary text-on-primary label-caps text-xs">1</span>
+        <h2 class="font-headline text-2xl">The property</h2>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="label-caps text-outline block mb-1" for="property_name">What are we advertising?</label>
+          <input id="property_name" name="property_name" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Oberoi Sky Heights, 3BHK sea-view apartment"/>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="label-caps text-outline block mb-1" for="property_type">Type of property</label>
+            <input id="property_type" name="property_type" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. sea-view apartment, 4BHK villa"/>
+          </div>
+          <div>
+            <label class="label-caps text-outline block mb-1" for="city">City</label>
+            <input id="city" name="city" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Mumbai"/>
+          </div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="label-caps text-outline block mb-1" for="locality">Area / locality <span class="text-outline-variant normal-case">(optional)</span></label>
+            <input id="locality" name="locality" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Bandra West, Thaltej"/>
+          </div>
+          <div>
+            <label class="label-caps text-outline block mb-1" for="price_cr">Price <span class="text-outline-variant normal-case">(₹ crores)</span></label>
+            <input id="price_cr" name="price_cr" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. 4.5"/>
+          </div>
+        </div>
+        <div>
+          <label class="label-caps text-outline block mb-1" for="standout_feature">What makes it special? <span class="text-outline-variant normal-case">(optional)</span></label>
+          <input id="standout_feature" name="standout_feature" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. infinity pool on the 32nd floor"/>
+        </div>
+        <label class="flex items-center gap-3 cursor-pointer text-sm">
+          <input type="checkbox" id="sample_ready" name="sample_ready" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
+          Sample apartment ready to view
+        </label>
+
+        <!-- Reference creatives -->
+        <div class="pt-2">
+          <label class="label-caps text-outline block mb-1">Reference creatives <span class="text-outline-variant normal-case">(optional)</span></label>
+          <p class="text-sm text-on-surface-variant mb-2">Upload ads you love — our AI will match their style, mood, and composition.</p>
+          <div id="ref-grid" class="flex flex-wrap gap-2 mb-2"></div>
+          <label class="inline-flex items-center gap-2 border border-dashed border-outline px-4 py-2 label-caps cursor-pointer hover:bg-surface-container-low transition-colors">
+            <span class="material-symbols-outlined text-base">upload</span> Upload creatives
+            <input type="file" id="ref-upload" accept="image/png,image/jpeg,image/webp" multiple class="hidden" onchange="uploadRef(this)"/>
+          </label>
+          <span id="ref-status" class="text-sm text-outline ml-3"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Who should see it -->
+    <section>
+      <div class="flex items-center gap-3 mb-4 border-b border-outline-variant pb-3">
+        <span class="w-7 h-7 flex items-center justify-center bg-primary text-on-primary label-caps text-xs">2</span>
+        <h2 class="font-headline text-2xl">Who should see it</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="label-caps text-outline block mb-1" for="buyer_type">Type of buyer</label>
+          <select id="buyer_type" name="buyer_type" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0">
+            <option value="HNI/NRI">HNI / NRI</option>
+            <option value="HNI">HNI only</option>
+            <option value="NRI">NRI only</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-caps text-outline block mb-1" for="nri_geographies">Which countries? <span class="text-outline-variant normal-case">(if NRI)</span></label>
+          <input id="nri_geographies" name="nri_geographies" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. UAE, US, UK"/>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Campaign setup -->
+    <section>
+      <div class="flex items-center gap-3 mb-4 border-b border-outline-variant pb-3">
+        <span class="w-7 h-7 flex items-center justify-center bg-primary text-on-primary label-caps text-xs">3</span>
+        <h2 class="font-headline text-2xl">Campaign setup</h2>
+      </div>
+      <div class="space-y-4">
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="label-caps text-outline block mb-1" for="platform">Where should the ads run?</label>
+            <select id="platform" name="platform" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0">
+              <option value="">Choose…</option>
+              <option value="Meta Ads">Facebook &amp; Instagram (Meta)</option>
+              <option value="Google Ads">Google</option>
+              <option value="Meta Ads + Google Ads">Both</option>
+            </select>
+          </div>
+          <div>
+            <label class="label-caps text-outline block mb-1" for="goal">What's the goal?</label>
+            <select id="goal" name="goal" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0">
+              <option value="">Choose…</option>
+              <option value="Lead Generation">Collect enquiries (leads)</option>
+              <option value="Brand Awareness">Build awareness</option>
+              <option value="Site Visits">Drive site visits</option>
+              <option value="WhatsApp Enquiries">WhatsApp enquiries</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="label-caps text-outline block mb-1" for="budget_inr">Total budget <span class="text-outline-variant normal-case">(₹)</span></label>
+            <input type="number" id="budget_inr" name="budget_inr" min="1" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. 50000"/>
+          </div>
+          <div>
+            <label class="label-caps text-outline block mb-1" for="campaign_duration_days">Duration <span class="text-outline-variant normal-case">(days)</span></label>
+            <input type="number" id="campaign_duration_days" name="campaign_duration_days" min="1" value="30" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. 30"/>
+          </div>
+        </div>
+
+        <details class="border-t border-outline-variant pt-3">
+          <summary class="label-caps text-primary cursor-pointer">More options (optional)</summary>
+          <div class="space-y-4 mt-4">
+            <div>
+              <label class="label-caps text-outline block mb-1" for="company_name">Page / company name on the ad <span class="text-outline-variant normal-case">(optional)</span></label>
+              <input id="company_name" name="company_name" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="Leave blank to keep the brand name out of the copy"/>
+            </div>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <label class="label-caps text-outline block mb-1" for="daily_budget_inr">Daily spend per ad group <span class="text-outline-variant normal-case">(₹)</span></label>
+                <input type="number" id="daily_budget_inr" name="daily_budget_inr" value="1000" min="1" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0"/>
+                <p id="daily-budget-hint" class="text-xs text-outline mt-1">Auto-calculated from total ÷ duration. Edit to override.</p>
+              </div>
+              <div>
+                <label class="label-caps text-outline block mb-1" for="cta">Button on the ad</label>
+                <select id="cta" name="cta" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0">
+                  <option value="GET_QUOTE">Get Quote</option>
+                  <option value="CONTACT_US">Contact Us</option>
+                  <option value="LEARN_MORE">Learn More</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="label-caps text-outline block mb-1" for="landing_page_url">Website shown after enquiry <span class="text-outline-variant normal-case">(optional)</span></label>
+              <input type="url" id="landing_page_url" name="landing_page_url" value="https://pikorua.in/" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0"/>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <button type="submit" id="submit-btn" class="w-full bg-primary text-on-primary label-caps py-4 hover:bg-surface-tint transition-colors">Launch campaign</button>
+    <p id="ref-display" class="text-xs text-outline"></p>
+  </form>
+
+  <!-- Status -->
+  <div id="status-box" class="hidden mt-6 p-4 border border-outline-variant text-sm"></div>
+
+  <!-- Inline preview -->
+  <div id="results-section" class="hidden mt-8 border border-outline-variant p-6">
+    <div class="flex justify-between items-center mb-4 border-b border-outline-variant pb-3">
+      <h2 class="font-headline text-2xl">Draft copy to review</h2>
+      <a id="full-results-link" href="#" class="label-caps text-primary hover:underline">Open full campaign</a>
+    </div>
+    <p id="results-summary" class="text-on-surface-variant mb-4"></p>
+    <div id="variant-cards" class="space-y-3"></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const form = document.getElementById('brief-form');
+const btn = document.getElementById('submit-btn');
+const box = document.getElementById('status-box');
+let pollTimer = null;
+
+function setStatus(html, kind) {
+  box.classList.remove('hidden');
+  const colors = { running: 'text-primary', ok: 'text-ok', fail: 'text-error', queued: 'text-on-surface-variant' };
+  box.className = 'mt-6 p-4 border border-outline-variant text-sm ' + (colors[kind] || '');
+  box.innerHTML = html;
+}
+
+function poll(runId) {
+  fetch('/status/' + runId).then(r => r.json()).then(data => {
+    const s = data.status;
+    if (s === 'queued') setStatus('Getting started…', 'queued');
+    else if (s === 'running_stage1') setStatus('Researching your ideal buyers and the local market…', 'running');
+    else if (s === 'running_stage2') setStatus('Writing your ads, WhatsApp messages and emails…', 'running');
+    else if (s === 'running_stage3') setStatus('Reviewing and polishing the best versions…', 'running');
+    else if (s === 'complete') {
+      clearInterval(pollTimer);
+      const sc = data.copy_scorecard_summary ? '<br><small>' + esc(data.copy_scorecard_summary) + '</small>' : '';
+      setStatus('✓ Your campaign is ready to review.' + sc, 'ok');
+      btn.disabled = false;
+      loadResults(runId);
+    } else if (s === 'failed') {
+      clearInterval(pollTimer);
+      setStatus('✗ Something went wrong: ' + esc(data.error || 'unknown error') + '. Please try again.', 'fail');
+      btn.disabled = false;
+    }
+  }).catch(() => {});
+}
+
+function loadResults(runId) {
+  document.getElementById('full-results-link').href = '/results/' + runId;
+  api('/results-data/' + runId).then(data => {
+    document.getElementById('results-section').classList.remove('hidden');
+    document.getElementById('results-summary').textContent = data.scorecard_summary || 'Copy review complete.';
+    const c = document.getElementById('variant-cards');
+    c.innerHTML = '';
+    (data.variants || []).forEach(v => {
+      const badge = v.revised ? '<span class="label-caps text-warn">Revised</span>'
+        : v.status === 'PASS' ? '<span class="label-caps text-ok">Ready</span>'
+        : v.status === 'FLAG' ? '<span class="label-caps text-error">Needs a look</span>'
+        : '<span class="label-caps text-outline">Custom</span>';
+      c.insertAdjacentHTML('beforeend',
+        '<div class="border-l-2 border-primary-container pl-4 py-1">' +
+        '<div class="flex justify-between label-caps text-outline mb-1"><span>Version ' + v.variant + (v.angle ? ' — ' + esc(v.angle) : '') + '</span>' + badge + '</div>' +
+        (v.headline ? '<div class="font-headline text-lg">' + esc(v.headline) + '</div>' : '') +
+        (v.body ? '<div class="text-sm text-on-surface-variant mt-1">' + esc(v.body) + '</div>' : '') +
+        '</div>');
+    });
+  }).catch(() => {});
+}
+
+function syncDailyBudget() {
+  const total = parseInt(form.budget_inr.value, 10);
+  const days = parseInt(form.campaign_duration_days.value, 10);
+  if (total > 0 && days > 0) {
+    const daily = Math.floor(total / days);
+    form.daily_budget_inr.value = daily;
+    document.getElementById('daily-budget-hint').textContent =
+      fmtINR(total) + ' ÷ ' + days + ' days = ' + fmtINR(daily) + '/day. Edit to override.';
+  }
+}
+form.budget_inr.addEventListener('input', syncDailyBudget);
+form.campaign_duration_days.addEventListener('input', syncDailyBudget);
+
+form.addEventListener('submit', function (e) {
+  e.preventDefault();
+  btn.disabled = true;
+  const payload = {
+    property_name: form.property_name.value.trim(), platform: form.platform.value,
+    goal: form.goal.value, budget_inr: parseInt(form.budget_inr.value, 10),
+    city: form.city.value.trim(), locality: form.locality.value.trim(),
+    property_type: form.property_type.value.trim(), price_cr: form.price_cr.value.trim(),
+    standout_feature: form.standout_feature.value.trim(), buyer_type: form.buyer_type.value,
+    nri_geographies: form.nri_geographies.value.trim(),
+    campaign_duration_days: parseInt(form.campaign_duration_days.value, 10),
+    landing_page_url: form.landing_page_url.value.trim() || 'https://pikorua.in/',
+    daily_budget_inr: parseInt(form.daily_budget_inr.value, 10) || 1000,
+    cta: form.cta.value, company_name: form.company_name.value.trim(),
+    sample_ready: form.sample_ready.checked,
+  };
+  setStatus('Sending…', 'queued');
+  api('/launch-campaign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(data => {
+      document.getElementById('ref-display').textContent = 'Reference: ' + data.run_id;
+      setStatus('Getting started…', 'queued');
+      pollTimer = setInterval(() => poll(data.run_id), 4000);
+    })
+    .catch(err => { setStatus('Could not reach the server: ' + err.message, 'fail'); btn.disabled = false; });
+});
+
+/* Reference creatives */
+function loadRefs() {
+  api('/reference-images').then(d => {
+    const grid = document.getElementById('ref-grid');
+    grid.innerHTML = '';
+    (d.images || []).forEach(img => {
+      const url = '/reference-images/' + encodeURIComponent(img.filename);
+      grid.insertAdjacentHTML('beforeend',
+        '<div class="relative w-16 h-16">' +
+        '<img src="' + url + '" title="' + esc(img.description || img.filename) + '" class="w-16 h-16 object-cover border border-outline-variant"/>' +
+        '<button type="button" onclick="delRef(\'' + esc(img.filename) + '\')" class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-on-background text-white text-xs leading-none">×</button>' +
+        '</div>');
+    });
+  }).catch(() => {});
+}
+function uploadRef(input) {
+  if (!input.files || !input.files.length) return;
+  const status = document.getElementById('ref-status');
+  status.textContent = 'Uploading…';
+  const fd = new FormData();
+  for (let i = 0; i < input.files.length; i++) fd.append('file_' + i, input.files[i], input.files[i].name);
+  fetch('/reference-images', { method: 'POST', body: fd }).then(r => {
+    status.textContent = r.ok ? 'Uploaded ✓' : 'Upload failed.';
+    loadRefs();
+    setTimeout(() => status.textContent = '', 3000);
+  });
+  input.value = '';
+}
+function delRef(fname) {
+  fetch('/reference-images/' + encodeURIComponent(fname), { method: 'DELETE' }).then(loadRefs);
+}
+
+/* Trend staleness banner */
+fetch('/trend-status').then(r => r.json()).then(d => {
+  if (d.stale) {
+    const bar = document.getElementById('trend-stale-bar');
+    const detail = d.age_hours !== null ? ' Last updated ' + d.age_hours + 'h ago.' : ' No trend data cached yet.';
+    document.getElementById('trend-stale-msg').textContent =
+      'Market trend data is stale — the next run will refresh it automatically.' + detail;
+    bar.classList.remove('hidden'); bar.classList.add('flex');
+  }
+}).catch(() => {});
+
+syncDailyBudget();
+loadRefs();
+</script>
+{% endblock %}

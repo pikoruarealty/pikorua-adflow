@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}PIKORUA — Lead Insights{% endblock %}
+
+{% block content %}
+<header class="flex justify-between items-end mb-8 border-b border-outline-variant pb-6">
+  <div>
+    <p class="label-caps text-outline mb-2">Analytics overview</p>
+    <h1 class="font-display text-4xl md:text-5xl">Lead Insights</h1>
+    <p id="src" class="text-sm text-outline mt-2"></p>
+  </div>
+  <button onclick="refresh()" class="border border-outline label-caps px-5 py-2 hover:bg-surface-container-low">Refresh</button>
+</header>
+
+<div id="board"><p class="text-on-surface-variant">Loading CRM intelligence…</p></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function stat(label, val, sub) {
+  return '<div class="border border-outline-variant p-5"><p class="label-caps text-outline">' + label + '</p>' +
+    '<p class="font-display text-4xl mt-1">' + val + '</p>' + (sub ? '<p class="text-xs text-outline mt-1">' + sub + '</p>' : '') + '</div>';
+}
+function bars(items, fmt) {
+  if (!items.length) return '<p class="text-sm text-outline">No data.</p>';
+  const max = Math.max(...items.map(i => i.value)) || 1;
+  return '<div class="space-y-2">' + items.map(i =>
+    '<div><div class="flex justify-between text-sm mb-1"><span>' + esc(i.label) + '</span>' +
+    '<span class="text-outline">' + (fmt ? fmt(i.value) : i.value) + (i.note ? ' · ' + esc(i.note) : '') + '</span></div>' +
+    '<div class="h-2 bg-surface-container"><div class="h-2 bg-primary-container" style="width:' + (i.value / max * 100) + '%"></div></div></div>'
+  ).join('') + '</div>';
+}
+function card(title, inner) {
+  return '<div class="border border-outline-variant p-6"><h3 class="font-headline text-xl mb-4">' + title + '</h3>' + inner + '</div>';
+}
+
+function render(d) {
+  document.getElementById('src').textContent = 'Source: ' + (d.source || 'CRM') + ' · ' + (d.total_leads || 0) + ' leads';
+  const q = d.lead_quality || {};
+  const stages = q.stages || [];
+  const qualityStage = stages.find(s => /quality|qualified|hot|warm/i.test(s.stage));
+  const avgQ = q.avg_quality_score != null ? q.avg_quality_score : (qualityStage ? qualityStage.count : '—');
+  const trend = d.volume_trend || {};
+
+  let html = '<div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">' +
+    stat('Total leads', d.total_leads || 0, trend.growth_rate != null ? (trend.growth_rate >= 0 ? '+' : '') + trend.growth_rate + '% vs last period' : '') +
+    stat('Peak month', trend.peak_month || '—', trend.peak_count ? trend.peak_count + ' leads' : '') +
+    stat('Top city', (d.geography && d.geography.top_cities && d.geography.top_cities[0]) ? d.geography.top_cities[0][0] : '—', '') +
+    '</div>';
+
+  html += '<div class="grid md:grid-cols-2 gap-6 mb-6">';
+
+  // Funnel
+  html += card('Lead funnel', bars(stages.map(s => ({ label: s.stage, value: s.count }))));
+
+  // Budget segments
+  const seg = d.budget_segments || {};
+  const segItems = Object.entries(seg).filter(([k, v]) => v.count).map(([k, v]) =>
+    ({ label: '₹' + k, value: v.count, note: (v.avg_quality_score || 0) + '% quality' }));
+  html += card('Budget segments', bars(segItems));
+
+  // Top cities
+  const cities = (d.geography && d.geography.top_cities || []).map(([c, n]) => ({ label: c, value: n }));
+  html += card('Top localities', bars(cities));
+
+  // Professions
+  const profs = ((d.professions && d.professions.industries) || []).slice(0, 8).map(p =>
+    ({ label: p.industry, value: p.count, note: (p.quality_rate || 0) + '% quality' }));
+  html += card('Professions', bars(profs));
+
+  html += '</div>';
+
+  // Top converting profiles
+  const profiles = d.top_profiles || [];
+  if (profiles.length) {
+    html += card('Top converting profiles',
+      '<div class="space-y-3">' + profiles.map(p => {
+        const pr = p.profile || {};
+        return '<div class="flex justify-between items-center border-b border-outline-variant pb-2">' +
+          '<span class="text-sm">' + esc(pr.industry || '?') + ' · ₹' + esc(pr.budget || '?') + ' · ' + esc(pr.city || '?') + '</span>' +
+          '<span class="label-caps text-primary">' + (p.quality_rate || 0) + '% · ' + p.count + ' leads</span></div>';
+      }).join('') + '</div>');
+    html = html.replace('</div>\n\n', '</div>'); // noop guard
+  }
+
+  document.getElementById('board').innerHTML = html + '<div id="insights" class="mt-8"></div>';
+  loadInsights();
+}
+
+function loadInsights() {
+  const root = document.getElementById('insights');
+  const skRow = '<div class="h-3 bg-surface-container rounded animate-pulse w-full mb-2"></div>';
+  root.innerHTML = '<h2 class="font-headline text-2xl mb-4">Strategic insights</h2>' +
+    '<div class="flex items-center gap-3 text-sm text-outline mb-4">' +
+    '<span class="inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>' +
+    'Analysing your CRM data… this can take up to 30 seconds.' +
+    '</div>' +
+    '<div class="grid md:grid-cols-2 gap-4">' +
+    [0,1,2,3].map(() => '<div class="border border-outline-variant p-4">' + skRow + '<div class="h-3 bg-surface-container rounded animate-pulse w-2/3 mb-2"></div><div class="h-3 bg-surface-container rounded animate-pulse w-1/2"></div></div>').join('') +
+    '</div>';
+  api('/crm-strategic-insights').then(d => {
+    const strat = (d.insights || []).filter(i => i.scope === 'strategic' || !i.scope);
+    if (d.error) { root.innerHTML = '<h2 class="font-headline text-2xl mb-4">Strategic insights</h2><p class="text-sm text-outline">' + esc(d.error) + '</p>'; return; }
+    let html = '<h2 class="font-headline text-2xl mb-4">Strategic insights</h2><div class="grid md:grid-cols-2 gap-4">';
+    strat.forEach(i => {
+      const conf = i.confidence === 'HIGH' ? 'text-ok' : i.confidence === 'SPECULATIVE' ? 'text-warn' : 'text-outline';
+      html += '<div class="border border-outline-variant p-5">' +
+        '<div class="flex justify-between items-start"><p class="label-caps text-primary">' + esc(i.title) + '</p>' +
+        '<span class="label-caps ' + conf + '">' + esc(i.confidence || '') + '</span></div>' +
+        '<p class="text-sm mt-2">' + esc(i.finding) + '</p>' +
+        '<p class="text-sm text-on-surface-variant mt-2">' + esc(i.action) + '</p>' +
+        '<p class="label-caps text-outline mt-2">' + esc(i.category || '') + '</p></div>';
+    });
+    html += '</div>';
+    root.innerHTML = html;
+  }).catch(e => { root.innerHTML = '<p class="text-error">' + e.message + '</p>'; });
+}
+
+function load() { api('/crm-analytics/summary').then(render).catch(e => { document.getElementById('board').innerHTML = '<p class="text-error">' + e.message + '</p>'; }); }
+function refresh() { document.getElementById('board').innerHTML = '<p class="text-on-surface-variant">Refreshing…</p>'; api('/crm-analytics/refresh').then(render).catch(() => load()); }
+load();
+</script>
+{% endblock %}

@@ -52,9 +52,28 @@ def _run_id_to_point_id(run_id: str) -> int:
 
 def _embed(text: str) -> list[float]:
     from fastembed import TextEmbedding
-    model = TextEmbedding()  # default: BAAI/bge-small-en-v1.5, 384 dims
-    embeddings = list(model.embed([text]))
-    return embeddings[0].tolist()
+    try:
+        model = TextEmbedding()  # default: BAAI/bge-small-en-v1.5, 384 dims
+        embeddings = list(model.embed([text]))
+        return embeddings[0].tolist()
+    except Exception as exc:
+        # Model file missing or corrupt (e.g. interrupted download).
+        # Clear the broken cache entry so the next call re-downloads it.
+        import shutil, os
+        cache_root = os.path.join(
+            os.environ.get("TEMP", os.path.expanduser("~")),
+            "fastembed_cache",
+        )
+        broken = os.path.join(cache_root, "models--qdrant--bge-small-en-v1.5-onnx-q")
+        if os.path.exists(broken):
+            try:
+                shutil.rmtree(broken)
+            except Exception:
+                pass
+        raise RuntimeError(
+            f"Embedding model unavailable ({exc}). "
+            "Deleted stale cache — approve the campaign again to retry."
+        ) from exc
 
 
 def store_approved_campaign(

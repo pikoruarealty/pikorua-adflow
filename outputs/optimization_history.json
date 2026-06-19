@@ -113,6 +113,44 @@
       "actual_pct": -6.5,
       "prediction_error_pp": 0.0,
       "settled_at": "2026-06-14T12:42:17.964277+00:00"
+    },
+    {
+      "id": "902d3518a7af",
+      "run_id": "0896fb0b",
+      "variant": 1,
+      "action": "targeting",
+      "basis": "targeting_other",
+      "metric": "reach",
+      "label": "Add interests: Software Engineering, Information Technology, Startup Founder, SaaS, Tech Entrepreneur, Product Management",
+      "before": 3500000,
+      "raw_multiplier": 1.0,
+      "predicted_after": 3500000,
+      "predicted_pct": 0.0,
+      "calibration_factor_used": 1.0,
+      "opened_at": "2026-06-15T14:49:45.769950+00:00",
+      "actual_after": 3600000,
+      "actual_pct": 2.9,
+      "prediction_error_pp": 2.9,
+      "settled_at": "2026-06-15T14:49:48.275596+00:00"
+    },
+    {
+      "id": "47f1b92d5cdb",
+      "run_id": "0896fb0b",
+      "variant": 1,
+      "action": "budget",
+      "basis": "budget_linear",
+      "metric": "leads",
+      "label": "Adjust budget",
+      "before": null,
+      "raw_multiplier": 1.0,
+      "predicted_after": null,
+      "predicted_pct": 0.0,
+      "calibration_factor_used": 1.0,
+      "opened_at": "2026-06-15T14:50:49.620177+00:00",
+      "actual_after": null,
+      "actual_pct": null,
+      "prediction_error_pp": null,
+      "settled_at": null
     }
   ],
   "calibration": {
@@ -121,6 +159,12 @@
       "n": 3,
       "updated_at": "2026-06-14T12:42:17.964277+00:00",
       "last_observed_ratio": 2.0216
+    },
+    "targeting_other": {
+      "factor": 1.0285714285714285,
+      "n": 1,
+      "updated_at": "2026-06-15T14:49:48.275596+00:00",
+      "last_observed_ratio": 1.0286
     }
   }
 }

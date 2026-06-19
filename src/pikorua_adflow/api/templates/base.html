@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>{% block title %}PIKORUA AdFlow{% endblock %}</title>
+<link rel="icon" type="image/png" href="/favicon.ico"/>
+<script>(function(){try{if(localStorage.getItem('pikorua-theme')==='dark')document.documentElement.classList.add('dark');}catch(e){}})();</script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+  /* ── Semantic palette as RGB triplets so Tailwind opacity modifiers work and
+       dark mode flips every token at once. ── */
+  :root {
+    --primary: 119 90 25; --on-primary: 255 255 255;
+    --primary-container: 197 160 89; --on-primary-container: 78 55 0;
+    --primary-fixed: 255 222 165; --primary-fixed-dim: 233 193 118;
+    --surface-tint: 119 90 25; --inverse-primary: 233 193 118;
+    --background: 250 249 247; --on-background: 26 28 27;
+    --surface: 250 249 247; --surface-bright: 255 255 255; --surface-dim: 218 218 216;
+    --surface-container-lowest: 255 255 255; --surface-container-low: 244 243 241;
+    --surface-container: 239 238 236; --surface-container-high: 233 232 230;
+    --surface-container-highest: 227 226 224; --surface-variant: 227 226 224;
+    --on-surface: 26 28 27; --on-surface-variant: 78 70 57;
+    --outline: 127 118 103; --outline-variant: 209 197 180;
+    --inverse-surface: 47 49 48; --inverse-on-surface: 241 241 239;
+    --error: 186 26 26; --ok: 46 87 64; --warn: 154 115 32;
+  }
+  .dark {
+    --primary: 233 193 118; --on-primary: 38 25 0;
+    --primary-container: 93 66 1; --on-primary-container: 255 222 165;
+    --primary-fixed: 93 66 1; --primary-fixed-dim: 119 90 25;
+    --surface-tint: 233 193 118; --inverse-primary: 119 90 25;
+    --background: 20 19 16; --on-background: 241 241 239;
+    --surface: 26 28 27; --surface-bright: 42 44 43; --surface-dim: 18 18 16;
+    --surface-container-lowest: 15 16 15; --surface-container-low: 31 33 31;
+    --surface-container: 35 37 35; --surface-container-high: 45 47 45;
+    --surface-container-highest: 56 58 56; --surface-variant: 45 47 45;
+    --on-surface: 241 241 239; --on-surface-variant: 209 197 180;
+    --outline: 154 145 131; --outline-variant: 74 70 61;
+    --inverse-surface: 241 241 239; --inverse-on-surface: 26 28 27;
+    --error: 255 180 171; --ok: 127 201 154; --warn: 224 182 90;
+    color-scheme: dark;
+  }
+</style>
+<script>
+  function _c(v){ return 'rgb(var(--' + v + ') / <alpha-value>)'; }
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      colors: {
+        "primary": _c('primary'), "on-primary": _c('on-primary'),
+        "primary-container": _c('primary-container'), "on-primary-container": _c('on-primary-container'),
+        "primary-fixed": _c('primary-fixed'), "primary-fixed-dim": _c('primary-fixed-dim'),
+        "surface-tint": _c('surface-tint'), "inverse-primary": _c('inverse-primary'),
+        "background": _c('background'), "on-background": _c('on-background'),
+        "surface": _c('surface'), "surface-bright": _c('surface-bright'), "surface-dim": _c('surface-dim'),
+        "surface-container-lowest": _c('surface-container-lowest'), "surface-container-low": _c('surface-container-low'),
+        "surface-container": _c('surface-container'), "surface-container-high": _c('surface-container-high'),
+        "surface-container-highest": _c('surface-container-highest'), "surface-variant": _c('surface-variant'),
+        "on-surface": _c('on-surface'), "on-surface-variant": _c('on-surface-variant'),
+        "outline": _c('outline'), "outline-variant": _c('outline-variant'),
+        "inverse-surface": _c('inverse-surface'), "inverse-on-surface": _c('inverse-on-surface'),
+        "error": _c('error'), "ok": _c('ok'), "warn": _c('warn'),
+      },
+      borderRadius: { "DEFAULT": "8px", "sm": "4px", "md": "8px", "lg": "12px", "xl": "16px", "2xl": "20px", "full": "9999px" },
+      spacing: { "container-max": "1440px", "margin-mobile": "20px", "margin-desktop": "56px" },
+      fontFamily: {
+        "display": ["Playfair Display", "serif"], "headline": ["Playfair Display", "serif"],
+        "body": ["Inter", "sans-serif"],
+      },
+    }},
+  };
+</script>
+<style>
+  body { font-family: Inter, sans-serif; -webkit-font-smoothing: antialiased; }
+  .font-display, .font-headline { font-family: 'Playfair Display', serif; }
+  .label-caps { font-family: Inter, sans-serif; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; }
+  .editorial-shadow { box-shadow: 0px 20px 40px rgba(26,31,44,0.04); }
+  .material-symbols-outlined { font-family: 'Material Symbols Outlined'; font-weight: normal;
+    font-style: normal; line-height: 1; display: inline-block; white-space: nowrap; }
+  .seg { height: 4px; flex: 1; transition: background-color .4s ease; }
+  .seg.on { background: rgb(var(--primary-container)); } .seg.off { background: rgb(var(--surface-container-highest)); }
+  /* Inputs readable in both themes */
+  input, select, textarea { color: rgb(var(--on-surface)); }
+  [contenteditable]:focus { outline: 1px solid rgb(var(--primary)); }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col selection:bg-primary-container selection:text-on-primary-container">
+
+<!-- Top navigation -->
+<nav class="bg-background border-b border-outline-variant sticky top-0 z-50">
+  <div class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto">
+    <div class="flex items-center gap-8">
+      <a href="/portal" aria-label="PIKORUA" class="flex items-center shrink-0">
+        <img src="/logo/light" alt="PIKORUA" class="h-9 w-auto block dark:hidden"
+             onerror="this.outerHTML='&lt;span class=\'font-display text-3xl text-primary\'&gt;PIKORUA&lt;/span&gt;'"/>
+        <img src="/logo/dark" alt="PIKORUA" class="h-9 w-auto hidden dark:block"
+             onerror="this.outerHTML='&lt;span class=\'font-display text-3xl text-primary\'&gt;PIKORUA&lt;/span&gt;'"/>
+      </a>
+      <div class="hidden md:flex gap-6 items-center">
+        <a class="label-caps {{ 'text-primary border-b-2 border-primary pb-1' if active=='new' else 'text-on-surface-variant hover:text-primary' }} transition-colors" href="/portal">New Campaign</a>
+        <a class="label-caps {{ 'text-primary border-b-2 border-primary pb-1' if active=='runs' else 'text-on-surface-variant hover:text-primary' }} transition-colors" href="/runs">My Campaigns</a>
+        <a class="label-caps {{ 'text-primary border-b-2 border-primary pb-1' if active=='leads' else 'text-on-surface-variant hover:text-primary' }} transition-colors" href="/crm-dashboard">Lead Insights</a>
+      </div>
+    </div>
+    <button onclick="pikToggleTheme()" title="Toggle light / dark" class="text-on-surface-variant hover:text-primary hover:bg-surface-container-low p-2 rounded-full transition-colors">
+      <span class="material-symbols-outlined">contrast</span>
+    </button>
+  </div>
+</nav>
+
+<!-- Page content -->
+<main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-10">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- Footer -->
+<footer class="bg-background border-t border-outline-variant mt-16">
+  <div class="flex flex-col md:flex-row justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-6 max-w-container-max mx-auto gap-3">
+    <span class="label-caps text-primary">PIKORUA ADFLOW</span>
+    <span class="text-sm text-on-surface-variant text-center">Nothing goes live until you publish — every action requires your approval.</span>
+  </div>
+</footer>
+
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

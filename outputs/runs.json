@@ -1148,5 +1148,141 @@
         "dry_run": false
       }
     ]
+  },
+  "0896fb0b": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Nehrunagar Apartments Prelaunch",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 100000,
+      "city": "Ahmedabad",
+      "locality": "Nehrunagar",
+      "property_type": "Luxury Apartment",
+      "price_cr": "3",
+      "standout_feature": "Center of the city, all club class amenities, gated community, beautiful views",
+      "buyer_type": "HNI",
+      "nri_geographies": "",
+      "campaign_duration_days": 45,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 2000,
+      "cta": "GET_QUOTE",
+      "company_name": "PIKORUA"
+    },
+    "created_at": "2026-06-15T14:02:27.467258+00:00",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-15_19-37-00",
+    "copy_scorecard_summary": "**3/5 variants passed. 2 flagged for rewrite: Variants 1 and 4.**",
+    "approved": true,
+    "selected_variants": [
+      1,
+      2
+    ],
+    "meta_ads": [
+      {
+        "variant": 1,
+        "campaign_id": "7001846615297",
+        "adset_id": "7001846724897",
+        "creative_id": "2073174263577260",
+        "ad_id": "7001846826697",
+        "image_hash": "c8e62d926efbf764054bd7d2be30e12e",
+        "dropped_locations": [],
+        "dry_run": false,
+        "daily_budget_inr": 1400
+      },
+      {
+        "variant": 2,
+        "campaign_id": "7001846615297",
+        "adset_id": "7001847149697",
+        "creative_id": "2051731485760985",
+        "ad_id": "7001847228097",
+        "image_hash": "aec3086ab30809aa1ba55cf5ab0936a2",
+        "dropped_locations": [],
+        "dry_run": false
+      }
+    ]
+  },
+  "83fa6cd0": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Ikebana Heights, 5 bhk",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 75000,
+      "city": "Ahmedabad",
+      "locality": "Sindhubhavan Road",
+      "property_type": "Pent House",
+      "price_cr": "13",
+      "standout_feature": "8500 sqft",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "US, Dubai",
+      "campaign_duration_days": 30,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1500,
+      "cta": "GET_QUOTE",
+      "company_name": "",
+      "sample_ready": true
+    },
+    "created_at": "2026-06-17T18:42:06.137502+00:00",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-18_00-16-34",
+    "copy_scorecard_summary": "**3/5 variants passed. 2 flagged for rewrite: Variants 3 and 5.**"
+  },
+  "05030c06": {
+    "status": "complete",
+    "brief": {
+      "property_name": "Oberoi Sky Heights",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 80000,
+      "city": "Ahmedabad",
+      "locality": "Thaltej",
+      "property_type": "Ultra luxury apartment",
+      "price_cr": "3-6",
+      "standout_feature": "Club Class Amenities, possession in 1 year",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "US, Dubai",
+      "campaign_duration_days": 45,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 1777,
+      "cta": "GET_QUOTE",
+      "company_name": "",
+      "sample_ready": true
+    },
+    "created_at": "2026-06-18T08:06:23.738362+00:00",
+    "review_folder": "D:\\Pikorua\\AI Digital Marketing\\pikorua-adflow\\outputs\\pending_review\\2026-06-18_13-41-15",
+    "copy_scorecard_summary": "**4/5 variants passed. 1 flagged for rewrite: Variant 4.**",
+    "approved": true,
+    "selected_variants": [
+      1,
+      2
+    ]
+  },
+  "b94f12e3": {
+    "status": "failed",
+    "brief": {
+      "property_name": "Nehrunagar Apartments Prelaunch",
+      "platform": "Meta Ads",
+      "goal": "Lead Generation",
+      "budget_inr": 100000,
+      "city": "Ahmedabad",
+      "locality": "Nehrunagar",
+      "property_type": "4-5 bhk",
+      "price_cr": "3-6",
+      "standout_feature": "Center of the city, all club class amenities, gated community, beautiful views",
+      "buyer_type": "HNI/NRI",
+      "nri_geographies": "US, Dubai",
+      "campaign_duration_days": 50,
+      "landing_page_url": "https://pikorua.in/",
+      "daily_budget_inr": 2000,
+      "cta": "GET_QUOTE",
+      "company_name": "",
+      "sample_ready": true,
+      "rera_verified": false,
+      "verified_awards": false,
+      "verified_certifications": false,
+      "verified_landmarks": false
+    },
+    "created_at": "2026-06-19T05:13:31.129819+00:00",
+    "review_folder": null,
+    "error": "Error code: 402 - {'error': {'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 64953. To increase, visit https://openrouter.ai/settings/credits and add more credits', 'code': 402, 'metadata': {'provider_name': None, 'previous_errors': [{'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 64953. To increase, visit https://openrouter.ai/settings/credits and add more credits'}, {'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 64953. To increase, visit https://openrouter.ai/settings/credits and add more credits'}, {'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 64953. To increase, visit https://openrouter.ai/settings/credits and add more credits'}, {'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 64953. To increase, visit https://openrouter.ai/settings/credits and add more credits'}, {'code': 402, 'message': 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 64953. To increase, visit https://openrouter.ai/settings/credits and add more credits'}]}}, 'user_id': 'user_3EzQMVDVZppkkI4wI8gswl9rANZ'}"
   }
 }

@@ -3,6 +3,14 @@ from crewai import Agent, Crew, LLM, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 
 from pikorua_adflow.utils.brand_voice_loader import load_brand_voice
+from .task_composer import (
+    VisualPromptOutput,
+    compose_description,
+    list_variants,
+)
+
+# Canonical variant order matches list_variants() — used by output_saver
+VISUAL_TASK_NAMES = [f"{vk}_task" for vk in list_variants()]
 
 
 @CrewBase
@@ -10,18 +18,19 @@ class ContentCrew:
     agents_config = "config/agents.yaml"
     tasks_config = "config/tasks.yaml"
 
-    def __init__(self):
+    def __init__(self, prior_visual_state: dict | None = None):
         self._brand_voice = load_brand_voice()
-        # Creative tasks need a stronger model than the mechanical default (flash-lite).
-        # CREATIVE_MODEL is a free, higher-capability model (Groq qwen3-32b by default);
-        # swap to an OpenRouter/frontier model in production via .env.
+        # prior_visual_state: {variant_key: {"scene": [...], "tone": [...]}}
+        # Populated by campaign_service from past RUNS for the same property_name.
+        self._prior_visual_state: dict = prior_visual_state or {}
+
         creative_model = os.getenv("CREATIVE_MODEL", "gemini/gemini-3.5-flash")
         default_model = os.getenv("MODEL", "gemini/gemini-3.1-flash-lite")
         # Copywriter: high temperature → variety across the 5 variants.
         self._creative_llm = LLM(model=creative_model, temperature=0.9, max_retries=5)
         # Evaluator: low temperature → consistent, repeatable scoring.
         self._evaluator_llm = LLM(model=creative_model, temperature=0.3, max_retries=5)
-        # Mechanical agents (ad_ops, visual_prompter) use the default model.
+        # Mechanical agents (ad_ops) use the default model.
         self._default_llm = LLM(model=default_model, max_retries=5)
 
     def _with_brand_voice(self, base: str) -> str:
@@ -49,7 +58,15 @@ class ContentCrew:
 
     @agent
     def visual_prompter(self) -> Agent:
-        return Agent(config=self.agents_config["visual_prompter"], verbose=True, llm=self._default_llm)
+        # Use the creative LLM: visual prompts require quality and variety,
+        # not just mechanical formatting.
+        return Agent(
+            config=self.agents_config["visual_prompter"],
+            verbose=True,
+            llm=self._creative_llm,
+        )
+
+    # ── Copy tasks (YAML-driven) ────────────────────────────────────────────
 
     @task
     def write_meta_ads(self) -> Task:
@@ -79,13 +96,55 @@ class ContentCrew:
     def format_for_api(self) -> Task:
         return Task(config=self.tasks_config["format_for_api"])
 
-    @task
-    def generate_banner_prompts(self) -> Task:
-        return Task(config=self.tasks_config["generate_banner_prompts"])
+    # ── Visual tasks (programmatic — 5 variants, one per task) ─────────────
+    # Each task description is composed at __init__ time by task_composer.py,
+    # embedding the prior scene/tone tags for this property+variant.
+    # {product}, {city}, {locality}, {price_cr}, {sample_ready}, {property_type},
+    # {reference_images} remain as literal placeholders — CrewAI substitutes them
+    # from the crew.kickoff(inputs=...) dict at runtime.
+
+    _VISUAL_EXPECTED_OUTPUT = (
+        'Valid JSON (no markdown fences): '
+        '{"ideogram_prompt": "<200-400 word image-generation prompt>", '
+        '"scene_tag": "<exact scene from scene_pool>", '
+        '"tone_tag": "<dark_luxury or bright_aspirational>", '
+        '"logo_corner": "<bottom-left|bottom-right|top-right|top-left>"}'
+    )
+
+    def _visual_task(self, variant_key: str) -> Task:
+        ps = self._prior_visual_state.get(variant_key, {})
+        desc = compose_description(
+            variant_key,
+            prior_scene_tags=ps.get("scene", []),
+            prior_tone_tags=ps.get("tone", []),
+        )
+        return Task(
+            description=desc,
+            expected_output=self._VISUAL_EXPECTED_OUTPUT,
+            agent=self.visual_prompter(),
+            output_pydantic=VisualPromptOutput,
+            context=[self.write_meta_ads(), self.rewrite_flagged()],
+        )
 
     @task
-    def generate_render_prompts(self) -> Task:
-        return Task(config=self.tasks_config["generate_render_prompts"])
+    def architectural_perspective_task(self) -> Task:
+        return self._visual_task("architectural_perspective")
+
+    @task
+    def lifestyle_moment_task(self) -> Task:
+        return self._visual_task("lifestyle_moment")
+
+    @task
+    def iconic_representation_task(self) -> Task:
+        return self._visual_task("iconic_representation")
+
+    @task
+    def exterior_establishing_shot_task(self) -> Task:
+        return self._visual_task("exterior_establishing_shot")
+
+    @task
+    def interior_signature_moment_task(self) -> Task:
+        return self._visual_task("interior_signature_moment")
 
     @crew
     def crew(self) -> Crew:

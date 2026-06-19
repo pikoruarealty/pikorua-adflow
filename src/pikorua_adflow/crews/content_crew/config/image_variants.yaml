@@ -1,0 +1,221 @@
+# =============================================================================
+# image_variants.yaml — Five-variant luxury real estate ad prompt generation
+# =============================================================================
+# Architecture (new):
+#   scene_photography_brief  — universal ~15-line brief for the LLM: how to write
+#                              the scene photography description (camera, light,
+#                              materials, atmosphere ONLY — no ad layout language).
+#   variants                 — per-variant scene_pool, creative_brief, allowed_palettes,
+#                              structure_map, and sample_ready_cta.
+#   hard_bans                — single source of truth for image_service.py sanitisation.
+#
+# The full ad prompt is assembled by build_gpt_image_prompt() in image_service.py
+# using the LLM's scene_prose + headline + palette_tag and the property brief.
+# =============================================================================
+
+# =============================================================================
+# scene_photography_brief — injected into every visual_prompter task.
+# Tells the LLM how to write its 60-80 word scene description.
+# =============================================================================
+scene_photography_brief: |
+  You are a luxury real estate photographer writing a shot brief for a gpt-image-1 render.
+
+  Your job is to write a 60-80 word SCENE PHOTOGRAPHY DESCRIPTION ONLY.
+  Describe: camera body + lens, shooting angle, focal distance, light quality
+  (colour temperature + direction + quality of light), material micro-detail
+  (exact surface finishes with physical properties), one natural imperfection
+  (lens flare, grain, haze, soft chromatic aberration — makes it photographic).
+
+  DO NOT describe: text placement, ad layout, typography, colour zones,
+  information hierarchy, graphic elements, or any advertising design elements.
+  Those are handled by Python — not your task.
+
+  The output must read like a cinematographer's one-paragraph shot note, not an ad brief.
+
+# =============================================================================
+# variants — five distinct campaign perspectives.
+# =============================================================================
+variants:
+
+  architectural_perspective:
+    label: "Architectural Perspective"
+    default_tone_bias: dark_luxury
+    sample_ready_cta: "Sample flat open — walk in today"
+    allowed_palettes:
+      - navy_gold
+      - charcoal_gold
+      - forest_gold
+      - slate_cream
+    structure_map:
+      dark_luxury: bordered_campaign
+      bright_aspirational: immersive_fullbleed
+    scene_pool:
+      - interior_corridor_vanishing_point
+      - staircase_or_lobby_geometry
+      - balcony_seen_from_inside_apartment
+      - glass_curtain_wall_interior_view
+      - entrance_lobby_high_ceiling
+    creative_brief: |
+      VARIANT: Architectural Perspective.
+      The camera is INSIDE the building. Interior architecture is the subject.
+      Never an exterior shot.
+
+      Choose one strong compositional device the space itself generates:
+      · A corridor or lobby with a vanishing-point depth
+      · A high ceiling that dwarfs the space below (lobby, staircase, atrium)
+      · Stacked balcony railings or glazing bars receding into depth
+      · A glass curtain wall from the apartment interior, city glow beyond
+      · A diagonal ceiling or floor shadow from a high clerestory window
+
+      No people, or at most one unidentifiable silhouette for scale.
+      Mood: calm authority, precision, the quiet confidence of exceptional craftsmanship.
+
+  lifestyle_moment:
+    label: "Lifestyle Moment"
+    default_tone_bias: bright_aspirational
+    sample_ready_cta: "Sample flat ready — come experience it"
+    allowed_palettes:
+      - ivory_warmth
+      - charcoal_gold
+      - burgundy_gold
+    structure_map:
+      dark_luxury: structured_split
+      bright_aspirational: immersive_fullbleed
+    scene_pool:
+      - balcony_golden_hour_moment
+      - reading_corner_afternoon_light
+      - bedroom_window_morning_unwind
+      - kitchen_casual_domestic_moment
+      - living_room_evening_wind_down
+    creative_brief: |
+      VARIANT: Lifestyle Moment.
+      One or two people — candid, never facing camera, mid one small believable action.
+      The action and the scene must thematically rhyme: if she is looking at the city
+      at dusk, the mood is evening; if he is reading in afternoon light, the mood is
+      quiet afternoon.
+      Styling reads lived-in elegant — not catalog-posed, not aspirationally stiff.
+      Mood: warmth, aspiration, a quietly elevated everyday life.
+
+  iconic_representation:
+    label: "Iconic Representation"
+    default_tone_bias: dark_luxury
+    sample_ready_cta: "Sample flat open"
+    allowed_palettes:
+      - navy_gold
+      - slate_cream
+      - ivory_warmth
+    structure_map:
+      dark_luxury: immersive_fullbleed
+      bright_aspirational: structured_split
+    scene_pool:
+      - tabletop_luxury_vignette
+      - architectural_signature_detail_closeup
+      - lobby_or_entrance_feature_detail
+      - material_texture_macro
+      - single_hero_object_in_space
+    creative_brief: |
+      VARIANT: Iconic Representation.
+      One hero detail, tightly art-directed: a door handle's patina, a marble
+      threshold, a brass fixture, a tightly styled tabletop vignette, or a material
+      macro (the exact grain of stone, the weave of fabric, the polish of a floor).
+      Maximum negative space. No people. No room-wide shots.
+      Mood: the silence of a museum case — identity distilled to a single frame.
+
+  exterior_establishing_shot:
+    label: "Exterior Establishing Shot"
+    default_tone_bias: dark_luxury
+    sample_ready_cta: "Visit the site — sample flat now open"
+    allowed_palettes:
+      - navy_gold
+      - charcoal_gold
+      - forest_gold
+      - burgundy_gold
+    structure_map:
+      dark_luxury: bordered_campaign
+      bright_aspirational: structured_split
+    scene_pool:
+      - twilight_street_level_light_trails
+      - daytime_three_quarter_drone_angle
+      - dusk_landscaped_approach
+      - dawn_empty_street_long_exposure
+      - golden_hour_low_angle_full_height
+    creative_brief: |
+      VARIANT: Exterior Establishing Shot.
+      The only variant showing the building from outside.
+      Favour blue-hour or twilight: deep indigo sky, warm interior lights glowing
+      from units, motion-blurred light trails on street.
+      Camera: Sony A7R V, 85mm f/4 or tilt-shift 50mm; long exposure, ISO 200, tripod.
+      Never head-on symmetrical — use a three-quarter angle showing two facades.
+      Mood: authority, scale, arrival — the image that makes someone think "that's the one."
+
+  interior_signature_moment:
+    label: "Interior Signature Moment"
+    default_tone_bias: dark_luxury
+    sample_ready_cta: "Step inside — sample flat ready"
+    allowed_palettes:
+      - burgundy_gold
+      - ivory_warmth
+      - charcoal_gold
+    structure_map:
+      dark_luxury: immersive_fullbleed
+      bright_aspirational: structured_split
+    scene_pool:
+      - living_room_dusk_diagonal_light
+      - bedroom_quiet_dawn_glow
+      - kitchen_empty_morning_light
+      - study_or_reading_nook_lamp_glow
+      - bathroom_spa_material_warmth
+    creative_brief: |
+      VARIANT: Interior Signature Moment.
+      The room is the protagonist. No people.
+      Light quality and material texture carry the entire emotional argument:
+      a dramatic diagonal of sunlight crossing a marble floor, a dusk cityscape
+      glowing through full-height windows, one carefully placed object (dried flowers,
+      a sculptural vase) as the single human touch. Nothing else.
+      Mood: quiet luxury — the feeling of entering a room that knows it is exceptional.
+
+# =============================================================================
+# Hard bans — single source of truth for image_service.py sanitisation.
+# =============================================================================
+hard_bans:
+  claims_absolute:
+    - "guaranteed returns"
+    - "guaranteed appreciation"
+    - "investment guarantee"
+    - "no gst"
+    - "tax free"
+    - "tax-free"
+    - "instant possession"
+    - "best in the city"
+    - "best in india"
+    - "best in the world"
+    - "world's tallest"
+    - "india's tallest"
+    - "cheapest"
+    - "lowest price guaranteed"
+    - "number one"
+    - "no. 1"
+    - "limited units"
+    - "few units remain"
+    - "only 3 homes"
+    - "final 5 floors"
+  claims_conditional:
+    "rera approved": rera_verified
+    "rera registered": rera_verified
+    "award winning": verified_awards
+    "award-winning": verified_awards
+    "certified green building": verified_certifications
+    "green certified": verified_certifications
+  fabrication_never_invent:
+    rera number: rera_verified
+    rera registration: rera_verified
+    possession date: possession_date
+    award: verified_awards
+    certified: verified_certifications
+    certification: verified_certifications
+    km from: verified_landmarks
+    minutes from: verified_landmarks
+    metro station: verified_landmarks
+    iconic landmark: verified_landmarks
+    testimonial: null
+    quote from: null

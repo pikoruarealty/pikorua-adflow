@@ -19,7 +19,12 @@ def approve_and_store(
     scorecard_summary: Optional[str] = None,
 ) -> str:
     """Store an approved campaign in Qdrant. Returns a status message."""
-    success = store_approved_campaign(run_id, brief, review_folder, scorecard_summary)
+    try:
+        success = store_approved_campaign(run_id, brief, review_folder, scorecard_summary)
+    except RuntimeError as exc:
+        return f"Campaign {run_id} approved but vector memory skipped: {exc}"
+    except Exception as exc:
+        return f"Campaign {run_id} approved but vector memory failed unexpectedly: {exc}"
     if success:
         return f"Campaign {run_id} stored in vector memory."
     return f"Campaign {run_id} could not be stored — ad_copy.md not found in {review_folder}."

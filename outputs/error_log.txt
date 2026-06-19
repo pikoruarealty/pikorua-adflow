@@ -54,3 +54,15 @@ Unterminated string starting at: line 69 column 16 (char 5289)
 [2026-06-15T15:45:25] CRM strategic insights
 Expecting ',' delimiter: line 65 column 25 (char 5578)
 ------------------------------------------------------------
+
+[2026-06-17T22:32:32] Image generation — prompt 2 (ideogram)
+<urlopen error [Errno 11001] getaddrinfo failed>
+------------------------------------------------------------
+
+[2026-06-17T22:32:33] Image generation — prompt 5 (ideogram)
+<urlopen error [Errno 11001] getaddrinfo failed>
+------------------------------------------------------------
+
+[2026-06-18T18:23:53] Image generation — prompt 5 (ideogram)
+Ideogram image request failed [402]: {"error": "You do not have sufficient balance to perform this operation!"}
+------------------------------------------------------------

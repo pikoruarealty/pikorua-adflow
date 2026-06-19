@@ -1,0 +1,866 @@
+{% extends "base.html" %}
+{% block title %}PIKORUA — Campaign{% endblock %}
+
+{% block content %}
+<div id="detail" data-run-id="{{ run_id }}">
+
+  <!-- Header -->
+  <header class="mb-6 border-b border-outline-variant pb-6">
+    <p class="label-caps text-outline mb-2">Campaign ID: {{ run_id }}</p>
+    <div class="flex justify-between items-end gap-4 flex-wrap">
+      <div>
+        <h1 id="d-title" class="font-display text-4xl md:text-5xl">Loading…</h1>
+        <p id="d-sub" class="text-on-surface-variant mt-2"></p>
+      </div>
+      <div class="flex gap-3 items-center">
+        <span id="approve-state"></span>
+        <button id="approve-btn" onclick="approveCampaign()" class="bg-primary text-on-primary rounded label-caps px-6 py-3 hover:bg-surface-tint transition-colors">Approve selected</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="flex gap-8 border-b border-outline-variant mb-8">
+    <button class="tab label-caps pb-3 -mb-px" data-tab="copy">Copy</button>
+    <button class="tab label-caps pb-3 -mb-px" data-tab="visuals">Visuals</button>
+    <button class="tab label-caps pb-3 -mb-px" data-tab="audience">Audience &amp; Deploy</button>
+    <button class="tab label-caps pb-3 -mb-px" data-tab="optimise">Optimise</button>
+  </nav>
+
+  <section id="tab-copy" class="tab-panel"></section>
+  <section id="tab-visuals" class="tab-panel hidden"></section>
+  <section id="tab-audience" class="tab-panel hidden"></section>
+  <section id="tab-optimise" class="tab-panel hidden"></section>
+
+</div>
+
+<div id="lightbox" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" class="max-h-[90vh] max-w-[90vw] object-contain shadow-2xl"/>
+  <button class="absolute top-4 right-4 text-white material-symbols-outlined text-[32px] hover:text-on-surface-variant transition-colors" onclick="closeLightbox()">close</button>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RUN_ID = document.getElementById('detail').dataset.runId;
+let DETAIL = null;
+const selected = new Set();
+const loaded = {};
+const generating = new Set();
+
+/* ── Tabs ── */
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('tab-' + name).classList.remove('hidden');
+  document.querySelectorAll('.tab').forEach(t => {
+    const on = t.dataset.tab === name;
+    t.classList.toggle('text-primary', on);
+    t.classList.toggle('border-b-2', on);
+    t.classList.toggle('border-primary', on);
+    t.classList.toggle('text-on-surface-variant', !on);
+  });
+  if (name === 'audience' && !loaded.audience) renderAudience();
+  if (name === 'optimise' && !loaded.optimise) renderOptimise();
+  if (name === 'visuals') rerenderAssignment();
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
+
+/* ── 10-segment gold score bar ── */
+function scoreBar(scores) {
+  const vals = Object.values(scores || {});
+  if (!vals.length) return '';
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const filled = Math.round(avg);
+  let segs = '';
+  for (let i = 0; i < 10; i++) segs += '<div class="seg ' + (i < filled ? 'on' : 'off') + '"></div>';
+  return '<div class="flex items-center gap-3">' +
+    '<div class="flex gap-1 flex-1 max-w-xs">' + segs + '</div>' +
+    '<span class="font-display text-xl">' + avg.toFixed(1) + '</span></div>';
+}
+function subScores(scores) {
+  return Object.entries(scores || {}).map(([k, v]) =>
+    '<span class="label-caps text-outline mr-4">' + k.replace(/_/g, ' ') + ' <span class="text-on-background">' + v + '</span></span>'
+  ).join('');
+}
+
+/* ── Load detail ── */
+function loadDetail() {
+  return api('/results-data/' + RUN_ID).then(d => {
+    DETAIL = d;
+    const b = d.brief || {};
+    document.getElementById('d-title').textContent = b.property_name || 'Campaign';
+    document.getElementById('d-sub').textContent =
+      '₹' + (b.price_cr || '') + ' Cr · ' + (b.locality || b.city || '') + ' · ' + (b.platform || '');
+    (d.selected_variants || []).forEach(v => selected.add(v));
+    if (d.approved) document.getElementById('approve-state').innerHTML = '<span class="label-caps text-ok">✓ Approved</span>';
+    renderCopy();
+  });
+}
+
+/* ── Copy tab ── */
+function renderCopy() {
+  const d = DETAIL;
+  const root = document.getElementById('tab-copy');
+  let html = '<div class="flex justify-between items-center mb-4">' +
+    '<h2 class="font-headline text-2xl">Meta Ads</h2>' +
+    '<button onclick="addVariant()" class="border border-outline rounded label-caps px-4 py-2 hover:bg-surface-container-low transition-colors">+ Add variant</button></div>';
+  html += '<div class="space-y-4">';
+  (d.variants || []).forEach(v => {
+    const sel = selected.has(v.variant);
+    const badge = v.revised ? '<span class="label-caps text-warn">Revised</span>'
+      : v.status === 'PASS' ? '<span class="label-caps text-ok">Pass</span>'
+      : v.status === 'FLAG' ? '<span class="label-caps text-error">Flag</span>'
+      : '<span class="label-caps text-outline">Custom</span>';
+    html += '<div class="border border-outline-variant p-5" id="vc-' + v.variant + '">' +
+      '<div class="flex justify-between items-start mb-3">' +
+        '<label class="flex items-center gap-2 label-caps cursor-pointer">' +
+          '<input type="checkbox" ' + (sel ? 'checked' : '') + ' onchange="toggleSelect(' + v.variant + ',this.checked)" class="text-primary"/> Select for publish</label>' +
+        '<div class="flex items-center gap-3">' + badge +
+          (Object.keys(v.scores || {}).length ? '<span class="font-display text-2xl">' + (Object.values(v.scores).reduce((a,b)=>a+b,0)/Object.values(v.scores).length).toFixed(1) + '</span>' : '') +
+        '</div></div>' +
+      '<div class="font-headline text-xl mb-1" contenteditable id="h-' + v.variant + '">' + esc(v.headline) + '</div>' +
+      '<div class="text-on-surface-variant text-sm mb-3" contenteditable id="b-' + v.variant + '">' + esc(v.body) + '</div>' +
+      (v.flag_reason ? '<p class="text-sm text-warn italic mb-3">Note: ' + esc(v.flag_reason) + '</p>' : '') +
+      '<div class="mb-3">' + (Object.keys(v.scores||{}).length ? subScores(v.scores) : '') + '</div>' +
+      '<div class="flex gap-1.5 flex-wrap items-center">' +
+        '<button onclick="saveCopy(' + v.variant + ')" class="label-caps border border-outline rounded px-3 py-1.5 hover:bg-surface-container-low transition-colors">Save</button>' +
+        '<span class="w-px h-5 bg-outline-variant mx-1"></span>' +
+        '<button onclick="rewriteField(' + v.variant + ',\'headline\',this)" class="label-caps text-primary rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-primary/10 transition-colors" title="AI rewrite headline"><span class="material-symbols-outlined text-[15px]">restart_alt</span> Headline</button>' +
+        '<button onclick="rewriteField(' + v.variant + ',\'body\',this)" class="label-caps text-primary rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-primary/10 transition-colors" title="AI rewrite body"><span class="material-symbols-outlined text-[15px]">restart_alt</span> Body</button>' +
+        '<button onclick="rescore(' + v.variant + ',this)" class="label-caps text-primary rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-primary/10 transition-colors" title="Re-score this variant"><span class="material-symbols-outlined text-[15px]">score</span> Score</button>' +
+        '<button onclick="dupVariant(' + v.variant + ')" class="label-caps text-on-surface-variant rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-surface-container-low transition-colors" title="Duplicate variant"><span class="material-symbols-outlined text-[15px]">content_copy</span></button>' +
+        '<button onclick="delVariant(' + v.variant + ')" class="label-caps text-error rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-error/10 transition-colors ml-auto" title="Delete variant"><span class="material-symbols-outlined text-[15px]">delete</span></button>' +
+      '</div>' +
+      '<div id="score-' + v.variant + '" class="mt-2 text-sm"></div>' +
+      '</div>';
+  });
+  html += '</div>';
+  if ((d.deleted_variants || []).length) {
+    html += '<div class="mt-4 border border-outline-variant p-4 bg-surface-container-lowest">' +
+      '<p class="label-caps text-outline mb-3">Deleted variants</p>' +
+      '<div class="flex flex-wrap gap-2">';
+    (d.deleted_variants || []).forEach(function(n) {
+      html += '<button onclick="restoreVariant(' + n + ')" class="label-caps border border-outline px-3 py-1 hover:bg-surface-container-low text-on-surface-variant">↩ Restore version ' + n + '</button>';
+    });
+    html += '</div></div>';
+  }
+  // Other channels
+  ['google', 'whatsapp', 'email'].forEach(ch => {
+    const c = d[ch] || {};
+    html += '<div class="mt-8"><div class="flex justify-between items-center mb-2">' +
+      '<h3 class="font-headline text-xl capitalize">' + ch + (c.edited ? ' <span class="label-caps text-warn">edited</span>' : '') + '</h3>' +
+      '<div class="flex gap-2"><button onclick="saveChannel(\'' + ch + '\')" class="label-caps border border-outline px-3 py-1">Save</button>' +
+      '<button onclick="revertChannel(\'' + ch + '\')" class="label-caps text-primary px-2 py-1">Revert</button></div></div>' +
+      '<pre contenteditable id="ch-' + ch + '" class="border border-outline-variant p-4 text-sm whitespace-pre-wrap font-body">' + esc(c.text || '') + '</pre>';
+    if (ch === 'google' && (c.issues || []).length)
+      html += '<ul class="mt-2 text-sm text-warn list-disc pl-5">' + c.issues.map(i => '<li>' + esc(i.line + ': ' + i.issue) + '</li>').join('') + '</ul>';
+    html += '</div>';
+  });
+  root.innerHTML = html;
+}
+function toggleSelect(v, on) { on ? selected.add(v) : selected.delete(v); rerenderAssignment(); }
+function saveCopy(v) {
+  const headline = document.getElementById('h-' + v).textContent.trim();
+  const body = document.getElementById('b-' + v).textContent.trim();
+  api('/edit-content/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel: 'meta', variant: v, headline, body }) })
+    .then(() => {
+      const vr = (DETAIL.variants || []).find(x => x.variant === v);
+      if (vr) { vr.headline = headline; vr.body = body; }
+      rerenderAssignment();
+      toast('Saved');
+    }).catch(e => showError(e.message));
+}
+function rewriteField(v, field, btn) {
+  const origHtml = btn ? btn.innerHTML : null;
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + (field === 'headline' ? ' Headline…' : ' Body…'); btn.classList.add('cursor-not-allowed', 'opacity-60'); }
+  api('/rewrite-copy/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ variant_num: v, field }) })
+    .then(d => {
+      document.getElementById((field === 'headline' ? 'h-' : 'b-') + v).textContent = d[field];
+      // auto-save immediately so reload preserves the rewritten copy
+      const headline = document.getElementById('h-' + v).textContent.trim();
+      const body = document.getElementById('b-' + v).textContent.trim();
+      return api('/edit-content/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'meta', variant: v, headline, body }) })
+        .then(() => {
+          const vr = (DETAIL.variants || []).find(x => x.variant === v);
+          if (vr) { vr.headline = headline; vr.body = body; }
+          rerenderAssignment();
+          toast('Rewritten & saved');
+        });
+    })
+    .catch(e => showError(e.message))
+    .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = origHtml; btn.classList.remove('cursor-not-allowed', 'opacity-60'); } });
+}
+function rescore(v, btn) {
+  const origHtml = btn ? btn.innerHTML : null;
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>';
+  const scoreEl = document.getElementById('score-' + v);
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Score…'; btn.classList.add('cursor-not-allowed', 'opacity-60'); }
+  if (scoreEl) scoreEl.innerHTML = '<span class="text-on-surface-variant italic">' + spin + ' Scoring…</span>';
+  const headline = document.getElementById('h-' + v).textContent.trim();
+  const body = document.getElementById('b-' + v).textContent.trim();
+  api('/rescore-variant/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ variant_num: v, headline, body }) })
+    .then(d => { if (scoreEl) scoreEl.innerHTML = 'New score <strong>' + d.avg + '</strong> · ' + subScores(d.scores) + ' · ' + esc(d.flag); })
+    .catch(e => { if (scoreEl) scoreEl.textContent = ''; showError(e.message); })
+    .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = origHtml; btn.classList.remove('cursor-not-allowed', 'opacity-60'); } });
+}
+function addVariant() { api('/add-variant/' + RUN_ID, { method: 'POST' }).then(() => reloadCopy()).catch(e => showError(e.message)); }
+function delVariant(v) {
+  if (!confirm('Delete version ' + v + '?')) return;
+  api('/delete-variant/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel: 'meta', variant: v }) }).then(() => { selected.delete(v); reloadCopy(); }).catch(e => showError(e.message));
+}
+function saveChannel(ch) {
+  const text = document.getElementById('ch-' + ch).textContent;
+  api('/edit-content/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel: ch, text }) }).then(() => toast('Saved')).catch(e => showError(e.message));
+}
+function revertChannel(ch) {
+  api('/revert-content/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel: ch }) }).then(d => { document.getElementById('ch-' + ch).textContent = d.text || ''; }).catch(e => showError(e.message));
+}
+function reloadCopy() { loadDetail(); }
+function dupVariant(v) {
+  api('/duplicate-variant/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel: 'meta', variant: v }) }).then(() => reloadCopy()).catch(e => showError(e.message));
+}
+function restoreVariant(v) {
+  api('/restore-variant/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel: 'meta', variant: v }) }).then(() => reloadCopy()).catch(e => showError(e.message));
+}
+function assignImgToVariant(variantNum, imageNum) {
+  api('/assign-image/' + RUN_ID + '/' + variantNum, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image_num: imageNum ? parseInt(imageNum, 10) : null }) })
+    .then(() => { toast('Image assigned'); loadDetail().then(renderVisuals); })
+    .catch(e => showError(e.message));
+}
+
+/* ── Visuals tab ── */
+function renderVisuals() {
+  const d = DETAIL;
+  const root = document.getElementById('tab-visuals');
+  const allGenerating = generating.size > 0;
+  const spinner = '<span class="inline-block w-2.5 h-2.5 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span>';
+  let html = '<div class="flex justify-between items-center mb-5"><h2 class="font-display text-2xl">Visual assets</h2>' +
+    '<div class="flex items-center gap-2">' +
+    '<button onclick="applyLogo()" class="border border-outline rounded label-caps px-4 py-2 hover:bg-surface-container-low transition-colors inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-[15px]">branding_watermark</span> Apply logo</button>' +
+    '<button id="gen-all-btn" onclick="genImages()" ' + (allGenerating ? 'disabled ' : '') +
+    'class="bg-primary text-on-primary rounded label-caps px-5 py-2 hover:bg-surface-tint transition-colors inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">' +
+    (allGenerating ? spinner + ' Generating…' : 'Generate all') + '</button>' +
+    '</div></div>';
+  html += '<div class="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded">' +
+    '<span class="label-caps text-outline text-[10px]">Generation settings</span>' +
+    '<div class="flex items-center gap-1.5">' +
+      '<label class="label-caps text-[10px] text-on-surface-variant" for="gen-ratio">Aspect</label>' +
+      '<select id="gen-ratio" class="text-xs border border-outline rounded bg-surface px-2 py-1 text-on-surface">' +
+        '<option value="4x5">4:5 Portrait (feed)</option>' +
+        '<option value="9x16">9:16 Stories</option>' +
+        '<option value="1x1">1:1 Square</option>' +
+        '<option value="3x2">3:2 Landscape</option>' +
+        '<option value="16x9">16:9 Wide</option>' +
+      '</select>' +
+    '</div>' +
+    '<div class="flex items-center gap-1.5">' +
+      '<label class="label-caps text-[10px] text-on-surface-variant" for="gen-quality">Quality</label>' +
+      '<select id="gen-quality" class="text-xs border border-outline rounded bg-surface px-2 py-1 text-on-surface">' +
+        '<option value="high">High</option>' +
+        '<option value="medium">Medium</option>' +
+        '<option value="low">Low (fast)</option>' +
+      '</select>' +
+    '</div>' +
+  '</div>';
+  html += '<div id="gen-status" class="text-sm text-on-surface-variant mb-4"></div>';
+  const promptCount = (d.image_prompts || []).length;
+  const gridCols = promptCount === 5
+    ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+    : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
+  html += '<div class="grid ' + gridCols + ' gap-4">';
+  (d.image_prompts || []).forEach(p => {
+    const imgName = 'image_' + p.num + '.png';
+    const has = (d.existing_images || []).includes(imgName);
+    const isGen = generating.has(p.num);
+    const variants = (d.existing_images || []).filter(f => new RegExp('^image_' + p.num + '_v\\d+\\.png$').test(f));
+    const sortedVariants = variants.slice().sort(function(a, b) {
+      const va = parseInt((a.match(/_v(\d+)\./) || ['','0'])[1], 10);
+      const vb = parseInt((b.match(/_v(\d+)\./) || ['','0'])[1], 10);
+      return va - vb;
+    });
+    const latestFile = sortedVariants.length ? sortedVariants[sortedVariants.length - 1] : (has ? imgName : null);
+    html += '<div class="border border-outline-variant flex flex-col bg-surface-container-lowest">' +
+      '<div id="img-wrap-' + p.num + '" class="aspect-[3/4] bg-surface-container-low overflow-hidden relative">' +
+        (latestFile ? '<img id="main-img-' + p.num + '" src="/image/' + RUN_ID + '/' + latestFile + '?t=' + Date.now() + '" onclick="openLightbox(this.src)" class="w-full h-full object-cover cursor-zoom-in"/>'
+                    : '<div class="w-full h-full flex items-center justify-center label-caps text-outline text-[10px]">No image yet</div>') +
+        (isGen ? '<div class="absolute inset-0 bg-surface/80 flex flex-col items-center justify-center gap-2">' +
+          '<span class="inline-block w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>' +
+          '<span class="label-caps text-[9px] text-on-surface-variant">Generating…</span></div>' : '') +
+      '</div>';
+    if (sortedVariants.length) {
+      html += '<div id="thumbs-' + p.num + '" class="flex gap-1 px-2 pt-2 flex-wrap">';
+      // Show base image as first thumb when variants exist so user can navigate back to it
+      if (has) {
+        html += '<div class="relative group w-10 h-12 shrink-0" data-file="' + imgName + '">' +
+          '<img src="/image/' + RUN_ID + '/' + imgName + '?t=' + Date.now() + '" onclick="swapMainImg(' + p.num + ',\'' + imgName + '\')" class="w-full h-full object-cover border border-outline-variant cursor-pointer hover:opacity-90 transition-opacity" title="Original"/>' +
+        '</div>';
+      }
+      sortedVariants.forEach(vf => {
+        const isSelected = vf === latestFile;
+        html += '<div class="relative group w-10 h-12 shrink-0" data-file="' + vf + '">' +
+          '<img src="/image/' + RUN_ID + '/' + vf + '?t=' + Date.now() + '" onclick="swapMainImg(' + p.num + ',\'' + vf + '\')" class="w-full h-full object-cover border cursor-pointer hover:opacity-90 transition-opacity ' + (isSelected ? 'border-primary ring-1 ring-primary' : 'border-outline-variant') + '"/>' +
+          '<button onclick="deleteVariantImage(\'' + vf + '\')" title="Remove variant" ' +
+            'class="absolute -top-1 -right-1 w-4 h-4 bg-surface border border-outline-variant text-error flex items-center justify-center text-[9px] leading-none opacity-0 group-hover:opacity-100 transition-opacity">×</button>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<div class="p-3 flex flex-col gap-1.5">' +
+      '<p class="label-caps text-outline text-[10px] truncate" title="' + esc(p.title) + '">Prompt ' + p.num + ' · ' + esc(p.title) + (p.edited ? ' · edited' : '') + '</p>' +
+      '<button id="gen-btn-' + p.num + '" onclick="genImages([' + p.num + '])" ' + (isGen ? 'disabled ' : '') +
+      'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
+      (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>' : '') +
+      (isGen ? ' Working…' : (has ? 'REPLACE' : 'GENERATE')) +
+      '</button>' +
+      '<div class="flex gap-1">' +
+        (has ? '<button onclick="addVariantImage(' + p.num + ')" ' + (isGen ? 'disabled ' : '') + 'class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center" title="Generate a new variant"><span class="material-symbols-outlined text-[16px]">add_photo_alternate</span></button>' : '') +
+        '<input type="file" id="upl-' + p.num + '" class="hidden" accept="image/png,image/jpeg,image/webp" onchange="uploadImg(' + p.num + ',this)"/>' +
+        '<button onclick="document.getElementById(\'upl-' + p.num + '\').click()" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Upload your own image"><span class="material-symbols-outlined text-[16px]">upload</span></button>' +
+        (has ? '<button onclick="revertImg(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Revert to AI-generated version"><span class="material-symbols-outlined text-[16px]">history</span></button>' : '') +
+        (has ? '<button onclick="revertLogo(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Remove logo composite"><span class="material-symbols-outlined text-[16px]">hide_image</span></button>' : '') +
+        '<button onclick="togglePrompt(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Edit prompt"><span class="material-symbols-outlined text-[16px]">edit_note</span></button>' +
+      '</div>' +
+      '<div id="pe-' + p.num + '" class="hidden">' +
+        '<textarea id="pr-' + p.num + '" class="w-full text-xs border border-outline-variant rounded bg-surface p-2 h-32 font-body">' + esc(p.prompt_text) + '</textarea>' +
+        '<div class="flex gap-1 mt-1">' +
+          '<button onclick="savePrompt(' + p.num + ')" class="label-caps text-[10px] border border-outline rounded px-2 py-1 hover:bg-surface-container-low transition-colors">Save</button>' +
+          '<button onclick="revertPrompt(' + p.num + ')" class="label-caps text-[10px] text-outline border border-outline-variant rounded px-2 py-1 hover:bg-surface-container-low transition-colors">Revert</button>' +
+          '<button onclick="regenPrompt(' + p.num + ',this)" class="label-caps text-[10px] text-primary px-2 py-1 inline-flex items-center gap-1">AI rewrite</button>' +
+        '</div>' +
+      '</div>' +
+    '</div></div>';
+  });
+  html += '</div>';
+
+  /* ── Assignment overview ── */
+  html += '<div class="mt-10 border-t border-outline-variant pt-8" id="ad-assignment-section">' + buildAssignmentInner() + '</div>';
+
+  /* ── Reference creatives ── */
+  html += '<div class="mt-10 border-t border-outline-variant pt-8">' +
+    '<div class="flex justify-between items-center mb-1">' +
+      '<h3 class="font-display text-xl">Reference creatives</h3>' +
+      '<div class="flex gap-2">' +
+        '<input type="file" id="ref-upl" class="hidden" accept="image/png,image/jpeg,image/webp" multiple onchange="uploadRefImages(this)"/>' +
+        '<button onclick="document.getElementById(\'ref-upl\').click()" class="border border-outline rounded label-caps px-3 py-1.5 hover:bg-surface-container-low transition-colors inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-[15px]">add_photo_alternate</span> Add</button>' +
+      '</div>' +
+    '</div>' +
+    '<p class="text-sm text-on-surface-variant mb-5">These images inspire the AI\'s photography mood, typographic character, and colour palette — not copied as layout templates.</p>' +
+    '<div id="ref-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"><p class="col-span-full text-sm text-outline italic">Loading…</p></div>' +
+  '</div>';
+
+  root.innerHTML = html;
+  loadRefImages();
+}
+function loadRefImages() {
+  fetch('/reference-images').then(r => r.json()).then(d => renderRefImages(d.images || [])).catch(() => renderRefImages([]));
+}
+function renderRefImages(images) {
+  const grid = document.getElementById('ref-grid');
+  if (!grid) return;
+  if (!images.length) {
+    grid.innerHTML = '<p class="col-span-full text-sm text-outline italic">No reference creatives yet. Add images to guide the AI\'s visual direction.</p>';
+    return;
+  }
+  grid.innerHTML = images.map(img =>
+    '<div class="border border-outline-variant bg-surface-container-lowest flex flex-col">' +
+      '<div class="aspect-[3/4] overflow-hidden relative group">' +
+        '<img src="/reference-images/' + encodeURIComponent(img.filename) + '" class="w-full h-full object-cover cursor-zoom-in" onclick="openLightbox(this.src)"/>' +
+        '<button onclick="deleteRefImage(\'' + esc(img.filename) + '\')" title="Remove" ' +
+          'class="absolute top-1 right-1 w-6 h-6 bg-surface/90 border border-outline-variant text-error flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-error hover:text-on-error">' +
+          '<span class="material-symbols-outlined text-[14px]">close</span></button>' +
+      '</div>' +
+      '<div class="p-2">' +
+        '<p class="label-caps text-[10px] text-outline truncate mb-1" title="' + esc(img.filename) + '">' + esc(img.filename) + '</p>' +
+        (img.description ? '<p class="text-[10px] text-on-surface-variant line-clamp-3">' + esc(img.description) + '</p>' : '<p class="text-[10px] text-outline italic">Analyzing…</p>') +
+      '</div>' +
+    '</div>'
+  ).join('');
+}
+function uploadRefImages(input) {
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  toast('Uploading reference image' + (files.length > 1 ? 's' : '') + '…');
+  const form = new FormData();
+  files.forEach(f => form.append('file', f));
+  fetch('/reference-images', { method: 'POST', body: form })
+    .then(r => { if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Upload failed'); }); return r.json(); })
+    .then(d => { input.value = ''; toast('Reference image' + (files.length > 1 ? 's' : '') + ' added'); loadRefImages(); })
+    .catch(e => { input.value = ''; showError(e.message); });
+}
+function deleteRefImage(filename) {
+  if (!confirm('Remove this reference creative?')) return;
+  fetch('/reference-images/' + encodeURIComponent(filename), { method: 'DELETE' })
+    .then(() => { toast('Removed'); loadRefImages(); })
+    .catch(e => showError(e.message));
+}
+function addVariantImage(n) {
+  generating.add(n);
+  renderVisuals();
+  document.getElementById('gen-status').textContent = 'Generating variant… this can take a minute.';
+  api('/generate-images/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ alongside: [n] }) })
+    .then(d => {
+      generating.delete(n);
+      const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
+      const statusMsg = (d.generated || []).length + ' variant(s) generated.' + (errs ? ' ' + errs : '');
+      loadDetail().then(() => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg; });
+    }).catch(e => { generating.delete(n); renderVisuals(); document.getElementById('gen-status').textContent = 'Error: ' + e.message; });
+}
+function deleteVariantImage(fname) {
+  api('/image/' + RUN_ID + '/' + fname, { method: 'DELETE' })
+    .then(() => loadDetail().then(renderVisuals))
+    .catch(e => showError(e.message));
+}
+function swapMainImg(n, fname) {
+  const main = document.getElementById('main-img-' + n);
+  if (main) main.src = '/image/' + RUN_ID + '/' + fname + '?t=' + Date.now();
+  document.querySelectorAll('#thumbs-' + n + ' img').forEach(t => {
+    t.classList.remove('ring-1', 'ring-primary', 'border-primary');
+    t.classList.add('border-outline-variant');
+  });
+  const thumb = document.querySelector('#thumbs-' + n + ' [data-file="' + fname + '"] img');
+  if (thumb) {
+    thumb.classList.remove('border-outline-variant');
+    thumb.classList.add('ring-1', 'ring-primary', 'border-primary');
+  }
+}
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.remove('hidden');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.add('hidden');
+  document.getElementById('lightbox-img').src = '';
+}
+function togglePrompt(n) { document.getElementById('pe-' + n).classList.toggle('hidden'); }
+function genImages(prompts, mode) {
+  const isGenAll = !prompts;
+  const promptList = prompts || (DETAIL.image_prompts || []).map(p => p.num);
+
+  // For "Generate all": if images already exist and no mode decided yet, ask replace or add
+  if (isGenAll && !mode) {
+    const existing = DETAIL.existing_images || [];
+    const hasAny = promptList.some(n => existing.includes('image_' + n + '.png'));
+    if (hasAny) {
+      showGenAllDialog(promptList);
+      return;
+    }
+  }
+
+  const miniSpin = '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>';
+  promptList.forEach(n => {
+    generating.add(n);
+    const wrap = document.getElementById('img-wrap-' + n);
+    if (wrap && !wrap.querySelector('.gen-overlay')) {
+      const ov = document.createElement('div');
+      ov.className = 'gen-overlay absolute inset-0 bg-surface/80 flex flex-col items-center justify-center gap-2';
+      ov.innerHTML = '<span class="inline-block w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>' +
+        '<span class="label-caps text-[9px] text-on-surface-variant">Generating…</span>';
+      wrap.appendChild(ov);
+    }
+    const btn = document.getElementById('gen-btn-' + n);
+    if (btn) { btn.disabled = true; btn.innerHTML = miniSpin + ' Working…'; btn.classList.add('cursor-not-allowed'); }
+  });
+  const genAll = document.getElementById('gen-all-btn');
+  if (genAll) {
+    genAll.disabled = true;
+    genAll.innerHTML = '<span class="inline-block w-2.5 h-2.5 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span> Generating…';
+    genAll.classList.add('cursor-not-allowed');
+  }
+  document.getElementById('gen-status').textContent = 'Generating… this can take a minute.';
+  const genRatio = (document.getElementById('gen-ratio') || {}).value || '4x5';
+  const genQuality = (document.getElementById('gen-quality') || {}).value || 'high';
+  const payload = mode === 'add'
+    ? { alongside: promptList, ratio: genRatio, quality: genQuality }
+    : { prompts: promptList, ratio: genRatio, quality: genQuality };
+  api('/generate-images/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(d => {
+      promptList.forEach(n => generating.delete(n));
+      const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
+      const statusMsg = (d.generated || []).length + ' image(s) generated.' + (errs ? ' ' + errs : '');
+      loadDetail().then(() => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg; });
+    }).catch(e => {
+      promptList.forEach(n => {
+        generating.delete(n);
+        const wrap = document.getElementById('img-wrap-' + n);
+        if (wrap) { const ov = wrap.querySelector('.gen-overlay'); if (ov) ov.remove(); }
+        const btn = document.getElementById('gen-btn-' + n);
+        if (btn) { btn.disabled = false; btn.innerHTML = 'RETRY'; btn.classList.remove('cursor-not-allowed'); btn.classList.add('text-error', 'border-error'); }
+      });
+      const genAll = document.getElementById('gen-all-btn');
+      if (genAll) { genAll.disabled = false; genAll.innerHTML = 'Generate all'; genAll.classList.remove('cursor-not-allowed'); }
+      document.getElementById('gen-status').textContent = 'Error: ' + e.message;
+    });
+}
+function showGenAllDialog(promptList) {
+  let modal = document.getElementById('gen-all-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'gen-all-modal';
+    modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML =
+    '<div class="bg-surface border border-outline-variant p-6 max-w-sm w-full mx-4">' +
+      '<h3 class="font-display text-xl mb-2">Images already exist</h3>' +
+      '<p class="text-sm text-on-surface-variant mb-6">What would you like to do with the existing images?</p>' +
+      '<div class="flex flex-col gap-3">' +
+        '<button onclick="closeGenAllDialog(); genImages(null, \'replace\')" ' +
+          'class="bg-primary text-on-primary label-caps py-3 px-4 hover:bg-surface-tint transition-colors">Replace existing images</button>' +
+        '<button onclick="closeGenAllDialog(); genImages(null, \'add\')" ' +
+          'class="border border-outline label-caps py-3 px-4 hover:bg-surface-container-low transition-colors">Add as new variants</button>' +
+        '<button onclick="closeGenAllDialog()" ' +
+          'class="label-caps text-on-surface-variant py-2 hover:text-on-surface transition-colors">Cancel</button>' +
+      '</div>' +
+    '</div>';
+  modal.classList.remove('hidden');
+  modal.onclick = e => { if (e.target === modal) closeGenAllDialog(); };
+}
+function closeGenAllDialog() {
+  const m = document.getElementById('gen-all-modal');
+  if (m) m.classList.add('hidden');
+}
+
+function savePrompt(n) {
+  const text = document.getElementById('pr-' + n).value;
+  api('/save-prompt/' + RUN_ID + '/' + n, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }) }).then(() => toast('Saved')).catch(e => showError(e.message));
+}
+function regenPrompt(n, btn) {
+  const origHtml = btn ? btn.innerHTML : null;
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Rewriting…'; btn.classList.add('cursor-not-allowed', 'opacity-60'); }
+  api('/regenerate-prompt/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt_num: n }) })
+    .then(d => { document.getElementById('pr-' + n).value = d.prompt; toast('Prompt rewritten'); })
+    .catch(e => showError(e.message))
+    .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = origHtml; btn.classList.remove('cursor-not-allowed', 'opacity-60'); } });
+}
+function uploadImg(n, input) {
+  const file = input.files[0];
+  if (!file) return;
+  toast('Uploading…');
+  file.arrayBuffer().then(buf => fetch('/upload-image/' + RUN_ID + '/' + n, {
+    method: 'POST', headers: { 'Content-Type': file.type || 'image/png' }, body: buf,
+  })).then(res => { if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Upload failed'); }); return res.json(); })
+    .then(() => { input.value = ''; loadDetail().then(() => { renderVisuals(); toast('Image uploaded'); }); })
+    .catch(e => { input.value = ''; showError(e.message); });
+}
+function revertImg(n) {
+  if (!confirm('Revert image ' + n + ' to AI-generated version?')) return;
+  api('/revert-image/' + RUN_ID + '/' + n, { method: 'POST' })
+    .then(d => loadDetail().then(() => { renderVisuals(); toast(d.restored ? 'Reverted to AI version' : 'Image removed'); }))
+    .catch(e => showError(e.message));
+}
+function revertLogo(n) {
+  if (!confirm('Remove logo composite from image ' + n + '?')) return;
+  api('/revert-logo/' + RUN_ID + '/' + n, { method: 'POST' })
+    .then(() => loadDetail().then(() => { renderVisuals(); toast('Logo removed'); }))
+    .catch(e => showError(e.message));
+}
+function applyLogo() {
+  toast('Applying logo…');
+  api('/apply-logo/' + RUN_ID, { method: 'POST' })
+    .then(d => loadDetail().then(() => { renderVisuals(); toast('Logo applied to ' + (d.count || 0) + ' image(s)'); }))
+    .catch(e => showError(e.message));
+}
+function revertPrompt(n) {
+  if (!confirm('Revert prompt ' + n + ' to original AI-generated version?')) return;
+  api('/revert-prompt/' + RUN_ID + '/' + n, { method: 'POST' })
+    .then(() => loadDetail().then(() => { renderVisuals(); toast('Prompt reverted'); }))
+    .catch(e => showError(e.message));
+}
+
+/* ── Ad assignment helpers ── */
+function buildAssignmentInner() {
+  const d = DETAIL;
+  const allVariants = d.variants || [];
+  const selectedVariants = allVariants.filter(v => selected.has(v.variant));
+  const prompts = d.image_prompts || [];
+  const existing = d.existing_images || [];
+  let h = '<h3 class="font-display text-xl mb-1">Ad assignment</h3>' +
+    '<p class="text-sm text-on-surface-variant mb-5">Only selected-for-publish variants appear here. The thumbnail shows exactly what will be deployed.</p>';
+  if (!allVariants.length) {
+    h += '<p class="text-sm text-outline italic">No ad variants yet — create them in the Copy tab.</p>';
+  } else if (!selectedVariants.length) {
+    h += '<p class="text-sm text-outline italic">No variants selected for publish — check "Select for publish" in the Copy tab.</p>';
+  } else {
+    h += '<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">';
+    selectedVariants.forEach(v => {
+      const assignedNum = v.image_num != null ? parseInt(v.image_num, 10) : v.variant;
+      const imgName = 'image_' + assignedNum + '.png';
+      const imgExists = existing.includes(imgName);
+      const isAuto = v.image_num == null;
+      h += '<div class="border border-outline-variant bg-surface-container-lowest p-3 flex gap-3 items-start">' +
+        '<div class="w-14 h-[72px] shrink-0 bg-surface-container-low border border-outline-variant overflow-hidden">' +
+          (imgExists
+            ? '<img src="/image/' + RUN_ID + '/' + imgName + '?t=' + Date.now() + '" class="w-full h-full object-cover cursor-zoom-in" onclick="openLightbox(this.src)"/>'
+            : '<div class="w-full h-full flex items-center justify-center"><span class="material-symbols-outlined text-outline text-[20px]">image_not_supported</span></div>') +
+        '</div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="label-caps text-[10px] text-outline mb-0.5">Variant ' + v.variant + (isAuto ? ' · auto' : ' · assigned') + '</p>' +
+          '<p class="text-sm truncate mb-2" title="' + esc(v.headline || '') + '">' + esc(v.headline || '(no headline)') + '</p>' +
+          '<select class="w-full text-[10px] border border-outline-variant bg-surface px-1 py-1 font-body label-caps" onchange="assignImgToVariant(' + v.variant + ',this.value)">' +
+            '<option value="">Auto — image ' + v.variant + '</option>' +
+            prompts.map(p => {
+              const isSel = v.image_num != null && parseInt(v.image_num, 10) === p.num;
+              return '<option value="' + p.num + '"' + (isSel ? ' selected' : '') + '>Image ' + p.num + ' · ' + esc(p.title) + '</option>';
+            }).join('') +
+          '</select>' +
+        '</div>' +
+      '</div>';
+    });
+    h += '</div>';
+  }
+  return h;
+}
+function rerenderAssignment() {
+  const section = document.getElementById('ad-assignment-section');
+  if (section) section.innerHTML = buildAssignmentInner();
+}
+
+/* ── Audience & Deploy tab ── */
+function renderAudience() {
+  loaded.audience = true;
+  const root = document.getElementById('tab-audience');
+  root.innerHTML = '<p class="text-on-surface-variant">Loading audience…</p>';
+  api('/audience/' + RUN_ID).then(d => {
+    const a = d.audience || {};
+    let html = '<div class="grid md:grid-cols-2 gap-8">';
+    html += '<div><h2 class="font-headline text-2xl mb-4">Target parameters</h2>' +
+      '<div class="space-y-4">' +
+      field('City', 'aud-city', a.city || '') +
+      field('Radius (km)', 'aud-radius', a.radius_km || 25, 'number') +
+      field('Age min', 'aud-agemin', a.age_min || 28, 'number') +
+      field('Age max', 'aud-agemax', a.age_max || 65, 'number') +
+      '<div><p class="label-caps text-outline mb-1">Interests</p><div class="flex flex-wrap gap-2">' +
+        (a.interests || []).map(i => '<span class="label-caps bg-primary-fixed/40 text-on-primary-container px-3 py-1">' + esc(i.name || i) + '</span>').join('') +
+      '</div></div>' +
+      '<p class="text-sm text-on-surface-variant">' + esc(d.summary || '') + '</p>' +
+      '<button onclick="saveAudience()" class="border border-outline rounded label-caps px-4 py-2 hover:bg-surface-container-low transition-colors">Save audience</button>' +
+      '</div></div>';
+    html += '<div><h2 class="font-headline text-2xl mb-4">Deploy</h2>' +
+      '<p class="text-sm text-on-surface-variant mb-4">Publishes the selected copy variants to Meta as PAUSED lead ads. Review in Ads Manager before activating.</p>' +
+      '<div class="grid grid-cols-2 gap-4 mb-4">' +
+        '<div class="border-l-2 border-primary pl-4"><p class="label-caps text-outline">Budget</p><p class="font-headline text-2xl" id="dep-budget"></p></div>' +
+        '<div class="border-l-2 border-primary pl-4"><p class="label-caps text-outline">Duration</p><p class="font-headline text-2xl" id="dep-dur"></p></div>' +
+      '</div>' +
+      '<button id="deploy-btn" onclick="deploy()" class="w-full bg-primary text-on-primary rounded label-caps py-4 hover:bg-surface-tint transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">Publish campaign</button>' +
+      '<div id="deploy-status" class="mt-4 text-sm"></div></div>';
+    html += '</div>';
+    root.innerHTML = html;
+    const b = (DETAIL && DETAIL.brief) || {};
+    document.getElementById('dep-budget').textContent = fmtINR(b.daily_budget_inr) + '/day';
+    document.getElementById('dep-dur').textContent = (b.campaign_duration_days || 30) + ' days';
+    renderPublished();
+  }).catch(e => { root.innerHTML = '<p class="text-error">' + e.message + '</p>'; });
+}
+function field(label, id, val, type) {
+  return '<div><label class="label-caps text-outline block mb-1">' + label + '</label>' +
+    '<input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val) + '" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0"/></div>';
+}
+function saveAudience() {
+  const payload = {
+    city: document.getElementById('aud-city').value,
+    radius_km: parseInt(document.getElementById('aud-radius').value, 10) || 25,
+    age_min: parseInt(document.getElementById('aud-agemin').value, 10) || 28,
+    age_max: parseInt(document.getElementById('aud-agemax').value, 10) || 65,
+  };
+  api('/audience/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(() => toast('Audience saved')).catch(e => showError(e.message));
+}
+function deploy() {
+  const el = document.getElementById('deploy-status');
+  const btn = document.getElementById('deploy-btn');
+  const spin = '<span class="inline-block w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Publishing…'; }
+  el.innerHTML = '<div class="flex items-center gap-2 text-on-surface-variant"><span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span> Connecting to Meta Ads… this may take up to a minute.</div>';
+  api('/deploy-to-meta/' + RUN_ID, { method: 'POST' }).then(d => {
+    const ok = (d.deployed || []).length, errs = (d.errors || []).map(e => e.error).join('; ');
+    el.innerHTML = '<span class="text-ok">✓ ' + ok + ' ad(s) created (PAUSED).</span> ' + (errs ? '<span class="text-error ml-2">' + esc(errs) + '</span>' : '');
+    if (btn) { btn.disabled = false; btn.textContent = 'Publish campaign'; }
+    renderPublished();
+  }).catch(e => {
+    el.innerHTML = '<span class="text-error">✕ ' + esc(e.message) + '</span> <button onclick="deploy()" class="label-caps text-primary underline ml-2">Retry</button>';
+    if (btn) { btn.disabled = false; btn.textContent = 'Publish campaign'; }
+  });
+}
+function renderPublished() {
+  if (!DETAIL || !DETAIL.has_live_ads) return;
+  api('/meta-previews/' + RUN_ID).then(d => {
+    if (!(d.previews || []).length) return;
+    const root = document.getElementById('tab-audience');
+    let html = '<div class="mt-10"><h3 class="font-headline text-xl mb-3">Published ads</h3><div class="flex gap-4 flex-wrap">';
+    d.previews.forEach(p => { (p.previews || []).forEach(pv => { html += '<div class="border border-outline-variant">' + (pv.body || '') + '</div>'; }); });
+    html += '</div></div>';
+    root.insertAdjacentHTML('beforeend', html);
+  }).catch(() => {});
+}
+
+/* ── Optimise tab ── */
+function renderOptimise() {
+  loaded.optimise = true;
+  const root = document.getElementById('tab-optimise');
+  if (!DETAIL || !DETAIL.has_live_ads) {
+    root.innerHTML = '<p class="text-on-surface-variant">Publish live ads first to see performance, recommendations, and variant comparisons.</p>';
+    loadStrategicInsights(root);
+    loadMetaRecommendations(root);
+    return;
+  }
+  const skRow = '<div class="h-3 bg-surface-container rounded animate-pulse w-full mb-2"></div>';
+  root.innerHTML = '<h2 class="font-headline text-2xl mb-4 text-on-surface-variant">Performance at a glance</h2>' +
+    '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">' +
+    [0,1,2,3].map(() => '<div class="border border-outline-variant p-4">' + skRow + '<div class="h-8 bg-surface-container rounded animate-pulse w-3/4 mt-3"></div></div>').join('') +
+    '</div>' +
+    '<div class="space-y-3">' + [0,1,2].map(() => '<div class="border border-outline-variant p-4">' + skRow + '<div class="h-3 bg-surface-container rounded animate-pulse w-2/3"></div></div>').join('') + '</div>';
+  api('/meta-performance/' + RUN_ID).then(d => {
+    let html = '<h2 class="font-headline text-2xl mb-4">Performance at a glance</h2>';
+    const tot = (d.variants || []).reduce((a, v) => {
+      const m = v.metrics || {};
+      a.impr += m.impressions || 0; a.clicks += Math.round((m.impressions || 0) * (m.ctr || 0) / 100);
+      a.leads += m.leads || 0; a.spend += m.spend || 0; return a;
+    }, { impr: 0, clicks: 0, leads: 0, spend: 0 });
+    const cpl = tot.leads ? tot.spend / tot.leads : 0;
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">' +
+      stat('Impressions', fmtCount(tot.impr)) + stat('Clicks', fmtCount(tot.clicks)) +
+      stat('Leads', tot.leads) + stat('CPL', fmtINR(cpl)) + '</div>';
+    // Recommendations (campaign + per-variant)
+    const allRecs = (d.campaign_recs || []).concat(...(d.variants || []).map(v => (v.recommendations || []).map(r => ({ ...r, variant: v.variant }))));
+    html += '<h3 class="font-headline text-xl mb-3">AI recommendations</h3>';
+    if (!allRecs.length) html += '<p class="text-sm text-on-surface-variant mb-6">No recommendations yet — let the ads gather more data.</p>';
+    else { html += '<div class="space-y-3 mb-8">'; allRecs.forEach((r, i) => {
+      const col = r.severity === 'red' ? 'text-error' : r.severity === 'green' ? 'text-ok' : 'text-warn';
+      html += '<div class="border border-outline-variant p-4 flex justify-between items-center gap-4">' +
+        '<div><p class="label-caps ' + col + '">' + esc(r.label) + '</p><p class="text-sm text-on-surface-variant mt-1">' + esc(r.detail) + '</p></div>' +
+        '<button onclick=\'applyRec(' + JSON.stringify(r).replace(/'/g, "&#39;") + ')\' class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap">Apply</button>' +
+        '</div>';
+    }); html += '</div>'; }
+    // Per-variant performance
+    html += '<h3 class="font-headline text-xl mb-3">Creative variant performance</h3><div class="space-y-2 mb-8">';
+    (d.variants || []).forEach(v => {
+      const m = v.metrics || {};
+      const rank = v.rank_label ? '<span class="label-caps ' + (v.rank_label === 'Top performer' ? 'text-ok' : 'text-error') + '">' + v.rank_label + '</span>' : '';
+      html += '<div class="border border-outline-variant p-4 flex justify-between items-center">' +
+        '<div><p class="font-headline text-lg">Version ' + v.variant + ' ' + rank + '</p>' +
+        '<p class="text-sm text-outline">CTR ' + (m.ctr || 0) + '% · ' + (m.leads || 0) + ' leads · CPL ' + fmtINR(m.cpl) + '</p></div>' +
+        '<p class="font-display text-xl">' + fmtCount(m.impressions || 0) + '</p></div>';
+    });
+    html += '</div>';
+    root.innerHTML = html;
+    loadStrategicInsights(root);
+    loadMetaRecommendations(root);
+  }).catch(e => { root.innerHTML = '<p class="text-error">' + e.message + '</p>'; });
+}
+function stat(label, val) {
+  return '<div class="border border-outline-variant p-4"><p class="label-caps text-outline">' + label + '</p><p class="font-display text-3xl mt-1">' + val + '</p></div>';
+}
+function applyRec(r) {
+  let action = r.action, params = r.params || {};
+  if (action === 'note') { showError(r.detail); return; }
+  if (action === 'targeting_interests') { action = 'add_interests'; }
+  // variant=0 means all live variants; fall back to first variant for legacy callers
+  const variant = (r.variant !== undefined) ? r.variant
+    : (r.apply_to_variant || (DETAIL.variants[0] && DETAIL.variants[0].variant) || 1);
+  api('/meta-optimize/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, variant, params }) })
+    .then(() => { toast('Applied'); loaded.optimise = false; renderOptimise(); }).catch(e => showError(e.message));
+}
+function loadStrategicInsights(root) {
+  api('/crm-strategic-insights?run_id=' + RUN_ID).then(d => {
+    const camp = (d.insights || []).filter(i => i.scope === 'campaign');
+    if (!camp.length) return;
+    let html = '<h3 class="font-headline text-xl mb-3 mt-4">Strategic insights (from your CRM)</h3><div class="space-y-3">';
+    camp.forEach(i => {
+      const rec = { action: i.category === 'budget' ? 'budget' : 'add_interests', variant: 0, params: i.params || {} };
+      html += '<div class="border border-outline-variant p-4 flex justify-between items-center gap-4">' +
+        '<div><p class="label-caps text-primary">' + esc(i.title) + '</p>' +
+        '<p class="text-sm mt-1">' + esc(i.finding) + '</p><p class="text-sm text-on-surface-variant mt-1">' + esc(i.action) + '</p></div>' +
+        '<button onclick=\'applyRec(' + JSON.stringify(rec).replace(/'/g, "&#39;") + ')\' class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap">Apply to all</button></div>';
+    });
+    html += '</div>';
+    root.insertAdjacentHTML('beforeend', html);
+  }).catch(() => {});
+}
+
+function loadMetaRecommendations(root) {
+  if (!DETAIL || !DETAIL.has_live_ads) return;
+  api('/meta-recommendations/' + RUN_ID).then(d => {
+    const recs = d.recommendations || [];
+    if (!recs.length) return;
+    let html = '<h3 class="font-headline text-xl mb-3 mt-8">Meta native recommendations</h3><div class="space-y-3">';
+    recs.forEach(r => {
+      const title = esc(r.title || r.type || 'Recommendation');
+      const detail = esc(r.message || r.content || '');
+      html += '<div class="border border-outline-variant p-4 flex justify-between items-center gap-4">' +
+        '<div><p class="label-caps text-primary">' + title + '</p>' +
+        (detail ? '<p class="text-sm text-on-surface-variant mt-1">' + detail + '</p>' : '') + '</div>';
+      if (r.recommendation_id) {
+        html += '<button onclick=\'applyMetaRec("' + esc(r.recommendation_id) + '")\' class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap">Apply</button>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+    root.insertAdjacentHTML('beforeend', html);
+  }).catch(() => {});
+}
+function applyMetaRec(id) {
+  api('/meta-apply-recommendation/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recommendation_id: id }) })
+    .then(() => toast('Recommendation applied'))
+    .catch(e => showError(e.message));
+}
+
+/* ── Approve ── */
+function approveCampaign() {
+  api('/approve/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ selected_variants: [...selected] }) })
+    .then(() => { document.getElementById('approve-state').innerHTML = '<span class="label-caps text-ok">✓ Approved</span>'; toast('Approved'); })
+    .catch(e => showError(e.message));
+}
+
+/* ── Error banner ── */
+let errTimer = null;
+function showError(msg) {
+  let el = document.getElementById('err-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'err-banner';
+    el.className = 'fixed top-4 right-4 z-50 max-w-sm bg-error text-on-error px-4 py-3 label-caps text-[11px] flex items-start gap-3 shadow-lg rounded transition-opacity';
+    el.innerHTML = '<span class="material-symbols-outlined text-[16px] shrink-0">error</span><span class="flex-1" id="err-banner-msg"></span>' +
+      '<button onclick="document.getElementById(\'err-banner\').style.opacity=\'0\'" class="opacity-70 hover:opacity-100 ml-1 shrink-0">✕</button>';
+    document.body.appendChild(el);
+  }
+  document.getElementById('err-banner-msg').textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(errTimer);
+  errTimer = setTimeout(() => { el.style.opacity = '0'; }, 7000);
+}
+
+/* ── Toast ── */
+let toastTimer = null;
+function toast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast';
+    t.className = 'fixed bottom-6 right-6 bg-primary text-on-primary px-4 py-2 label-caps z-50 transition-opacity'; document.body.appendChild(t); }
+  t.textContent = msg; t.style.opacity = '1';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.opacity = '0', 2000);
+}
+
+/* ── Boot ── */
+loadDetail().then(() => { renderVisuals(); showTab('copy'); }).catch(e => {
+  document.getElementById('d-title').textContent = 'Could not load campaign';
+  document.getElementById('d-sub').textContent = e.message;
+});
+</script>
+{% endblock %}
