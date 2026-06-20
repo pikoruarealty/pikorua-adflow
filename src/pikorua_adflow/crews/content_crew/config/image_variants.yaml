@@ -50,6 +50,9 @@ variants:
 
   lifestyle_private_retreat:
     label: "Lifestyle — Private Retreat"
+    allowed_recipes:
+      - the_editorial_sidebar
+      - the_architectural_dead_zone
     default_tone_bias: bright_aspirational
     sample_ready_cta: "Sample flat ready — come experience it"
     allowed_palettes:
@@ -76,6 +79,10 @@ variants:
 
   lifestyle_social_home:
     label: "Lifestyle — The Social Home"
+    allowed_recipes:
+      - the_golden_archway
+      - the_horizon_anchor
+      - the_zenith_gaze
     default_tone_bias: bright_aspirational
     sample_ready_cta: "Sample flat ready — see the space"
     allowed_palettes:
@@ -101,6 +108,10 @@ variants:
 
   lifestyle_city_connection:
     label: "Lifestyle — City Connection"
+    allowed_recipes:
+      - the_depth_integration
+      - the_editorial_sidebar
+      - the_horizon_anchor
     default_tone_bias: dark_luxury
     sample_ready_cta: "Sample flat ready — see the view"
     allowed_palettes:
@@ -126,6 +137,10 @@ variants:
 
   exterior_establishing_shot:
     label: "Exterior Establishing Shot"
+    allowed_recipes:
+      - the_dark_water_canvas
+      - the_sky_chandelier
+      - the_horizon_anchor
     opt_in: true
     default_tone_bias: dark_luxury
     sample_ready_cta: "Visit the site — sample flat now open"
@@ -157,6 +172,10 @@ variants:
 
   interior_signature_moment:
     label: "Interior Signature Moment"
+    allowed_recipes:
+      - the_architectural_dead_zone
+      - the_glass_morphism_shield
+      - the_horizon_anchor
     default_tone_bias: dark_luxury
     sample_ready_cta: "Step inside — sample flat ready"
     allowed_palettes:

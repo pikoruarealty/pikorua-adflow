@@ -411,6 +411,123 @@ AD_STRUCTURES: dict[str, str] = {
 }
 
 
+# ── Learned design grammar (recipes + detail library + vocabulary additions) ──
+# Distilled from curated reference ads (see design_principles.yaml). The recipe is the
+# coherent design bundle the LLM picks per variant; we weave its fields into the prompt.
+# Vocabulary additions are merged into the palette/structure glossaries below so recipe
+# references resolve. Loading is defensive: if the file is absent, the pipeline falls back
+# to the legacy palette/structure behaviour with no recipe overlay.
+_DESIGN_PRINCIPLES_PATH = (
+    Path(__file__).parent.parent.parent
+    / "crews" / "content_crew" / "config" / "design_principles.yaml"
+)
+
+
+def _load_design_principles() -> dict:
+    try:
+        with open(_DESIGN_PRINCIPLES_PATH, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+
+_DESIGN_PRINCIPLES = _load_design_principles()
+_RECIPES_BY_NAME: dict[str, dict] = {
+    r["name"]: r
+    for r in _DESIGN_PRINCIPLES.get("recipes", [])
+    if isinstance(r, dict) and r.get("name")
+}
+_LAYOUT_DISCIPLINE: list[str] = _DESIGN_PRINCIPLES.get("layout_discipline", []) or []
+_DETAIL_PRINCIPLES: dict = _DESIGN_PRINCIPLES.get("detail_principles", {}) or {}
+
+# Merge vocabulary additions into the palette / structure glossaries so recipe
+# palette_family / structure_family references resolve to concrete descriptions.
+_VOCAB = _DESIGN_PRINCIPLES.get("vocabulary_additions", {}) or {}
+for _name, _desc in (_VOCAB.get("palettes") or {}).items():
+    PALETTE_CONFIGS.setdefault(_name, f"• Overall colour world: {_desc}")
+for _name, _desc in (_VOCAB.get("structures") or {}).items():
+    AD_STRUCTURES.setdefault(_name, f"• {_desc}")
+
+# Generic structure names used in recipes that map onto our canonical structures.
+_STRUCTURE_ALIASES: dict[str, str] = {
+    "full-bleed": "immersive_fullbleed",
+    "full_bleed": "immersive_fullbleed",
+    "fullbleed": "immersive_fullbleed",
+    "immersive": "immersive_fullbleed",
+    "split": "structured_split",
+    "structured_split": "structured_split",
+    "bordered": "bordered_campaign",
+    "framing_device": "bordered_campaign",
+}
+
+# Recipe text_roles → which typography sections to emit. Anything not requested is
+# suppressed, so moderate/teaser recipes render less text than full_detail ones.
+_ALL_TEXT_ROLES = {"headline", "subhead", "price", "info_band", "cta", "badge"}
+
+
+def _expand_structures(structure_family: list) -> str:
+    """Expand a recipe's structure_family names into concrete layout descriptions."""
+    if not structure_family:
+        return ""
+    seen: set[str] = set()
+    out: list[str] = []
+    for name in structure_family:
+        key = _STRUCTURE_ALIASES.get(name, name)
+        if key in seen:
+            continue
+        seen.add(key)
+        desc = AD_STRUCTURES.get(key)
+        if desc:
+            out.append(f"[{name}]\n{desc}")
+        else:
+            out.append(f"[{name}] — compose the layout in this distinctive manner.")
+    return "\n".join(out)
+
+
+def _format_recipe_block(recipe: dict) -> str:
+    """Render the chosen recipe's concrete art-direction fields as short Ideogram bullets.
+    Deliberately omits palette_family (covered by palette_config) and why_it_works (prose
+    that confuses image models into prioritising creative description over text callouts)."""
+    lines = [f"Design treatment (recipe: {recipe.get('name', '')}):"]
+    if recipe.get("lighting"):
+        lines.append(f"• Light: {recipe['lighting']}")
+    # Support both old field name (subject_treatment) and new (subject_rule)
+    subject = recipe.get("subject_rule") or recipe.get("subject_treatment")
+    if subject:
+        lines.append(f"• Subject: {subject}")
+    # Support both old (negative_space) and new (negative_space_rule)
+    neg_space = recipe.get("negative_space_rule") or recipe.get("negative_space")
+    if neg_space:
+        lines.append(f"• Negative space: {neg_space}")
+    # Support both old (type_move) and new (type_treatment)
+    type_treat = recipe.get("type_treatment") or recipe.get("type_move")
+    if type_treat:
+        lines.append(f"• Type treatment: {type_treat}")
+    if recipe.get("footer_backing"):
+        lines.append(f"• Footer/panel backing colour: {recipe['footer_backing']}")
+    return "\n".join(lines)
+
+
+def _format_detail_principles(keys: tuple[str, ...]) -> str:
+    """Fold a short slice of the detail-principle library into the prompt."""
+    out: list[str] = []
+    for k in keys:
+        rules = _DETAIL_PRINCIPLES.get(k) or []
+        for rule in rules:
+            out.append(f"• {rule}")
+    return "\n".join(out)
+
+
+def _recipe_text_roles(recipe: Optional[dict]) -> Optional[set]:
+    """The set of text roles a recipe carries, or None to render the full default set."""
+    if not recipe:
+        return None
+    roles = recipe.get("text_roles") or []
+    return {str(r).strip() for r in roles} or None
+
+
 def _select_structure(variant_key: str, tone_tag: str) -> str:
     """Return the structure name for this variant + tone combination."""
     variant_cfg = _VARIANTS_CONFIG.get(variant_key, {})
@@ -424,13 +541,22 @@ def _select_structure(variant_key: str, tone_tag: str) -> str:
     return structure_map.get(tone) or defaults[tone]
 
 
-def _build_typography_block(entry: dict, brief: dict) -> str:
+def _build_typography_block(
+    entry: dict, brief: dict, allowed_roles: Optional[set] = None
+) -> str:
     """
     Build the Typography hierarchy section from property brief data.
-    Each text line is on its own quoted line so gpt-image-1 stacks them as
+    Each text line is on its own quoted line so the renderer stacks them as
     distinct typographic layers within each module (not a single run-on string).
     All values come from brief — nothing invented.
+
+    allowed_roles — when provided (from a recipe's text_roles), only the requested
+    text roles are emitted so moderate/teaser recipes render less text than
+    full_detail ones. None renders the full default set (legacy behaviour).
     """
+    def want(role: str) -> bool:
+        return allowed_roles is None or role in allowed_roles
+
     locality = (brief.get("locality") or brief.get("city") or "").upper()
     city = (brief.get("city") or "").upper()
     price_cr = str(brief.get("price_cr") or "").strip()
@@ -452,7 +578,7 @@ def _build_typography_block(entry: dict, brief: dict) -> str:
 
     lines = ["Typography hierarchy:", ""]
 
-    if eyebrow:
+    if eyebrow and (want("subhead") or want("headline")):
         lines += ["Top Eyebrow:", f'"{eyebrow}"', ""]
 
     lines += ["Primary Headline:", f'"{locality}"', ""]
@@ -460,16 +586,16 @@ def _build_typography_block(entry: dict, brief: dict) -> str:
     if city and city != locality:
         lines += ["City:", f'"{city}"', ""]
 
-    if headline:
+    if headline and want("subhead"):
         lines += ["Campaign Tagline (secondary — body scale, NOT a second headline):", f'"{headline}"', ""]
 
     pricing_module_rendered = False
-    if price_cr:
+    if price_cr and want("price"):
         lines += ["Pricing Module:", f'"₹{price_cr} Cr"', '"ONWARDS"', ""]
         pricing_module_rendered = True
 
-    # Bottom information band — only if we have at least config or price
-    has_band = bool(config_val or price_cr or usp)
+    # Bottom information band — only if requested by the recipe and we have content
+    has_band = want("info_band") and bool(config_val or price_cr or usp)
     if has_band:
         lines.append("Bottom Information Band (all text: BOLD weight, ALL CAPS, pure white #FFFFFF on dark backing — no thin fonts, no grey, no mid-tone):")
         lines.append("")
@@ -503,7 +629,7 @@ def _build_typography_block(entry: dict, brief: dict) -> str:
                 lines.append(f'"{part}"')
             lines.append("")
 
-    if sample_ready:
+    if sample_ready and want("badge"):
         lines += [
             "Centre Floating Badge:",
             '"SAMPLE APARTMENT"',
@@ -512,136 +638,120 @@ def _build_typography_block(entry: dict, brief: dict) -> str:
             "",
         ]
 
-    lines.append(
-        "NOTE: Render ONLY the text elements listed above — do not invent any additional "
-        "text, numbers, phone numbers, sq ft, URLs, or property details."
-    )
+    lines.append("NOTE: Render ONLY the text strings listed above. Do not invent or add anything.")
     return "\n".join(lines)
 
 
-def build_gpt_image_prompt(entry: dict, brief: dict, variant_key: str) -> str:
+def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
     """
-    Assemble the full structured gpt-image-1 prompt from:
+    Assemble the full structured Ideogram ad prompt from:
       - entry["scene_prose"]  — 60-80 word photography description from the LLM
       - entry["headline"]     — headline from copy output
       - entry["eyebrow"]      — optional eyebrow line
-      - entry["palette_tag"]  — selected colour palette
+      - entry["palette_tag"]  — selected colour palette (concrete text/accent treatment)
       - entry["tone_tag"]     — dark_luxury or bright_aspirational
+      - entry["recipe_tag"]   — chosen design recipe (the learned, coherent design bundle)
       - brief                 — property data (locality, city, price_cr, config, etc.)
-      - variant_key           — determines the ad structure
+      - variant_key           — fallback ad structure when no recipe is chosen
 
-    This replaces the old approach of asking the LLM to write the full prompt.
+    When a recipe is present it is the primary art-direction authority: its
+    lighting / subject / negative-space / typographic move / colour world / structure
+    drive composition, and its text_roles gate how much text is rendered. The
+    detail-principle library and layout_discipline rules refine the result.
+    When absent, the builder falls back to the legacy palette + structure behaviour.
     """
     scene_prose = (entry.get("scene_prose") or "").strip()
     palette_tag = (entry.get("palette_tag") or "navy_gold").strip()
     tone_tag = (entry.get("tone_tag") or "dark_luxury").strip()
+    recipe = _RECIPES_BY_NAME.get((entry.get("recipe_tag") or "").strip())
 
     palette_config = PALETTE_CONFIGS.get(palette_tag, PALETTE_CONFIGS["navy_gold"])
-    structure_name = _select_structure(variant_key, tone_tag)
-    structure_config = AD_STRUCTURES.get(structure_name, AD_STRUCTURES["bordered_campaign"])
-    typography_block = _build_typography_block(entry, brief)
 
+    # Structure: recipe.structure_family (list, legacy) or recipe.layout_type (string, new)
+    # supersedes the variant→tone default.
+    recipe_structure = None
+    if recipe:
+        if recipe.get("structure_family"):
+            recipe_structure = recipe["structure_family"]
+        elif recipe.get("layout_type"):
+            recipe_structure = [recipe["layout_type"]]
+    if recipe_structure:
+        structure_config = _expand_structures(recipe_structure)
+    else:
+        structure_name = _select_structure(variant_key, tone_tag)
+        structure_config = AD_STRUCTURES.get(structure_name, AD_STRUCTURES["bordered_campaign"])
+
+    typography_block = _build_typography_block(entry, brief, _recipe_text_roles(recipe))
+
+    recipe_block = (_format_recipe_block(recipe) + "\n\n") if recipe else ""
+    layout_block = ""
+    if recipe and recipe.get("text_tier") == "full_detail" and _LAYOUT_DISCIPLINE:
+        layout_block = (
+            "Layout discipline (keep the loaded ad uncluttered):\n"
+            + "\n".join(f"• {r}" for r in _LAYOUT_DISCIPLINE)
+            + "\n\n"
+        )
+
+    # Typography callouts come EARLY — before layout/recipe doctrine — so the image
+    # model encounters the exact text strings before any atmospheric instructions.
     return (
         f"{scene_prose}\n\n"
-        "Treat this as a finished luxury real estate advertisement, not merely a photograph.\n"
-        "FIRST create a world-class architectural photograph.\n"
-        "THEN transform it into a premium real estate marketing campaign creative.\n\n"
-        "Design language:\n"
-        "Ultra-premium developer advertisement, luxury property brochure aesthetic.\n"
-        "High-end Indian real estate campaign — Lodha / Shivalik / Iscon / Swati style.\n"
-        "Premium property Instagram/Facebook ad. Professional sales creative.\n\n"
+        "A finished, world-class luxury real estate advertisement — "
+        "premium Indian developer campaign style (Lodha / Shivalik / Iscon / Swati).\n\n"
+        "Render these exact text elements into the design (do not alter the wording):\n"
+        f"{typography_block}\n\n"
         "Layout structure:\n"
         f"{structure_config}\n\n"
-        f"{typography_block}\n\n"
-        "Colour palette:\n"
+        "Colour & text treatment:\n"
         f"{palette_config}\n\n"
-        "Typography rules:\n"
-        "• ONE headline only — the Primary Headline (location name) is the single largest "
-        "typographic element. The Campaign Tagline is a subordinate supporting line rendered "
-        "at body scale, NOT a second display headline — never give it the same visual weight "
-        "as the Primary Headline.\n"
-        "• Primary Headline: bold or extrabold weight serif, gold, ALL CAPS, display scale.\n"
-        "• Campaign Tagline: medium weight, smaller than the headline, never competing with it.\n"
-        "• Pricing Module: bold weight, gold, clearly larger than body text.\n"
-        "• Bottom band modules: BOLD weight minimum, ALL CAPS, pure white (#FFFFFF) — "
-        "never thin, never light, never italic, never grey, never mid-tone. "
-        "Each module label must be readable at thumbnail size without squinting.\n"
-        "• Never use condensed, narrow, or ultra-thin typeface variants anywhere — "
-        "minimum effective weight is medium (400) for large text, bold (700) for small text.\n\n"
-        "Design treatment:\n"
-        "• Real estate brochure quality — print-ready, not digital-casual\n"
-        "• High-end luxury developer advertisement — Lodha / Shivalik / Swati campaign standard\n"
-        "• Structured spacing — clear grid alignment, marketing-agency level composition\n"
-        "• Every text element perfectly legible at mobile thumbnail size within 2 seconds\n"
-        "• Information modules feel designed by an agency, not automatically placed\n"
-        "• No random decorative clutter — every graphic element serves the hierarchy\n"
-        "• Professional sales campaign aesthetic throughout\n"
-        "• No logos. No watermarks. No random icons or decorative symbols.\n"
-        "• No invented text — render ONLY the text strings listed in Typography hierarchy above.\n\n"
+        f"{recipe_block}"
+        f"{layout_block}"
+        "No invented text, no logos, no watermarks. One corner kept clean for logo compositing.\n\n"
         "Aspect ratio 4:5."
     )
 
 
-# ── OpenAI gpt-image-1 ────────────────────────────────────────────────────────
-
-def call_gpt_image_1(
-    prompt: str, api_key: str, aspect: str = "4x5", quality: str = "high"
-) -> bytes:
-    """OpenAI gpt-image-1 — best text rendering for ad banners.
-
-    Returns raw PNG bytes.  Size is chosen to match the requested aspect ratio;
-    gpt-image-1 only supports square, landscape, and portrait sizes.
-    """
-    import base64
-    import urllib.error
-    import urllib.request
-
-    _SIZE_MAP = {
-        "1x1": "1024x1024",
-        "4x5": "1024x1536",
-        "5x4": "1536x1024",
-        "16x9": "1536x1024",
-        "9x16": "1024x1536",
-        "2x3": "1024x1536",
-        "3x2": "1536x1024",
-    }
-    clean = (aspect or "4x5").lower().replace(":", "x")
-    size = _SIZE_MAP.get(clean, "1024x1536")
-
-    payload = json.dumps({
-        "model": "gpt-image-1",
-        "prompt": prompt,
-        "size": size,
-        "n": 1,
-        "quality": quality if quality in ("low", "medium", "high") else "high",
-        "output_format": "png",
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/images/generations",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode(errors="replace")
-        raise RuntimeError(
-            f"gpt-image-1 request failed [{e.code}]: {detail}"
-        ) from e
-
-    b64 = data["data"][0].get("b64_json", "")
-    if not b64:
-        raise RuntimeError("gpt-image-1 returned no image data")
-    return base64.b64decode(b64)
+# Backward-compatible alias: callers/tests that reference the old name keep working.
+build_gpt_image_prompt = build_ad_prompt
 
 
 # ── Ideogram API calls ────────────────────────────────────────────────────────
+
+# Optional recipe-scoped style reference (quality booster, default OFF). When
+# IDEOGRAM_STYLE_REF=1, 1-2 curated exemplar images for the chosen recipe are attached
+# to the Ideogram request as native style references. Off by default to keep the
+# distilled text grammar — not pixel copying — as the primary mechanism.
+_STYLE_REF_DIR = Path(
+    os.getenv("IDEOGRAM_STYLE_REF_DIR")
+    or (Path(__file__).parent.parent.parent.parent / "project_context" / "reference_ads")
+)
+
+
+def _collect_style_refs(recipe_tag: str) -> list[tuple[str, bytes]]:
+    """Return up to 2 (filename, bytes) exemplar images for a recipe, or [] if the
+    style-ref flag is off, the recipe has no exemplars, or files are missing."""
+    if os.getenv("IDEOGRAM_STYLE_REF", "0") not in ("1", "true", "True"):
+        return []
+    recipe = _RECIPES_BY_NAME.get((recipe_tag or "").strip())
+    if not recipe:
+        return []
+    names = [n for n in (recipe.get("exemplar_images") or []) if n]
+    if not names:
+        return []
+    import random
+    random.shuffle(names)
+    out: list[tuple[str, bytes]] = []
+    for name in names:
+        if len(out) >= 2:
+            break
+        path = _STYLE_REF_DIR / name
+        try:
+            if path.exists():
+                out.append((name, path.read_bytes()))
+        except Exception:
+            continue
+    return out
+
 
 def call_ideogram_v3(
     prompt: str, key: str, speed: str = "QUALITY", aspect: str = "4x5"
@@ -701,9 +811,15 @@ def call_ideogram_v3(
 
 
 def call_ideogram(
-    prompt: str, key: str, speed: str = "QUALITY", aspect: str = "4x5"
+    prompt: str, key: str, speed: str = "QUALITY", aspect: str = "4x5",
+    recipe_tag: str = "",
 ) -> bytes:
-    """Ideogram 4.0 API — multipart/form-data payload."""
+    """Ideogram 4.0 API — multipart/form-data payload.
+
+    recipe_tag — when the IDEOGRAM_STYLE_REF flag is on, 1-2 curated exemplar images
+    for this recipe are attached as native style references (quality booster). Off by
+    default; missing files or flag-off degrade silently to a text-only request.
+    """
     import time
     import urllib.error
     import urllib.request
@@ -729,12 +845,21 @@ def call_ideogram(
             f"{value}\r\n"
         ).encode("utf-8")
 
+    def _file_field(name: str, filename: str, content: bytes) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+        ).encode("utf-8") + content + b"\r\n"
+
     body = (
         _field("text_prompt", prompt)
         + _field("resolution", resolution)
         + _field("rendering_speed", speed)
-        + f"--{boundary}--\r\n".encode("utf-8")
     )
+    for fname, content in _collect_style_refs(recipe_tag):
+        body += _file_field("style_reference_images", fname, content)
+    body += f"--{boundary}--\r\n".encode("utf-8")
     req = urllib.request.Request(
         "https://api.ideogram.ai/v1/ideogram-v4/generate",
         data=body,

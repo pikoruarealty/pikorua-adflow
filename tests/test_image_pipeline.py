@@ -105,15 +105,25 @@ def test_variant_descriptions_reference_scene_pool():
 
 
 def test_prior_tags_embedded_in_description():
-    vk = "architectural_perspective"
-    scene_history = ["interior_corridor_vanishing_point", "balcony_seen_from_inside_apartment"]
+    vk = "exterior_establishing_shot"
+    scene_history = ["twilight_street_level_light_trails", "dusk_landscaped_approach"]
     tone_history = ["dark_luxury"]
-    desc = compose_description(vk, prior_scene_tags=scene_history, prior_tone_tags=tone_history)
+    recipe_history = ["the_sky_chandelier"]
+    desc = compose_description(
+        vk,
+        prior_scene_tags=scene_history,
+        prior_tone_tags=tone_history,
+        prior_recipe_tags=recipe_history,
+    )
     for tag in scene_history:
         assert tag in desc, f"prior_scene_tag '{tag}' not in description"
     for tag in tone_history:
         assert tag in desc, f"prior_tone_tag '{tag}' not in description"
-    print("  PASS prior_scene_tags and prior_tone_tags embedded in description")
+    for tag in recipe_history:
+        assert tag in desc, f"prior_recipe_tag '{tag}' not in description"
+    # The variant's allowed recipes should be offered as a constrained menu.
+    assert "DESIGN RECIPE" in desc, "recipe-selection menu missing from description"
+    print("  PASS prior scene/tone/recipe tags embedded; recipe menu present")
 
 
 def test_allowed_palettes_in_description():
@@ -201,17 +211,34 @@ def test_sanitiser_assembled_skips_price_enforcement():
 def test_build_gpt_image_prompt_contains_key_sections():
     prompt = build_gpt_image_prompt(SAMPLE_ENTRY, SAMPLE_BRIEF, "exterior_establishing_shot")
     for section in (
-        "Treat this as a finished luxury real estate advertisement",
-        "FIRST create a world-class architectural photograph",
-        "Design language:",
+        "A finished, world-class luxury real estate advertisement",
         "Layout structure:",
+        "Render these exact text elements into the design",
         "Typography hierarchy:",
-        "Colour palette:",
-        "Design treatment:",
+        "Colour & text treatment:",
+        "No invented text, no logos, no watermarks",
         "Aspect ratio",
     ):
         assert section in prompt, f"Key section missing from assembled prompt: '{section}'"
-    print("  PASS build_gpt_image_prompt() contains all 7 required sections")
+    print("  PASS build_ad_prompt() contains all required Ideogram-native sections")
+
+
+def test_recipe_drives_art_direction_and_text_density():
+    # full_detail recipe -> renders the info band + folds in layout discipline
+    full_entry = dict(SAMPLE_ENTRY, recipe_tag="the_horizon_anchor")
+    full_prompt = build_gpt_image_prompt(full_entry, SAMPLE_BRIEF, "exterior_establishing_shot")
+    assert "the_horizon_anchor" in full_prompt, "recipe art-direction block missing"
+    assert "Layout discipline" in full_prompt, "layout discipline missing for full_detail recipe"
+    assert "Bottom Information Band" in full_prompt, "full_detail recipe should render info band"
+
+    # moderate recipe (text_roles without info_band) -> info band suppressed
+    mod_entry = dict(SAMPLE_ENTRY, recipe_tag="the_dark_water_canvas")
+    mod_prompt = build_gpt_image_prompt(mod_entry, SAMPLE_BRIEF, "exterior_establishing_shot")
+    assert "Bottom Information Band" not in mod_prompt, (
+        "moderate recipe without info_band role should suppress the info band"
+    )
+    assert "Pricing Module" in mod_prompt, "moderate recipe with price role should render price"
+    print("  PASS recipe drives art direction and gates text density by text_roles")
 
 
 def test_build_gpt_image_prompt_uses_locality_not_product():

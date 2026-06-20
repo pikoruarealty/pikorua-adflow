@@ -8,13 +8,14 @@ import pathlib
 from datetime import datetime
 
 
-# Mapping from @task method name → variant_key (canonical order)
+# Mapping from @task method name → variant_key (canonical order).
+# 5 decided variants: 3 lifestyle + 1 interior + exterior (opt-in, generated last).
 _VISUAL_TASK_TO_VARIANT = {
-    "architectural_perspective_task": "architectural_perspective",
-    "lifestyle_moment_task": "lifestyle_moment",
-    "iconic_representation_task": "iconic_representation",
-    "exterior_establishing_shot_task": "exterior_establishing_shot",
+    "lifestyle_private_retreat_task": "lifestyle_private_retreat",
+    "lifestyle_social_home_task": "lifestyle_social_home",
+    "lifestyle_city_connection_task": "lifestyle_city_connection",
     "interior_signature_moment_task": "interior_signature_moment",
+    "exterior_establishing_shot_task": "exterior_establishing_shot",
 }
 _VARIANT_ORDER = list(_VISUAL_TASK_TO_VARIANT.values())
 

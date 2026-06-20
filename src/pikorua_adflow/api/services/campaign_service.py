@@ -617,9 +617,9 @@ def get_run_detail(run_id: str) -> dict:
 def _collect_prior_visual_state(property_name: str) -> dict:
     """
     Scan all completed RUNS for the same property_name and collect the scene_tag /
-    tone_tag history per variant_key from their visual_prompts.json files.
+    tone_tag / recipe_tag history per variant_key from their visual_prompts.json files.
 
-    Returns: {variant_key: {"scene": [...oldest first...], "tone": [...]}}
+    Returns: {variant_key: {"scene": [...oldest first...], "tone": [...], "recipe": [...]}}
     """
     state: dict[str, dict[str, list]] = {}
     with RUNS_LOCK:
@@ -639,11 +639,13 @@ def _collect_prior_visual_state(property_name: str) -> dict:
                 vk = entry.get("variant_key")
                 if not vk:
                     continue
-                bucket = state.setdefault(vk, {"scene": [], "tone": []})
+                bucket = state.setdefault(vk, {"scene": [], "tone": [], "recipe": []})
                 if scene := entry.get("scene_tag"):
                     bucket["scene"].append(scene)
                 if tone := entry.get("tone_tag"):
                     bucket["tone"].append(tone)
+                if recipe := entry.get("recipe_tag"):
+                    bucket["recipe"].append(recipe)
         except Exception:
             pass
     return state

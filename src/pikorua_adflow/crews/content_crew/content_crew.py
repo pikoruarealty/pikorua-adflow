@@ -117,6 +117,7 @@ class ContentCrew:
             variant_key,
             prior_scene_tags=ps.get("scene", []),
             prior_tone_tags=ps.get("tone", []),
+            prior_recipe_tags=ps.get("recipe", []),
         )
         return Task(
             description=desc,
@@ -127,24 +128,24 @@ class ContentCrew:
         )
 
     @task
-    def architectural_perspective_task(self) -> Task:
-        return self._visual_task("architectural_perspective")
+    def lifestyle_private_retreat_task(self) -> Task:
+        return self._visual_task("lifestyle_private_retreat")
 
     @task
-    def lifestyle_moment_task(self) -> Task:
-        return self._visual_task("lifestyle_moment")
+    def lifestyle_social_home_task(self) -> Task:
+        return self._visual_task("lifestyle_social_home")
 
     @task
-    def iconic_representation_task(self) -> Task:
-        return self._visual_task("iconic_representation")
-
-    @task
-    def exterior_establishing_shot_task(self) -> Task:
-        return self._visual_task("exterior_establishing_shot")
+    def lifestyle_city_connection_task(self) -> Task:
+        return self._visual_task("lifestyle_city_connection")
 
     @task
     def interior_signature_moment_task(self) -> Task:
         return self._visual_task("interior_signature_moment")
+
+    @task
+    def exterior_establishing_shot_task(self) -> Task:
+        return self._visual_task("exterior_establishing_shot")
 
     @crew
     def crew(self) -> Crew:

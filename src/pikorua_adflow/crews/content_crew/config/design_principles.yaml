@@ -1,0 +1,192 @@
+# Distilled luxury-ad design grammar. Consumed by image_service.py -> build_ad_prompt().
+# Field values are concise INSTRUCTIONS (≤15 words each) — not descriptions.
+# Verbose prose confuses image models into ignoring explicit text callouts.
+#
+# layout_type     → AD_STRUCTURES / vocabulary_additions.structures key
+# footer_backing  → exact hex for solid panel colour
+# text_primary_hex → exact hex for primary display text
+# lighting        → concrete light direction + quality (≤15 words)
+# subject_rule    → concrete placement instruction (≤15 words)
+# negative_space_rule → where text lives in frame (≤15 words)
+# type_treatment  → concrete typeface behaviour (≤15 words)
+# NOT INCLUDED: why_it_works, palette_family — prose that confuses image models.
+
+recipes:
+  - name: the_editorial_sidebar
+    scene_types: [lifestyle_single, lifestyle_social]
+    tones: [dark_luxury]
+    text_tier: full_detail
+    text_roles: [headline, subhead, price, info_band, cta]
+    layout_type: editorial_sidebar
+    footer_backing: "#1A1A1A"
+    text_primary_hex: "#C9A84C"
+    lighting: "low-key evening, warm amber rim highlights, deep structural shadows"
+    subject_rule: "pushed right two-thirds, in profile or facing away, elegant dress"
+    negative_space_rule: "left third = dark wall vertical text column; right two-thirds = photo only"
+    type_treatment: "elegant serif, varied bold/regular weights, all text left-aligned in column"
+
+  - name: the_horizon_anchor
+    scene_types: [lifestyle_social, interior]
+    tones: [dark_luxury, bright_aspirational]
+    text_tier: full_detail
+    text_roles: [headline, subhead, info_band, price, cta, badge]
+    layout_type: solid_footer_container
+    footer_backing: "#0D1B2A"
+    text_primary_hex: "#C9A84C"
+    lighting: "twilight blue hour, strong horizon line, warm balcony light vs cool sky"
+    subject_rule: "seated or standing above the footer cut-off line, gazing outward"
+    negative_space_rule: "lower 25-40% = solid opaque footer block; upper zone clear for headline"
+    type_treatment: "bold tracked serif headline top; tight geometric sans for footer spec row"
+
+  - name: the_sky_chandelier
+    scene_types: [exterior, lifestyle_single]
+    tones: [dark_luxury, bright_aspirational]
+    text_tier: moderate
+    text_roles: [headline, subhead, cta]
+    layout_type: full-bleed
+    text_primary_hex: "#C9A84C"
+    lighting: "twilight or golden hour, dark upper sky or ceiling soffit, glowing building below"
+    subject_rule: "distant human scale reference only, gazing toward the light source"
+    negative_space_rule: "upper sky or dark ceiling reserved for headline lockup only"
+    type_treatment: "centered serif lockup at top, bold weight, gold, all-caps"
+
+  - name: the_glass_morphism_shield
+    scene_types: [interior, lifestyle_social]
+    tones: [bright_aspirational]
+    text_tier: full_detail
+    text_roles: [headline, info_band, badge, cta]
+    layout_type: glass_morphism_panel
+    footer_backing: "#1C3325"
+    text_primary_hex: "#C9A84C"
+    lighting: "bright even daylight or hazy backlight through foliage"
+    subject_rule: "staged rooms or casual subjects overlapping the panel edge"
+    negative_space_rule: "semi-transparent dark-green rounded panel forces text zone over busy background"
+    type_treatment: "list items left-aligned inside the rounded panel; headline bold serif above"
+
+  - name: the_depth_integration
+    scene_types: [lifestyle_single]
+    tones: [dark_luxury]
+    text_tier: full_detail
+    text_roles: [headline, subhead, info_band, badge]
+    layout_type: full-bleed
+    text_primary_hex: "#C9A84C"
+    lighting: "dusk twilight, ambient city glow, strong warm rim light on subject"
+    subject_rule: "centered foreground, back to camera, typography sits behind subject"
+    negative_space_rule: "dark gradient sky + shadowed lower zone = layered text canvas"
+    type_treatment: "massive graphic numerals as sky texture; clean bold serif headline above"
+
+  - name: the_dark_water_canvas
+    scene_types: [exterior, lifestyle_single]
+    tones: [dark_luxury]
+    text_tier: moderate
+    text_roles: [headline, price, cta]
+    layout_type: full-bleed
+    footer_backing: "#0A0A15"
+    text_primary_hex: "#C9A84C"
+    lighting: "twilight, cool sky vs warm architectural glow reflecting off water"
+    subject_rule: "building or subject symmetrical against sky, eye drawn upward"
+    negative_space_rule: "foreground pool/driveway darkened to near-black for single glowing text block"
+    type_treatment: "single bold serif, one text block only, in darkest foreground area"
+
+  - name: the_physical_3d_intrusion
+    scene_types: [interior, lifestyle_single]
+    tones: [dark_luxury, bright_aspirational]
+    text_tier: moderate
+    text_roles: [headline, subhead, badge]
+    layout_type: full-bleed
+    text_primary_hex: "#FFFFFF"
+    lighting: "soft warm dim interior ambient, moody textured shadows"
+    subject_rule: "subject or furniture partially overlapped by the typographic element"
+    negative_space_rule: "massive 3D letters occupy center frame as graphic object; badge at bottom"
+    type_treatment: "headline as massive 3D block letters on floor plane; thin serif subhead below"
+
+  - name: the_architectural_dead_zone
+    scene_types: [interior]
+    tones: [bright_aspirational, dark_luxury]
+    text_tier: full_detail
+    text_roles: [headline, subhead, info_band]
+    layout_type: asymmetrical
+    text_primary_hex: "#C9A84C"
+    lighting: "dappled sunlight, high-contrast shadow pools, strong indoor-outdoor light balance"
+    subject_rule: "no people — empty room, architecture is the subject"
+    negative_space_rule: "text only in shadow pools or blank structural walls; focal point untouched"
+    type_treatment: "sans-serif + serif mix, thin tracked weights, asymmetric alignment to dead zones"
+
+  - name: the_golden_archway
+    scene_types: [lifestyle_social, interior]
+    tones: [bright_aspirational]
+    text_tier: full_detail
+    text_roles: [headline, subhead, info_band, cta, badge]
+    layout_type: framing_device
+    footer_backing: "#B8860B"
+    text_primary_hex: "#C9A84C"
+    lighting: "bright even interior daylight, warm corporate tones, no harsh shadows"
+    subject_rule: "subjects collaborating inside the frame, viewed through the golden overlay"
+    negative_space_rule: "gold graphic overlay frame on outer edges = all-text container; photo uncluttered inside"
+    type_treatment: "bold large sans + overlapping script, all text on the gold frame only"
+
+  - name: the_backlit_silhouette
+    scene_types: [lifestyle_single, lifestyle_social]
+    tones: [bright_aspirational]
+    text_tier: moderate
+    text_roles: [headline, cta, badge]
+    layout_type: full-bleed
+    text_primary_hex: "#C9A84C"
+    lighting: "intense golden-hour backlighting blowing out window/sky to white, volumetric rays"
+    subject_rule: "dark silhouettes facing the light source, not the camera"
+    negative_space_rule: "illuminated foreground surface (bed, stone floor, rug) = headline canvas"
+    type_treatment: "bold centered serif headline in gold, placed on bright foreground"
+
+  - name: the_zenith_gaze
+    scene_types: [lifestyle_social]
+    tones: [bright_aspirational]
+    text_tier: moderate
+    text_roles: [headline, info_band, cta]
+    layout_type: full-bleed
+    text_primary_hex: "#C9A84C"
+    lighting: "late afternoon golden hour, long shadows, camera directly overhead"
+    subject_rule: "bird's-eye shot, subjects in relaxed supine or seated poses, centered"
+    negative_space_rule: "aerial surface (lawn, courtyard, water) = centered headline canvas; no footer"
+    type_treatment: "multiple sizes, strict centered, bold serif, floating over aerial surface"
+
+layout_discipline:
+  - "COMPARTMENTALIZATION: Never float spec text over photo — use a solid opaque footer block."
+  - "DEAD ZONES: Anchor secondary text into shadows and blank walls; keep focal point clear."
+  - "PRICE ANCHORING: Isolate the price in a high-contrast badge, separate from the main text."
+
+detail_principles:
+  typography:
+    - "DO limit to two typeface families: elegant serif for headlines, geometric sans for data."
+    - "DO utilize extreme letter-spacing on caps to establish hierarchy."
+    - "DON'T float dense paragraphs over varied photographic textures."
+  lighting:
+    - "DO use strong directional light to sculpt dark shadow pools for text."
+    - "DO use volumetric backlighting to create natural high-key white space."
+    - "DON'T use flat, even, or flash photography lighting."
+  composition:
+    - "DO frame subjects as scale-references, facing away or gazing into the property."
+    - "DO use single-point perspectives or strong architectural leading lines."
+    - "DON'T center subjects perfectly unless the layout is hyper-symmetrical."
+  colour:
+    - "DO map text accent colour to the primary accent colour in the photograph."
+    - "DO maintain: dark neutral background + warm accent + stark white/metallic text."
+    - "DON'T use vibrant primary colours for text backgrounds."
+  branding:
+    - "DO keep logo small, one clean corner, adequate padding."
+    - "NEVER reproduce any studied brand's logo, wordmark, or merchandise."
+
+vocabulary_additions:
+  palettes:
+    twilight_amber: "Dominant cool twilight blues and greys, accented with warm glowing amber and gold, backed by dark slate."
+    charcoal_burgundy: "Dominant deep black and charcoal, accented with rich burgundy and red, backed by warm skin and wood tones."
+    earth_forest: "Dominant warm stone and greys, accented with deep forest green, backed by crisp white and brass."
+  structures:
+    solid_footer_container: "The bottom 25-40% of the canvas is replaced by a solid opaque block to securely house dense technical info, grids, and CTAs."
+    editorial_sidebar: "The left or right third of the image utilizes deep structural shadows or solid walls to act as a dedicated high-contrast vertical text column."
+    glass_morphism_panel: "Floating semi-transparent blurred pill or rounded rectangle overlays to mask busy backgrounds for text legibility."
+    asymmetrical: "Text blocks anchored to architectural dead zones in a deliberately asymmetrical composition."
+    framing_device: "A massive graphic overlay (arch, border, or frame) on the outer edges acts as the structural container for all text."
+  type_moves:
+    depth_of_field_integration: "Massive graphic typography rendered physically behind human subjects in the scene's depth."
+    physical_3d_typography: "Headlines modeled as solid 3D objects resting on the floor plane, casting environmental shadows."
+    interlocking_display_serif: "Highly stylized overlapping serif characters used as a standalone centralized graphic lockup."

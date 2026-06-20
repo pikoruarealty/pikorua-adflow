@@ -159,25 +159,19 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
             results.append({"prompt": i, "status": "already_exists", "file": str(out_path)})
             continue
 
-        if not openai_key and not ideogram_key:
+        if not ideogram_key:
             errors.append({
                 "prompt": i, "backend": "none", "fixable": False,
                 "error": (
-                    "No image service is connected yet. Add an OPENAI_API_KEY "
-                    "or IDEOGRAM_API_KEY to generate images."
+                    "Ideogram is not connected yet. Add an IDEOGRAM_API_KEY "
+                    "to generate images."
                 ),
             })
             continue
 
         speed = payload.speeds.get(i) or payload.speed
         aspect = payload.ratios.get(i) or payload.ratio
-        # Use backend chosen in the UI; fall back to whichever key is available
-        requested_backend = payload.backend or "ideogram"
-        if requested_backend == "gpt-image-1" and not openai_key:
-            requested_backend = "ideogram"
-        if requested_backend == "ideogram" and not ideogram_key:
-            requested_backend = "gpt-image-1"
-        backend = requested_backend
+        backend = "ideogram"
 
         # Prefer custom prompt override → user-saved edit → AI-generated prompt
         custom_or_saved = (
@@ -208,7 +202,7 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
                 gen_entry["scene_prose"] = (
                     payload.exterior_brief.strip() + " " + gen_entry.get("scene_prose", "")
                 ).strip()
-            raw_prompt = imgs.build_gpt_image_prompt(gen_entry, entry_brief, variant_key)
+            raw_prompt = imgs.build_ad_prompt(gen_entry, entry_brief, variant_key)
             sanitized = imgs.sanitize_image_prompt(raw_prompt, entry_brief, assembled=True)
         else:
             # Legacy format: prose ideogram_prompt stored in visual_prompts.json
@@ -218,11 +212,10 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
         logo_corner = entry.get("logo_corner", "bottom-right")
 
         try:
-            if backend == "gpt-image-1":
-                img_bytes = imgs.call_gpt_image_1(sanitized, openai_key, aspect, payload.quality or "high")
-            else:
-                v4_speed = speed if speed in ("TURBO", "DEFAULT") else "DEFAULT"
-                img_bytes = imgs.call_ideogram(sanitized, ideogram_key, v4_speed, aspect)
+            v4_speed = speed if speed in ("TURBO", "DEFAULT") else "DEFAULT"
+            img_bytes = imgs.call_ideogram(
+                sanitized, ideogram_key, v4_speed, aspect, recipe_tag=entry.get("recipe_tag", "")
+            )
             out_path.write_bytes(img_bytes)
             if BRAND_LOGO_PATH.exists():
                 try:

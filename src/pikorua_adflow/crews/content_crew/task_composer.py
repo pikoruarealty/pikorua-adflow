@@ -14,9 +14,9 @@ Usage (called from ContentCrew @task methods):
     from .task_composer import compose_description, VisualPromptOutput, list_variants
 
     desc = compose_description(
-        "architectural_perspective",
-        prior_scene_tags=state.get("architectural_perspective", {}).get("scene", []),
-        prior_tone_tags=state.get("architectural_perspective", {}).get("tone", []),
+        "lifestyle_private_retreat",
+        prior_scene_tags=state.get("lifestyle_private_retreat", {}).get("scene", []),
+        prior_tone_tags=state.get("lifestyle_private_retreat", {}).get("tone", []),
     )
     Task(
         description=desc,
@@ -50,6 +50,7 @@ class VisualPromptOutput(BaseModel):
     palette_tag: str       # one of the allowed palette names for this variant
     scene_tag: str         # exact scene from scene_pool
     tone_tag: str          # dark_luxury or bright_aspirational
+    recipe_tag: str = ""   # chosen design recipe (learned coherent design bundle)
     logo_corner: str       # corner kept clean; composite_logo() uses this post-generation
     ideogram_prompt: str = ""  # legacy compat — present in old visual_prompts.json entries
 
@@ -61,6 +62,41 @@ def _load_config() -> dict:
 
 _CONFIG = _load_config()
 VARIANT_KEYS: list[str] = list(_CONFIG["variants"].keys())
+
+# Learned design grammar — recipes the LLM picks from per variant. Defensive load:
+# if the file is missing, allowed_recipes resolve to empty and the prompt omits the
+# recipe-selection block (pipeline still runs on the legacy palette/structure path).
+_DESIGN_PRINCIPLES_PATH = Path(__file__).parent / "config" / "design_principles.yaml"
+
+
+def _load_design_principles() -> dict:
+    try:
+        with open(_DESIGN_PRINCIPLES_PATH, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except (FileNotFoundError, Exception):
+        return {}
+
+
+_RECIPES_BY_NAME: dict[str, dict] = {
+    r["name"]: r
+    for r in _load_design_principles().get("recipes", [])
+    if isinstance(r, dict) and r.get("name")
+}
+
+
+def _recipe_summary(name: str) -> str:
+    """One-line summary so the LLM can pick the right recipe for the scene."""
+    r = _RECIPES_BY_NAME.get(name)
+    if not r:
+        return f"  - {name}"
+    palette = r.get("palette_family") or []
+    if isinstance(palette, list):
+        palette = ", ".join(str(p) for p in palette)
+    return (
+        f"  - {name} [tier: {r.get('text_tier', '?')}] — "
+        f"lighting: {r.get('lighting', '')}; "
+        f"type: {r.get('type_move', '')}; colour world: {palette}"
+    )
 
 
 def list_variants() -> list[str]:
@@ -87,6 +123,7 @@ def compose_description(
     prior_scene_tags: Optional[list] = None,
     prior_tone_tags: Optional[list] = None,
     prior_palette_tags: Optional[list] = None,
+    prior_recipe_tags: Optional[list] = None,
 ) -> str:
     """
     Build the task description for one variant.
@@ -109,6 +146,7 @@ def compose_description(
 
     variant = _CONFIG["variants"][variant_key]
     allowed_palettes = variant.get("allowed_palettes", ["navy_gold", "charcoal_gold"])
+    allowed_recipes = [r for r in variant.get("allowed_recipes", []) if r in _RECIPES_BY_NAME]
     scene_photography_brief = _CONFIG.get("scene_photography_brief", "")
     creative_brief = variant.get("creative_brief", "")
 
@@ -124,6 +162,21 @@ def compose_description(
         f"  Palette tags already used in this batch: {prior_palette_tags or []}\n"
         "  → Choose a palette_tag NOT in the 'already used' list above if one is available.\n"
     )
+
+    recipe_block = ""
+    if allowed_recipes:
+        summaries = "\n".join(_recipe_summary(r) for r in allowed_recipes)
+        recipe_block = (
+            "DESIGN RECIPE — pick exactly one coherent design bundle for this variant. "
+            "The recipe drives the ad's composition, lighting, negative space, and how much "
+            "text is rendered. Choose the recipe whose lighting and mood best fit the scene "
+            "you are describing.\n"
+            f"  Allowed recipes:\n{summaries}\n"
+            f"  Recipes already used in this batch: {prior_recipe_tags or []}\n"
+            "  → Prefer a recipe_tag NOT in the 'already used' list if one fits the scene.\n"
+            "  → Pick a palette_tag from allowed_palettes that best matches the chosen "
+            "recipe's colour world.\n\n"
+        )
 
     instruction_tail = (
         "SCENE SELECTION: Pick a scene from scene_pool that does NOT appear in "
@@ -154,6 +207,7 @@ def compose_description(
         '  "palette_tag": "<one of the allowed_palettes listed above>",\n'
         '  "scene_tag": "<exact sub-scene name from scene_pool>",\n'
         '  "tone_tag": "<dark_luxury or bright_aspirational>",\n'
+        f'  "recipe_tag": "<one of the allowed recipe names listed above{"" if allowed_recipes else " — leave empty string if none listed"}>",\n'
         '  "logo_corner": "<bottom-left | bottom-right | top-right | top-left — '
         'choose the corner naturally kept cleanest by the scene composition>"\n'
         "}"
@@ -163,5 +217,6 @@ def compose_description(
         f"{scene_photography_brief}\n\n"
         f"{creative_brief}\n\n"
         f"{context_block}\n"
+        f"{recipe_block}"
         f"{instruction_tail}"
     )
