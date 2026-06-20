@@ -533,12 +533,17 @@ def get_run_detail(run_id: str) -> dict:
     prompt_overrides = edits.get("prompt_overrides", {})
     image_prompts = []
     _VP_LABELS = {
+        "lifestyle_private_retreat": "Lifestyle — Private Retreat",
+        "lifestyle_social_home": "Lifestyle — The Social Home",
+        "lifestyle_city_connection": "Lifestyle — City Connection",
+        "exterior_establishing_shot": "Exterior Establishing Shot",
+        "interior_signature_moment": "Interior Signature Moment",
+        # legacy keys kept for runs generated before the variant restructure
         "architectural_perspective": "Architectural Perspective",
         "lifestyle_moment": "Lifestyle Moment",
         "iconic_representation": "Iconic Representation",
-        "exterior_establishing_shot": "Exterior Establishing Shot",
-        "interior_signature_moment": "Interior Signature Moment",
     }
+    _VP_OPT_IN = {"exterior_establishing_shot"}
     vp_path = review_folder / "visual_prompts.json"
     if vp_path.exists():
         try:
@@ -547,12 +552,14 @@ def get_run_detail(run_id: str) -> dict:
             vp_entries = []
         for entry in vp_entries:
             i = entry.get("prompt_num", 0)
-            title = _VP_LABELS.get(entry.get("variant_key", ""), f"Prompt {i}")
+            vk = entry.get("variant_key", "")
+            title = _VP_LABELS.get(vk, f"Prompt {i}")
             ptext = entry.get("ideogram_prompt", "")
             image_prompts.append({
                 "num": i, "title": title,
                 "prompt_text": prompt_overrides.get(str(i), ptext),
                 "edited": str(i) in prompt_overrides,
+                "opt_in": vk in _VP_OPT_IN,
             })
     elif visual_text:
         for i, block in enumerate(re.split(r"\n---\n", visual_text), 1):

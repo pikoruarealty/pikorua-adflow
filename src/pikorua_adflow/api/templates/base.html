@@ -85,6 +85,16 @@
   .seg.on { background: rgb(var(--primary-container)); } .seg.off { background: rgb(var(--surface-container-highest)); }
   /* Inputs readable in both themes */
   input, select, textarea { color: rgb(var(--on-surface)); }
+  /* Force native dropdown popup to use dark styling in dark mode */
+  .dark select {
+    color-scheme: dark;
+    background-color: rgb(var(--surface-container));
+    color: rgb(var(--on-surface));
+  }
+  .dark select option {
+    background-color: rgb(var(--surface-container));
+    color: rgb(var(--on-surface));
+  }
   [contenteditable]:focus { outline: 1px solid rgb(var(--primary)); }
 </style>
 {% block head %}{% endblock %}

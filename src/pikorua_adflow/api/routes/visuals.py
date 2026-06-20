@@ -22,18 +22,23 @@ from ...crews.content_crew.task_composer import get_variant_meta as _get_variant
 router = APIRouter()
 
 _VARIANT_LABELS = {
+    "lifestyle_private_retreat": "Lifestyle — Private Retreat",
+    "lifestyle_social_home": "Lifestyle — The Social Home",
+    "lifestyle_city_connection": "Lifestyle — City Connection",
+    "exterior_establishing_shot": "Exterior Establishing Shot",
+    "interior_signature_moment": "Interior Signature Moment",
+    # legacy keys kept for runs generated before the variant restructure
     "architectural_perspective": "Architectural Perspective",
     "lifestyle_moment": "Lifestyle Moment",
     "iconic_representation": "Iconic Representation",
-    "exterior_establishing_shot": "Exterior Establishing Shot",
-    "interior_signature_moment": "Interior Signature Moment",
 }
 
+_OPT_IN_VARIANTS = {"exterior_establishing_shot"}
 
 _LEGACY_VARIANT_KEYS = [
-    "architectural_perspective",
-    "lifestyle_moment",
-    "iconic_representation",
+    "lifestyle_private_retreat",
+    "lifestyle_social_home",
+    "lifestyle_city_connection",
     "exterior_establishing_shot",
     "interior_signature_moment",
 ]
@@ -117,7 +122,12 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
     selected = {p for p in (payload.prompts or []) if 1 <= p <= len(visual_entries)}
     explicit = bool(selected)
     if not explicit:
-        selected = set(range(1, len(visual_entries) + 1))
+        # Generate all — exclude opt_in variants unless the user explicitly chose them
+        selected = {
+            e["prompt_num"]
+            for e in visual_entries
+            if e.get("variant_key", "") not in _OPT_IN_VARIANTS
+        }
 
     brief = run.get("brief", {})
     sample_ready = payload.sample_ready or bool(brief.get("sample_ready", False))
@@ -190,8 +200,15 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
             raw_prompt = custom_or_saved
             sanitized = imgs.sanitize_image_prompt(raw_prompt, entry_brief)
         elif entry.get("scene_prose"):
-            # New format: assemble the structured ad brief from the LLM's creative choices
-            raw_prompt = imgs.build_gpt_image_prompt(entry, entry_brief, variant_key)
+            # New format: assemble the structured ad brief from the LLM's creative choices.
+            # For the exterior variant, prepend any user-supplied building description so
+            # the prompt references actual building details rather than inventing them.
+            gen_entry = dict(entry)
+            if variant_key == "exterior_establishing_shot" and payload.exterior_brief:
+                gen_entry["scene_prose"] = (
+                    payload.exterior_brief.strip() + " " + gen_entry.get("scene_prose", "")
+                ).strip()
+            raw_prompt = imgs.build_gpt_image_prompt(gen_entry, entry_brief, variant_key)
             sanitized = imgs.sanitize_image_prompt(raw_prompt, entry_brief, assembled=True)
         else:
             # Legacy format: prose ideogram_prompt stored in visual_prompts.json

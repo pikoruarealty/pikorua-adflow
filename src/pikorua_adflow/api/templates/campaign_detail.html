@@ -158,6 +158,17 @@ function renderCopy() {
     html += '</div>';
   });
   root.innerHTML = html;
+  // Auto-rescore 1.5 s after the user stops editing headline or body
+  const _rt = {};
+  (d.variants || []).forEach(v => {
+    ['h-', 'b-'].forEach(pre => {
+      const el = document.getElementById(pre + v.variant);
+      if (el) el.addEventListener('input', () => {
+        clearTimeout(_rt[v.variant]);
+        _rt[v.variant] = setTimeout(() => rescore(v.variant, null), 1500);
+      });
+    });
+  });
 }
 function toggleSelect(v, on) { on ? selected.add(v) : selected.delete(v); rerenderAssignment(); }
 function saveCopy(v) {
@@ -298,10 +309,13 @@ function renderVisuals() {
       return va - vb;
     });
     const latestFile = sortedVariants.length ? sortedVariants[sortedVariants.length - 1] : (has ? imgName : null);
-    html += '<div class="border border-outline-variant flex flex-col bg-surface-container-lowest">' +
+    const isOptIn = !!p.opt_in;
+    html += '<div class="border ' + (isOptIn ? 'border-outline border-dashed' : 'border-outline-variant') + ' flex flex-col bg-surface-container-lowest">' +
       '<div id="img-wrap-' + p.num + '" class="aspect-[3/4] bg-surface-container-low overflow-hidden relative">' +
         (latestFile ? '<img id="main-img-' + p.num + '" src="/image/' + RUN_ID + '/' + latestFile + '?t=' + Date.now() + '" onclick="openLightbox(this.src)" class="w-full h-full object-cover cursor-zoom-in"/>'
-                    : '<div class="w-full h-full flex items-center justify-center label-caps text-outline text-[10px]">No image yet</div>') +
+                    : '<div class="w-full h-full flex flex-col items-center justify-center gap-1.5 label-caps text-outline text-[10px]">' +
+                      (isOptIn ? '<span class="material-symbols-outlined text-[20px] text-outline">add_photo_alternate</span><span>Optional — select to generate</span>' : 'No image yet') +
+                      '</div>') +
         (isGen ? '<div class="absolute inset-0 bg-surface/80 flex flex-col items-center justify-center gap-2">' +
           '<span class="inline-block w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>' +
           '<span class="label-caps text-[9px] text-on-surface-variant">Generating…</span></div>' : '') +
@@ -325,12 +339,22 @@ function renderVisuals() {
       html += '</div>';
     }
     html += '<div class="p-3 flex flex-col gap-1.5">' +
-      '<p class="label-caps text-outline text-[10px] truncate" title="' + esc(p.title) + '">Prompt ' + p.num + ' · ' + esc(p.title) + (p.edited ? ' · edited' : '') + '</p>' +
-      '<button id="gen-btn-' + p.num + '" onclick="genImages([' + p.num + '])" ' + (isGen ? 'disabled ' : '') +
-      'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
-      (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>' : '') +
-      (isGen ? ' Working…' : (has ? 'REPLACE' : 'GENERATE')) +
-      '</button>' +
+      '<p class="label-caps text-outline text-[10px] truncate" title="' + esc(p.title) + '">Prompt ' + p.num + ' · ' + esc(p.title) + (p.edited ? ' · edited' : '') + (isOptIn ? ' · <span class="text-on-surface-variant italic">optional</span>' : '') + '</p>' +
+      (isOptIn
+        ? '<label class="label-caps text-[9px] text-on-surface-variant leading-tight">Describe the exterior — towers, storeys, facade, landscaping, amenities</label>' +
+          '<textarea id="ext-brief-' + p.num + '" rows="3" oninput="onExtBriefInput(' + p.num + ')" ' +
+          'class="w-full text-xs border border-outline-variant rounded bg-surface p-2 font-body resize-none" ' +
+          'placeholder="e.g. Two 18-storey towers, glass curtain wall with bronze mullions, landscaped podium, rooftop infinity pool…"></textarea>' +
+          '<button id="gen-btn-' + p.num + '" disabled onclick="genExterior(' + p.num + ')" ' + (isGen ? 'disabled ' : '') +
+          'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
+          (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span> Working…' : (has ? 'REPLACE EXTERIOR' : 'GENERATE EXTERIOR')) +
+          '</button>'
+        : '<button id="gen-btn-' + p.num + '" onclick="genImages([' + p.num + '])" ' + (isGen ? 'disabled ' : '') +
+          'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
+          (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>' : '') +
+          (isGen ? ' Working…' : (has ? 'REPLACE' : 'GENERATE')) +
+          '</button>'
+      ) +
       '<div class="flex gap-1">' +
         (has ? '<button onclick="addVariantImage(' + p.num + ')" ' + (isGen ? 'disabled ' : '') + 'class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center" title="Generate a new variant"><span class="material-symbols-outlined text-[16px]">add_photo_alternate</span></button>' : '') +
         '<input type="file" id="upl-' + p.num + '" class="hidden" accept="image/png,image/jpeg,image/webp" onchange="uploadImg(' + p.num + ',this)"/>' +
@@ -452,9 +476,10 @@ function closeLightbox() {
   document.getElementById('lightbox-img').src = '';
 }
 function togglePrompt(n) { document.getElementById('pe-' + n).classList.toggle('hidden'); }
-function genImages(prompts, mode) {
+function genImages(prompts, mode, exteriorBrief) {
   const isGenAll = !prompts;
-  const promptList = prompts || (DETAIL.image_prompts || []).map(p => p.num);
+  // Generate all excludes opt_in variants
+  const promptList = prompts || (DETAIL.image_prompts || []).filter(p => !p.opt_in).map(p => p.num);
 
   // For "Generate all": if images already exist and no mode decided yet, ask replace or add
   if (isGenAll && !mode) {
@@ -490,9 +515,11 @@ function genImages(prompts, mode) {
   const genRatio = (document.getElementById('gen-ratio') || {}).value || '4x5';
   const genQuality = (document.getElementById('gen-quality') || {}).value || 'high';
   const genBackend = (document.getElementById('gen-backend') || {}).value || 'ideogram';
+  const basePayload = { ratio: genRatio, quality: genQuality, backend: genBackend };
+  if (exteriorBrief) basePayload.exterior_brief = exteriorBrief;
   const payload = mode === 'add'
-    ? { alongside: promptList, ratio: genRatio, quality: genQuality, backend: genBackend }
-    : { prompts: promptList, ratio: genRatio, quality: genQuality, backend: genBackend };
+    ? { ...basePayload, alongside: promptList }
+    : { ...basePayload, prompts: promptList };
   api('/generate-images/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     .then(d => {
       promptList.forEach(n => generating.delete(n));
@@ -511,6 +538,17 @@ function genImages(prompts, mode) {
       if (genAll) { genAll.disabled = false; genAll.innerHTML = 'Generate all'; genAll.classList.remove('cursor-not-allowed'); }
       document.getElementById('gen-status').textContent = 'Error: ' + e.message;
     });
+}
+function onExtBriefInput(n) {
+  const ta = document.getElementById('ext-brief-' + n);
+  const btn = document.getElementById('gen-btn-' + n);
+  if (btn) btn.disabled = !(ta && ta.value.trim().length > 10);
+}
+function genExterior(n) {
+  const ta = document.getElementById('ext-brief-' + n);
+  const brief = ta ? ta.value.trim() : '';
+  if (!brief) return;
+  genImages([n], undefined, brief);
 }
 function showGenAllDialog(promptList) {
   let modal = document.getElementById('gen-all-modal');
@@ -653,7 +691,11 @@ function renderAudience() {
     const includedIds = new Set((a.included_custom_audiences || []).map(x => x.id));
     const excludedIds  = new Set((a.excluded_custom_audiences  || []).map(x => x.id));
     let html = '<div class="grid md:grid-cols-2 gap-8">';
-    html += '<div><h2 class="font-headline text-2xl mb-4">Target parameters</h2>' +
+    html += '<div>' +
+      '<div class="flex justify-between items-center mb-4">' +
+        '<h2 class="font-headline text-2xl">Target parameters</h2>' +
+        '<button id="save-aud-btn" onclick="saveAudience()" disabled class="border border-outline rounded label-caps px-4 py-2 hover:bg-surface-container-low transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Save</button>' +
+      '</div>' +
       '<div class="space-y-4">' +
       field('City', 'aud-city', a.city || '') +
       field('Radius (km)', 'aud-radius', a.radius_km || 25, 'number') +
@@ -666,21 +708,28 @@ function renderAudience() {
       html += '<div><p class="label-caps text-outline mb-2">Custom Meta audiences</p>' +
         '<div class="space-y-1 max-h-48 overflow-y-auto pr-1">';
       metaAudiences.forEach(m => {
-        const val = includedIds.has(m.id) ? 'include' : excludedIds.has(m.id) ? 'exclude' : '';
+        const cur = includedIds.has(m.id) ? 'include' : excludedIds.has(m.id) ? 'exclude' : '';
+        const btnCls = (val, label, first) => {
+          const base = 'aud-ma-btn text-[10px] label-caps px-2 py-0.5 transition-colors' + (first ? '' : ' border-l border-outline-variant');
+          const active = cur === val;
+          const accent = active && val === 'include' ? ' bg-primary text-on-primary'
+                       : active && val === 'exclude' ? ' bg-error/20 text-error border-error'
+                       : active ? ' bg-surface-container' : ' hover:bg-surface-container-low';
+          return base + accent;
+        };
         html += '<div class="flex items-center justify-between gap-2 text-sm py-1 border-b border-outline-variant/30">' +
           '<span class="truncate">' + esc(m.name) + ' <span class="label-caps text-outline text-[10px]">' + esc(m.subtype) + '</span></span>' +
-          '<select class="aud-meta-audience bg-transparent border border-outline-variant rounded text-xs px-2 py-0.5"' +
-            ' data-id="' + esc(m.id) + '" data-name="' + esc(m.name) + '">' +
-            '<option value="">—</option>' +
-            '<option value="include"' + (val === 'include' ? ' selected' : '') + '>Include</option>' +
-            '<option value="exclude"' + (val === 'exclude' ? ' selected' : '') + '>Exclude</option>' +
-          '</select></div>';
+          '<div class="aud-meta-audience inline-flex rounded border border-outline-variant overflow-hidden flex-shrink-0"' +
+            ' data-id="' + esc(m.id) + '" data-name="' + esc(m.name) + '" data-val="' + esc(cur) + '">' +
+            '<button class="' + btnCls('include', 'Include', true) + '" data-val="include" onclick="toggleMetaAud(this)">Include</button>' +
+            '<button class="' + btnCls('exclude', 'Exclude', false) + '" data-val="exclude" onclick="toggleMetaAud(this)">Exclude</button>' +
+            '<button class="' + btnCls('', 'None', false) + '" data-val="" onclick="toggleMetaAud(this)">None</button>' +
+          '</div></div>';
       });
       html += '</div></div>';
     }
     html +=
-      '<p class="text-sm text-on-surface-variant">' + esc(d.summary || '') + '</p>' +
-      '<button onclick="saveAudience()" class="border border-outline rounded label-caps px-4 py-2 hover:bg-surface-container-low transition-colors">Save audience</button>' +
+      '<p class="text-sm text-on-surface-variant mt-2">' + esc(d.summary || '') + '</p>' +
       '</div></div>';
     html += '<div><h2 class="font-headline text-2xl mb-4">Deploy</h2>' +
       '<p class="text-sm text-on-surface-variant mb-4">Publishes the selected copy variants to Meta as PAUSED lead ads. Review in Ads Manager before activating.</p>' +
@@ -700,13 +749,34 @@ function renderAudience() {
 }
 function field(label, id, val, type) {
   return '<div><label class="label-caps text-outline block mb-1">' + label + '</label>' +
-    '<input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val) + '" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0"/></div>';
+    '<input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val) + '" oninput="enableSaveAudience()" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0"/></div>';
+}
+function enableSaveAudience() {
+  const btn = document.getElementById('save-aud-btn');
+  if (btn) btn.disabled = false;
+}
+function toggleMetaAud(btn) {
+  const group = btn.closest('.aud-meta-audience');
+  const val = btn.dataset.val;
+  group.dataset.val = val;
+  group.querySelectorAll('.aud-ma-btn').forEach((b, i) => {
+    const bVal = b.dataset.val;
+    const active = bVal === val;
+    const base = 'aud-ma-btn text-[10px] label-caps px-2 py-0.5 transition-colors' + (i > 0 ? ' border-l border-outline-variant' : '');
+    b.className = base + (active && bVal === 'include' ? ' bg-primary text-on-primary'
+                        : active && bVal === 'exclude' ? ' bg-error/20 text-error border-error'
+                        : active ? ' bg-surface-container'
+                        : ' hover:bg-surface-container-low');
+  });
+  enableSaveAudience();
 }
 function saveAudience() {
   const included = [], excluded = [];
-  document.querySelectorAll('.aud-meta-audience').forEach(sel => {
-    if (sel.value === 'include') included.push({ id: sel.dataset.id, name: sel.dataset.name });
-    else if (sel.value === 'exclude') excluded.push({ id: sel.dataset.id, name: sel.dataset.name });
+  document.querySelectorAll('.aud-meta-audience').forEach(group => {
+    const v = group.dataset.val;
+    const entry = { id: group.dataset.id, name: group.dataset.name };
+    if (v === 'include') included.push(entry);
+    else if (v === 'exclude') excluded.push(entry);
   });
   const payload = {
     city: document.getElementById('aud-city').value,
@@ -717,7 +787,8 @@ function saveAudience() {
     excluded_custom_audiences: excluded,
   };
   api('/audience/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    .then(() => toast('Audience saved')).catch(e => showError(e.message));
+    .then(() => { toast('Audience saved'); enableSaveAudience(); document.getElementById('save-aud-btn').disabled = true; })
+    .catch(e => showError(e.message));
 }
 function deploy() {
   const el = document.getElementById('deploy-status');

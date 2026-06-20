@@ -461,15 +461,17 @@ def _build_typography_block(entry: dict, brief: dict) -> str:
         lines += ["City:", f'"{city}"', ""]
 
     if headline:
-        lines += ["Lifestyle Headline:", f'"{headline}"', ""]
+        lines += ["Campaign Tagline (secondary — body scale, NOT a second headline):", f'"{headline}"', ""]
 
+    pricing_module_rendered = False
     if price_cr:
         lines += ["Pricing Module:", f'"₹{price_cr} Cr"', '"ONWARDS"', ""]
+        pricing_module_rendered = True
 
     # Bottom information band — only if we have at least config or price
     has_band = bool(config_val or price_cr or usp)
     if has_band:
-        lines.append("Bottom Information Band:")
+        lines.append("Bottom Information Band (all text: BOLD weight, ALL CAPS, pure white #FFFFFF on dark backing — no thin fonts, no grey, no mid-tone):")
         lines.append("")
         if config_val:
             # Split "3 & 4 BHK" into two stacked lines: "3 & 4" / "BHK RESIDENCES"
@@ -483,7 +485,9 @@ def _build_typography_block(entry: dict, brief: dict) -> str:
                 lines.append(f'"{bottom_part} RESIDENCES"')
             lines.append("")
 
-        if price_cr:
+        # Centre Module: skip if a dedicated Pricing Module is already rendered above —
+        # repeating the same price figure twice in one ad is redundant and confusing.
+        if price_cr and not pricing_module_rendered:
             lines += [
                 "Centre Module:",
                 '"STARTING AT"',
@@ -551,15 +555,24 @@ def build_gpt_image_prompt(entry: dict, brief: dict, variant_key: str) -> str:
         f"{typography_block}\n\n"
         "Colour palette:\n"
         f"{palette_config}\n\n"
+        "Typography rules:\n"
+        "• ONE headline only — the Primary Headline (location name) is the single largest "
+        "typographic element. The Campaign Tagline is a subordinate supporting line rendered "
+        "at body scale, NOT a second display headline — never give it the same visual weight "
+        "as the Primary Headline.\n"
+        "• Primary Headline: bold or extrabold weight serif, gold, ALL CAPS, display scale.\n"
+        "• Campaign Tagline: medium weight, smaller than the headline, never competing with it.\n"
+        "• Pricing Module: bold weight, gold, clearly larger than body text.\n"
+        "• Bottom band modules: BOLD weight minimum, ALL CAPS, pure white (#FFFFFF) — "
+        "never thin, never light, never italic, never grey, never mid-tone. "
+        "Each module label must be readable at thumbnail size without squinting.\n"
+        "• Never use condensed, narrow, or ultra-thin typeface variants anywhere — "
+        "minimum effective weight is medium (400) for large text, bold (700) for small text.\n\n"
         "Design treatment:\n"
-        "• Premium serif typography throughout — bold or medium weight, never ultra-light\n"
-        "• Rich serif typography hierarchy — headline weight anchors the composition, "
-        "body weight carries the detail\n"
         "• Real estate brochure quality — print-ready, not digital-casual\n"
         "• High-end luxury developer advertisement — Lodha / Shivalik / Swati campaign standard\n"
         "• Structured spacing — clear grid alignment, marketing-agency level composition\n"
         "• Every text element perfectly legible at mobile thumbnail size within 2 seconds\n"
-        "• Every module in the bottom strip distinct and readable at mobile size\n"
         "• Information modules feel designed by an agency, not automatically placed\n"
         "• No random decorative clutter — every graphic element serves the hierarchy\n"
         "• Professional sales campaign aesthetic throughout\n"

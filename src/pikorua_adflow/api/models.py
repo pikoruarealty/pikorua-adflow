@@ -70,6 +70,7 @@ class ImageGenReq(BaseModel):
     backend: str = "ideogram"  # "ideogram" | "gpt-image-1"
     custom_prompts: dict[int, str] = Field(default_factory=dict)
     sample_ready: bool = False
+    exterior_brief: str | None = None
 
 
 class SavePromptPayload(BaseModel):

@@ -66,3 +66,7 @@ Expecting ',' delimiter: line 65 column 25 (char 5578)
 [2026-06-18T18:23:53] Image generation — prompt 5 (ideogram)
 Ideogram image request failed [402]: {"error": "You do not have sufficient balance to perform this operation!"}
 ------------------------------------------------------------
+
+[2026-06-19T19:12:13] CRM strategic insights
+HTTP Error 402: Payment Required
+------------------------------------------------------------
