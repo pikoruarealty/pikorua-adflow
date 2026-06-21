@@ -38,6 +38,27 @@ scene_photography_brief: |
   dominant furniture profile, surface finish hierarchy, any signature architectural
   detail visible in the shot.
 
+  LIGHT DIVERSITY RULE: Do not default to golden-hour or warm amber tones for every
+  scene. Premium real estate photography uses the full light spectrum — blue-hour twilight,
+  crisp cool morning, neutral even daylight, bright midday, soft overcast diffused light.
+  Use warm golden light ONLY when it genuinely serves this specific scene's emotional
+  story. It is NOT a default luxury shorthand. Aim for the light that best reveals the
+  material character of the space — marble reads best in cool natural daylight; cityscape
+  drama reads best at blue hour; warmth belongs to intimate evening social scenes.
+
+  WINDOW SCALE RULE: Interior scenes must have a substantial natural light source —
+  a large window, floor-to-ceiling glazing, or a wide opening that lets the room breathe.
+  Narrow slot windows, small portholes, or purely artificial lighting make rooms feel
+  enclosed and institutional regardless of material quality. The light opening should be
+  large enough that outdoor scenery (trees, sky, city) is partially visible or implied.
+  A room that reads "open" signals premium. A room that reads "enclosed" does not.
+
+  NATURAL TEXT SURFACE RULE: Every interior scene must have a naturally dark zone
+  (dark floor, shadow pool, unlit wall plane, deep basalt tile) that provides a high-
+  contrast surface for the location name without requiring an artificial overlay. Describe
+  this dark zone specifically in the scene prose. If the scene has no natural dark zone,
+  choose a different scene or adjust the material palette so one exists.
+
   DO NOT describe: text placement, ad layout, typography, colour zones,
   information hierarchy, or any advertising design elements.
   The output reads like two tight paragraphs from an architectural photographer's shot
@@ -51,13 +72,16 @@ variants:
   lifestyle_private_retreat:
     label: "Lifestyle — Private Retreat"
     allowed_recipes:
-      - the_editorial_sidebar
+      - the_open_room_anchor
       - the_architectural_dead_zone
     default_tone_bias: bright_aspirational
     sample_ready_cta: "Sample flat ready — come experience it"
+    # Palette is dynamic (LLM picks per scene); batch distinctness is enforced in
+    # output_saver.dedupe_visual_batch so the five ads never share a palette.
     allowed_palettes:
-      - ivory_warmth
       - charcoal_gold
+      - burgundy_gold
+      - ivory_warmth
       - slate_cream
     structure_map:
       dark_luxury: structured_split
@@ -70,12 +94,16 @@ variants:
       - bathroom_spa_ritual_morning_light
     creative_brief: |
       VARIANT: Lifestyle — Private Retreat.
-      One person in a private, unhurried moment — never facing camera.
-      This is the apartment as personal sanctuary: the morning coffee on the balcony,
-      the quiet read, the unhurried unwind. No social performance, no group.
-      The person is incidental to the space — the space is the star.
-      Styling: lived-in elegant, not catalog-posed.
-      Mood: stillness, personal luxury, the quiet pleasure of having a home that fits you.
+      The apartment as a personal sanctuary — an unhurried, private moment.
+      The mood is stillness: morning coffee, a quiet read, an unwind after a long day.
+      PEOPLE CONFIGURATION IS DYNAMIC — choose what best serves the scene's story:
+        solo (most common for this variant — one person, back to camera or in profile),
+        a couple in a quiet shared moment (reading, morning routine),
+        or no people at all if the material quality alone carries the scene.
+      Never a group. Never a posed or performative moment.
+      The person(s), if present, are incidental to the space — the space is the star.
+      Styling: lived-in elegant, not catalog-posed, not promotional-shoot stiff.
+      Mood: the quiet pleasure of having a home that fits you exactly.
 
   lifestyle_social_home:
     label: "Lifestyle — The Social Home"
@@ -86,9 +114,10 @@ variants:
     default_tone_bias: bright_aspirational
     sample_ready_cta: "Sample flat ready — see the space"
     allowed_palettes:
-      - ivory_warmth
       - burgundy_gold
       - charcoal_gold
+      - ivory_warmth
+      - navy_gold
     structure_map:
       dark_luxury: structured_split
       bright_aspirational: immersive_fullbleed
@@ -100,40 +129,132 @@ variants:
       - living_room_family_afternoon
     creative_brief: |
       VARIANT: Lifestyle — The Social Home.
-      Two or three people in a candid social moment — hosting, gathering, conversation.
-      This apartment enables the best version of your social life: a kitchen where
-      people naturally cluster, a living room that invites lingering, a balcony made
-      for sundowners. Never posed or formal.
-      Mood: warmth, connection, the ease of a home that brings people together.
+      The apartment enables its best version of shared life — hosting, gathering, belonging.
+      PEOPLE CONFIGURATION IS DYNAMIC — choose what best serves the scene's story:
+        a couple hosting friends (3-4 people total),
+        a family of three or four in an easy afternoon moment,
+        two close friends in conversation,
+        or a small group on the balcony for sundowners.
+      Never a solo individual (that belongs to Private Retreat).
+      Never posed or formal — always candid, always mid-moment, never looking at the camera.
+      The room should feel like it was designed for exactly this kind of gathering.
+      Mood: warmth, ease, the feeling that this home makes social life effortless.
 
-  lifestyle_city_connection:
-    label: "Lifestyle — City Connection"
+  lifestyle_dynamic_a:
+    label: "Lifestyle — Scene A"
     allowed_recipes:
+      - the_open_room_anchor
+      - the_zenith_gaze
+      - the_architectural_dead_zone
       - the_depth_integration
-      - the_editorial_sidebar
       - the_horizon_anchor
-    default_tone_bias: dark_luxury
-    sample_ready_cta: "Sample flat ready — see the view"
+    default_tone_bias: bright_aspirational
+    sample_ready_cta: "Sample flat ready — step inside"
     allowed_palettes:
+      - burgundy_gold
+      - slate_cream
+      - charcoal_gold
+      - ivory_warmth
       - navy_gold
+    structure_map:
+      dark_luxury: immersive_fullbleed
+      bright_aspirational: structured_split
+    scene_pool:
+      - family_living_room_sunday_afternoon
+      - parent_and_child_reading_corner
+      - home_office_afternoon_focus
+      - kitchen_solo_cooking_evening
+      - morning_dressing_room_ritual
+      - yoga_wellness_balcony_morning
+      - bedroom_sunday_morning_couple
+      - children_playroom_afternoon_light
+      - balcony_city_panorama_dusk
+      - living_room_solo_reading_evening
+    creative_brief: |
+      VARIANT: Lifestyle — Dynamic Scene A.
+      Open brief. Choose any residential lifestyle moment that is NOT covered by:
+        — Private Retreat (personal solitude, one person quiet and still)
+        — The Social Home (hosting guests, group gathering, entertaining)
+      Everything else in the life of this home is available: a parent with a child,
+      working from home, a couple on a Sunday morning, a family ritual, wellness and
+      fitness, cooking alone, a personal care moment, an evening in, city-view scenes.
+      PEOPLE CONFIGURATION IS DYNAMIC — solo, couple, family, child, no person —
+      whatever the scene calls for naturally.
+      The scene must feel real and lived-in. Not a catalogue shoot.
+      Mood: the ease of a home that fits exactly how you live.
+
+  lifestyle_dynamic_b:
+    label: "Lifestyle — Scene B"
+    allowed_recipes:
+      - the_glass_morphism_shield
+      - the_backlit_silhouette
+      - the_sky_chandelier
+      - the_golden_archway
+      - the_open_room_anchor
+    default_tone_bias: dark_luxury
+    sample_ready_cta: "Sample flat open — experience it"
+    allowed_palettes:
+      - forest_gold
+      - navy_gold
+      - burgundy_gold
       - slate_cream
       - charcoal_gold
     structure_map:
       dark_luxury: immersive_fullbleed
       bright_aspirational: structured_split
     scene_pool:
-      - balcony_city_panorama_dusk
-      - floor_to_ceiling_window_cityscape_evening
-      - balcony_evening_wind_down_city_glow
-      - bedroom_city_view_morning_light
-      - living_room_floor_to_ceiling_day
+      - balcony_morning_yoga_city_backdrop
+      - home_office_afternoon_focus
+      - master_bedroom_sunday_morning
+      - dressing_room_morning_ritual
+      - kitchen_solo_cooking_evening
+      - children_at_play_natural_light
+      - couple_morning_coffee_balcony
+      - evening_balcony_book_and_city
+      - living_room_solo_music_evening
+      - family_living_room_sunday_afternoon
     creative_brief: |
-      VARIANT: Lifestyle — City Connection.
-      The city of Ahmedabad is always visible — through full-height glazing, from the
-      balcony, or as a glowing panorama at dusk. One person or no people; the view is
-      the subject. This is what the address sells: the relationship with the city.
-      Favour dusk or blue-hour: the cityscape glows, interior and exterior light balance.
-      Mood: urban luxury, the feeling of being above it all while connected to everything.
+      VARIANT: Lifestyle — Dynamic Scene B.
+      Open brief. Choose any residential lifestyle moment that is NOT covered by:
+        — Private Retreat (personal solitude, one person quiet and still)
+        — The Social Home (hosting guests, group gathering, entertaining)
+        — The scene already chosen for Dynamic Scene A in this batch
+      The scene must differ meaningfully from Scene A: different room, different time
+      of day, different emotional register. If A was family/daytime, B should be
+      individual or couple/evening, or vice versa.
+      PEOPLE CONFIGURATION IS DYNAMIC — whatever composition best serves the scene.
+      Mood: another facet of life in this home — a different story, not the same one told twice.
+
+  interior_signature_moment:
+    label: "Interior Signature Moment"
+    allowed_recipes:
+      - the_architectural_dead_zone
+      - the_glass_morphism_shield
+      - the_horizon_anchor
+    default_tone_bias: dark_luxury
+    sample_ready_cta: "Step inside — sample flat ready"
+    allowed_palettes:
+      - slate_cream
+      - navy_gold
+      - ivory_warmth
+      - charcoal_gold
+    structure_map:
+      dark_luxury: immersive_fullbleed
+      bright_aspirational: structured_split
+    scene_pool:
+      - living_room_dusk_diagonal_light
+      - bedroom_quiet_dawn_glow
+      - kitchen_empty_morning_light
+      - study_or_reading_nook_lamp_glow
+      - bathroom_spa_material_warmth
+    creative_brief: |
+      VARIANT: Interior Signature Moment.
+      The room is the protagonist. No people.
+      Light quality and material texture carry the entire emotional argument:
+      a dramatic diagonal of sunlight crossing a marble floor, a dusk cityscape
+      glowing through full-height windows, one carefully placed object (dried flowers,
+      a sculptural vase) as the single human touch. Nothing else.
+      Mood: quiet luxury — the feeling of entering a room that knows it is exceptional.
 
   exterior_establishing_shot:
     label: "Exterior Establishing Shot"
@@ -145,9 +266,9 @@ variants:
     default_tone_bias: dark_luxury
     sample_ready_cta: "Visit the site — sample flat now open"
     allowed_palettes:
+      - forest_gold
       - navy_gold
       - charcoal_gold
-      - forest_gold
       - burgundy_gold
     structure_map:
       dark_luxury: bordered_campaign
@@ -170,35 +291,32 @@ variants:
       Never head-on symmetrical — use a three-quarter angle showing two facades.
       Mood: authority, scale, arrival — the image that makes someone think "that's the one."
 
-  interior_signature_moment:
-    label: "Interior Signature Moment"
+  # ── Legacy variant key — retained for backward compat with old visual_prompts.json ──
+  lifestyle_city_connection:
+    label: "Lifestyle — The Address"
     allowed_recipes:
-      - the_architectural_dead_zone
-      - the_glass_morphism_shield
+      - the_depth_integration
+      - the_open_room_anchor
       - the_horizon_anchor
     default_tone_bias: dark_luxury
-    sample_ready_cta: "Step inside — sample flat ready"
+    sample_ready_cta: "Sample flat ready — see the address"
     allowed_palettes:
-      - burgundy_gold
-      - ivory_warmth
+      - navy_gold
+      - slate_cream
       - charcoal_gold
+      - forest_gold
     structure_map:
       dark_luxury: immersive_fullbleed
       bright_aspirational: structured_split
     scene_pool:
-      - living_room_dusk_diagonal_light
-      - bedroom_quiet_dawn_glow
-      - kitchen_empty_morning_light
-      - study_or_reading_nook_lamp_glow
-      - bathroom_spa_material_warmth
+      - balcony_city_panorama_dusk
+      - floor_to_ceiling_window_cityscape_evening
+      - balcony_evening_wind_down_city_glow
+      - bedroom_city_view_morning_light
+      - living_room_floor_to_ceiling_day
     creative_brief: |
-      VARIANT: Interior Signature Moment.
-      The room is the protagonist. No people.
-      Light quality and material texture carry the entire emotional argument:
-      a dramatic diagonal of sunlight crossing a marble floor, a dusk cityscape
-      glowing through full-height windows, one carefully placed object (dried flowers,
-      a sculptural vase) as the single human touch. Nothing else.
-      Mood: quiet luxury — the feeling of entering a room that knows it is exceptional.
+      VARIANT: Lifestyle — The Address (legacy).
+      City-view lifestyle scene. People optional.
 
 # =============================================================================
 # Hard bans — single source of truth for image_service.py sanitisation.

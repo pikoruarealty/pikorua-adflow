@@ -28,6 +28,8 @@
          Approve button in /runs portal; seeding deferred until first approved pipeline run
 - [x] 2.4 Image prompt generator — visual_prompter agent; generate_banner_prompts (3 Ideogram)
          + generate_render_prompts (2 Flux 2 Pro); outputs to outputs/visual_brief.md + review folder
+- [x] 2.5 Visual pipeline refinement — `composition_driven` text rendering without templates,
+         HEAVY serif typography enforcement, and context-sensitive natural CTA badges based on reference ads.
 
 ## Phase 3 — Deployment (GATED: needs Phase 2 complete + platform credentials)
 - [ ] 3.1 Meta Ads live launch via API

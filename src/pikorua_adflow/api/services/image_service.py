@@ -298,6 +298,11 @@ def sanitize_image_prompt(
         prompt = _handle_sample_ready(prompt, brief)
         prompt = _enforce_price_format(prompt, brief)
     prompt = _strip_common_noise(prompt)
+    # Strip project name if it leaked into the prompt — it is internal-only
+    property_name = brief.get("property_name", "").strip()
+    if property_name and property_name.lower() in prompt.lower():
+        import re as _re
+        prompt = _re.sub(_re.escape(property_name), "", prompt, flags=_re.IGNORECASE).strip()
     return prompt + _ANTI_LOGO_GUARD
 
 
@@ -366,6 +371,17 @@ PALETTE_CONFIGS: dict[str, str] = {
         "• Structural backing: NONE — no solid dark panels; text on natural scene surfaces\n"
         "• Overall feel: warm, bright, premium aspirational — morning or daylight energy"
     ),
+}
+
+# Compact palette reference — used when composition_notes drives layout.
+# Only the colour tokens; placement is handled by the scene-specific composition_notes.
+_PALETTE_COMPACT: dict[str, str] = {
+    "charcoal_gold":  "Gold #C9A84C on warm charcoal #2B2420 backing. Secondary text warm white #F8F4F0. Gold hairline accents. Apply these tokens exactly as described in the composition notes above.",
+    "burgundy_gold":  "Amber-gold #B8860B on dark burgundy #3D0C02 backing. Secondary text warm ivory #F5F0E8. Bronze hairlines #9A7B4F. Apply these tokens exactly as described in the composition notes above.",
+    "forest_gold":    "Gold #C9A84C on deep forest green #1C3325 backing. Secondary text cream #F5F0E8. Gold hairlines. Apply these tokens exactly as described in the composition notes above.",
+    "navy_gold":      "Gold #C9A84C on deep navy #0D1B2A backing. Secondary text pure white. Gold hairlines. Apply these tokens exactly as described in the composition notes above.",
+    "slate_cream":    "Gold #C9A84C on cool dark slate #1E2430 backing. Secondary text platinum white #E8E8E8. Gold or platinum hairlines. Apply these tokens exactly as described in the composition notes above.",
+    "ivory_warmth":   "Gold #C9A84C. Secondary text deep charcoal #2B2420. No solid dark panels anywhere — text sits on natural scene surfaces. Apply these tokens exactly as described in the composition notes above.",
 }
 
 # Three ad structures — all carry full developer-ad information density.
@@ -542,18 +558,84 @@ def _select_structure(variant_key: str, tone_tag: str) -> str:
 
 
 def _build_typography_block(
-    entry: dict, brief: dict, allowed_roles: Optional[set] = None
+    entry: dict, brief: dict,
+    allowed_roles: Optional[set] = None,
+    info_band_style: Optional[str] = None,
+    composition_driven: bool = False,
 ) -> str:
     """
     Build the Typography hierarchy section from property brief data.
-    Each text line is on its own quoted line so the renderer stacks them as
-    distinct typographic layers within each module (not a single run-on string).
     All values come from brief — nothing invented.
 
-    allowed_roles — when provided (from a recipe's text_roles), only the requested
-    text roles are emitted so moderate/teaser recipes render less text than
-    full_detail ones. None renders the full default set (legacy behaviour).
+    composition_driven=True — emits ONLY the raw text strings with brief labels.
+      No structural layout language (no band styles, no placement instructions).
+      Used when composition_notes in the entry drives all layout decisions.
+
+    composition_driven=False (default) — full templated output with band styles:
+      allowed_roles — from a recipe's text_roles; gates which sections emit.
+      info_band_style — controls the layout of the bottom information section:
+        "column_footer"    — specs stack inside the sidebar column
+        "icon_grid_strip"  — icon-above-label columns separated by gold rules
+        "price_hero_strip" — price dominant in centre, specs flanking
+        "asymmetric_band"  — large price left, stacked specs right
+        "compact_spec_row" — one narrow spec row at very bottom
+        "strip_three_col"  — standard 3-column footer strip (fallback)
+        None               — defaults to strip_three_col
     """
+    # ── composition_driven mode: flat text-string list only ───────────────────
+    if composition_driven:
+        locality = (brief.get("locality") or brief.get("city") or "").upper()
+        city     = (brief.get("city") or "").upper()
+        price_cr = str(brief.get("price_cr") or "").strip()
+        config_v = str(brief.get("config") or "").strip()
+        sample_ready = bool(brief.get("sample_ready"))
+        sample_cta = (
+            brief.get("sample_ready_cta") or
+            f"Sample {brief.get('property_type','Apartment')} Ready"
+        ).strip().upper()
+        headline = (entry.get("headline") or "").strip()
+        eyebrow  = (entry.get("eyebrow")  or "").strip()
+        usps = brief.get("usps") or []
+        if isinstance(usps, str):
+            usps = [usps]
+        usp_parts = []
+        for u in usps:
+            usp_parts.extend([p.strip() for p in u.split("/") if p.strip()])
+        config_parts = config_v.rsplit(" ", 1) if config_v else []
+        config_top    = config_parts[0] if config_parts else ""
+        config_bottom = (config_parts[1] + " RESIDENCES") if len(config_parts) > 1 else ""
+        config_combined = f"{config_top} {config_bottom}".strip()
+
+        lines = [
+            "Text elements to render — exact wording only, placement per composition notes above:",
+            "",
+        ]
+        if eyebrow:
+            lines.append(f'Eyebrow: "{eyebrow}"')
+        lines.append(f'Primary Headline (one unbroken line, never hyphenated — scale down to fit): "{locality}"')
+        if city and city != locality:
+            lines.append(f'City: "{city}"')
+        if headline:
+            lines.append(f'Campaign tagline: "{headline}"')
+        if price_cr:
+            lines.append(f'Price: "\u20b9{price_cr} Cr ONWARDS"')
+        if sample_ready:
+            lines.append(f'Sample badge: "{sample_cta}"')
+        spec_items = []
+        if config_combined:
+            spec_items.append(config_combined)
+        spec_items.extend(usp_parts)
+        if spec_items:
+            lines.append(f'Specification items: {", ".join(repr(s) for s in spec_items)}')
+            lines.append(
+                "(CRITICAL: The apartment configuration — e.g. \"4 & 5 BHK\" — is PRIMARY "
+                "buying information, NOT a watermark or corner label. It must appear at a "
+                "legible, prominent size in the focal composition. Never render it as tiny "
+                "corner text, a barely-visible superscript, or smaller than supporting spec text.)"
+            )
+        lines.append("")
+        lines.append("Do not alter any wording. Do not render any text not listed above.")
+        return "\n".join(lines)
     def want(role: str) -> bool:
         return allowed_roles is None or role in allowed_roles
 
@@ -562,10 +644,20 @@ def _build_typography_block(
     price_cr = str(brief.get("price_cr") or "").strip()
     config_val = str(brief.get("config") or brief.get("configuration") or "").strip()
     sample_ready = bool(brief.get("sample_ready"))
+    property_type = brief.get("property_type", "Apartment")
+    sample_cta = (
+        brief.get("sample_ready_cta")
+        or f"Sample {property_type} Ready — Visit Today"
+    ).strip().upper()
     headline = (entry.get("headline") or "").strip()
     eyebrow = (entry.get("eyebrow") or "").strip()
 
-    # USP for right module — check common field names
+    # Strip locality name from eyebrow — locality is always the Primary Headline and
+    # must not appear twice. "NEHRUNAGAR PRELAUNCH" → "PRELAUNCH".
+    if locality and locality.lower() in eyebrow.lower():
+        eyebrow = re.sub(re.escape(locality), "", eyebrow, flags=re.IGNORECASE)
+        eyebrow = re.sub(r"^[\s,\-—]+|[\s,\-—]+$", "", eyebrow).strip()
+
     usps = (
         brief.get("usps")
         or brief.get("key_selling_points")
@@ -575,66 +667,215 @@ def _build_typography_block(
     if isinstance(usps, str):
         usps = [usps]
     usp = usps[0].strip() if usps else ""
+    usp_parts = [p.strip() for p in usp.split("/", 1)] if "/" in usp else ([usp] if usp else [])
+
+    # Config: "3 & 4 BHK" → top="3 & 4", bottom="BHK RESIDENCES"
+    config_parts = config_val.rsplit(" ", maxsplit=1) if config_val else []
+    config_top = config_parts[0] if config_parts else ""
+    config_bottom = (config_parts[1] + " RESIDENCES") if len(config_parts) > 1 else ""
+    config_combined = f"{config_top} {config_bottom}".strip()
+
+    # Styles that place price INSIDE the band (suppress standalone Pricing Module above).
+    # Only suppress the standalone when the recipe also wants price — otherwise
+    # price disappears from the ad entirely.
+    style = info_band_style or "strip_three_col"
+    price_goes_in_band = style in ("price_hero_strip", "asymmetric_band") and want("price")
 
     lines = ["Typography hierarchy:", ""]
 
+    # ── Eyebrow ───────────────────────────────────────────────────────────────
     if eyebrow and (want("subhead") or want("headline")):
         lines += ["Top Eyebrow:", f'"{eyebrow}"', ""]
 
-    lines += ["Primary Headline:", f'"{locality}"', ""]
-
+    # ── Headline + city ───────────────────────────────────────────────────────
+    lines += [
+        "Primary Headline:",
+        f'"{locality}"',
+        "(CRITICAL: render this as a SINGLE UNBROKEN WORD on one line — never hyphenate, never split across lines. Scale font size down to fit; do not break the name.)",
+        "",
+    ]
     if city and city != locality:
         lines += ["City:", f'"{city}"', ""]
 
+    # ── Campaign tagline ──────────────────────────────────────────────────────
     if headline and want("subhead"):
-        lines += ["Campaign Tagline (secondary — body scale, NOT a second headline):", f'"{headline}"', ""]
+        lines += [
+            "Campaign Tagline (secondary — body scale, NOT a second headline):",
+            f'"{headline}"',
+            "",
+        ]
 
-    pricing_module_rendered = False
-    if price_cr and want("price"):
+    # ── Standalone Pricing Module (suppressed for price-in-band styles) ───────
+    pricing_above = False
+    if price_cr and want("price") and not price_goes_in_band:
         lines += ["Pricing Module:", f'"₹{price_cr} Cr"', '"ONWARDS"', ""]
-        pricing_module_rendered = True
+        pricing_above = True
 
-    # Bottom information band — only if requested by the recipe and we have content
-    has_band = want("info_band") and bool(config_val or price_cr or usp)
-    if has_band:
-        lines.append("Bottom Information Band (all text: BOLD weight, ALL CAPS, pure white #FFFFFF on dark backing — no thin fonts, no grey, no mid-tone):")
-        lines.append("")
-        if config_val:
-            # Split "3 & 4 BHK" into two stacked lines: "3 & 4" / "BHK RESIDENCES"
-            # rsplit from right so last word (BHK, VILLA, etc.) is the type line
-            parts = config_val.rsplit(" ", maxsplit=1)
-            top_part = parts[0]                      # e.g. "3 & 4"
-            bottom_part = parts[1] if len(parts) > 1 else ""  # e.g. "BHK"
-            lines.append("Left Module:")
-            lines.append(f'"{top_part}"')
-            if bottom_part:
-                lines.append(f'"{bottom_part} RESIDENCES"')
-            lines.append("")
+    # ── Bottom information section ────────────────────────────────────────────
+    has_content = want("info_band") and bool(config_val or price_cr or usp)
+    badge_rendered = False
 
-        # Centre Module: skip if a dedicated Pricing Module is already rendered above —
-        # repeating the same price figure twice in one ad is redundant and confusing.
-        if price_cr and not pricing_module_rendered:
+    if has_content:
+
+        if style == "column_footer":
+            # The headline card/pill holds ONLY headline + price + badge — keep it uncluttered.
+            # Config and USPs overflow into the lower photo zone in a lighter typographic key.
+            if sample_ready and want("badge"):
+                lines += [
+                    f'PROMINENT BADGE (anchored below the price, inside the headline card — bold pill, gold border, palette-matching backing, large and clearly readable): "{sample_cta}"',
+                    "",
+                ]
+                badge_rendered = True
+
+            # Spec details go into the photo zone bottom with a LEGIBLE backing treatment.
+            # Never floating white text on a bright background — must be readable.
+            spec_overflow: list[str] = []
+            if config_val:
+                spec_overflow.append(config_combined)
+            for part in usp_parts:
+                if part:
+                    spec_overflow.append(part)
+            if spec_overflow:
+                spec_line = "  ·  ".join(spec_overflow)
+                lines += [
+                    "Bottom Photo Zone Specs — render in the lower photo area (NOT inside the column).",
+                    "CRITICAL: the text MUST be legible. Choose one backing treatment that suits the scene:",
+                    "  • Slim semi-transparent dark strip: spans the bottom 8% of the photo zone only (not full canvas) — text in gold or cream over it",
+                    "  • Corner stamp or seal: small premium circular/hexagonal element, bottom-right corner, gold border, dark fill, spec text centred inside",
+                    "  • Thin gold rule + dark vignette: a hairline gold rule above the text; a soft dark gradient behind the text only, enough to read against",
+                    "Whatever treatment — light tracked uppercase, small scale, horizontal layout. Clearly readable at arm's length.",
+                    f'Text: "{spec_line}"',
+                    "",
+                ]
+
+        elif style == "price_hero_strip":
+            # Badge anchored just above the band; price is the dominant centre element
+            if sample_ready and want("badge"):
+                lines += [
+                    "PROMINENT BADGE (large pill, gold border, high-contrast backing matching the palette — anchored to bottom of photo zone, centred, must be clearly readable at arm's length):",
+                    f'"{sample_cta}"',
+                    "",
+                ]
+                badge_rendered = True
             lines += [
-                "Centre Module:",
-                '"STARTING AT"',
-                f'"₹{price_cr} Cr"',
+                "Bottom Band (dark backing — price dominant in centre, spec text flanking):",
                 "",
             ]
+            if config_val:
+                lines.append(f'Left (small tracked caps): "{config_combined}"')
+                lines.append("")
+            if price_cr and want("price"):
+                lines += ["Centre HERO (large gold):", f'"₹{price_cr} Cr"', '"ONWARDS"', ""]
+            if usp_parts:
+                right_text = " / ".join(p for p in usp_parts if p)
+                lines.append(f'Right (small tracked caps): "{right_text}"')
+                lines.append("")
 
-        if usp:
-            # Split on "/" if present, else use as single line
-            usp_parts = [p.strip() for p in usp.split("/", 1)] if "/" in usp else [usp]
-            lines.append("Right Module:")
+        elif style == "asymmetric_band":
+            # Badge anchored just above the band, right-aligned
+            if sample_ready and want("badge"):
+                lines += [
+                    "PROMINENT BADGE (bold pill, gold border, contrasting backing from the palette — anchored to bottom-right of photo zone, just above the footer band, large enough to read at a glance):",
+                    f'"{sample_cta}"',
+                    "",
+                ]
+                badge_rendered = True
+            lines += ["Bottom Strip (asymmetric dark backing — large price left, stacked specs right):", ""]
+            if price_cr and want("price"):
+                lines += [f'"₹{price_cr} Cr ONWARDS" — large, left block', ""]
+            if config_val:
+                lines += [f'"{config_combined}" — secondary, below price in left block', ""]
+            if usp_parts:
+                lines.append("Right column:")
+                for part in usp_parts:
+                    if part:
+                        lines.append(f'"{part}"')
+                lines.append("")
+
+        elif style == "compact_spec_row":
+            # Badge sits just above the spec row — must be large and readable
+            if sample_ready and want("badge"):
+                lines += [
+                    f'PROMINENT BADGE (bold pill or rectangle, high-contrast against the scene — anchored above the spec row, centred or right-aligned, large and unmissable): "{sample_cta}"',
+                    "",
+                ]
+                badge_rendered = True
+            spec_parts: list[str] = []
+            if config_val:
+                spec_parts.append(config_combined)
+            if price_cr and not pricing_above:
+                spec_parts.append(f"₹{price_cr} Cr ONWARDS")
             for part in usp_parts:
-                lines.append(f'"{part}"')
-            lines.append("")
+                if part:
+                    spec_parts.append(part)
+            if spec_parts:
+                spec_line = "  ·  ".join(spec_parts)
+                lines += [
+                    "Specification Row at very bottom of frame:",
+                    "CRITICAL: this text MUST be legible at arm's length — not micro-print.",
+                    "CRITICAL: Do NOT place any part of this specification (especially the apartment configuration) as a small corner watermark or tiny label elsewhere in the image. The spec row below is its ONLY placement.",
+                    "Use a slim solid backing strip (full canvas width, 8-10% height) in the palette's darkest backing colour.",
+                    "Text: BOLD ALL CAPS, tracked geometric sans, sized so each word is clearly readable without zooming.",
+                    "Gold or cream text on the dark strip — never white text on a bright or busy background.",
+                    f'"{spec_line}"',
+                    "",
+                ]
 
-    if sample_ready and want("badge"):
+        elif style == "icon_grid_strip":
+            # Icon-grid strip: amenities/features as icon+label columns separated by gold rules.
+            # Price stays in the standalone Pricing Module above — not repeated here.
+            grid_items: list[str] = []
+            if config_val:
+                grid_items.append(config_combined)
+            for part in usp_parts:
+                if part:
+                    grid_items.append(part)
+            if sample_ready and want("badge"):
+                grid_items.append(sample_cta)
+                badge_rendered = True
+            if grid_items:
+                col_str = "  |  ".join(f'"{g}"' for g in grid_items)
+                lines += [
+                    "Bottom Amenity Grid (dark backing strip, maximum 12% canvas height — slim branded footer, never dominant):",
+                    "Each column: a THIN LINE-ART GOLD ICON relevant to the feature (location pin for locality, gate/shield for gated community, etc. — distinct icons per column, never generic).",
+                    "Icon sits above a short ALL CAPS label, 2-3 words max, in tracked geometric sans. Gold on dark — fully legible.",
+                    "Columns evenly spaced, separated by thin vertical gold hairlines. Effect: editorial premium data matrix.",
+                    f"Columns (left to right): {col_str}",
+                    "",
+                ]
+
+        else:  # strip_three_col (default)
+            lines += [
+                "Bottom Information Band (BOLD ALL CAPS, three equal panels — use the palette's backing and text colours for this band):",
+                "",
+            ]
+            if config_val:
+                lines += ["Left Module:", f'"{config_top}"']
+                if config_bottom:
+                    lines.append(f'"{config_bottom}"')
+                lines.append("")
+            # Centre: badge if sample_ready (visually distinct); otherwise price if not shown above
+            if sample_ready and want("badge"):
+                lines += [
+                    "Centre Module (PROMINENT — bold, large, high contrast, readable at arm's length):",
+                    f'"{sample_cta}"',
+                    "",
+                ]
+                badge_rendered = True
+            elif price_cr and not pricing_above:
+                lines += ["Centre Module:", '"STARTING AT"', f'"₹{price_cr} Cr"', ""]
+            if usp_parts:
+                lines.append("Right Module:")
+                for part in usp_parts:
+                    if part:
+                        lines.append(f'"{part}"')
+                lines.append("")
+
+    # Fallback: badge wasn't embedded above but recipe wants it
+    if sample_ready and want("badge") and not badge_rendered:
         lines += [
-            "Centre Floating Badge:",
-            '"SAMPLE APARTMENT"',
-            '"READY"',
-            '"VISIT TODAY"',
+            "PROMINENT BADGE (large pill, gold border, palette-matched backing — placed in available negative space, large enough to be unmissable):",
+            f'"{sample_cta}"',
             "",
         ]
 
@@ -665,7 +906,17 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
     tone_tag = (entry.get("tone_tag") or "dark_luxury").strip()
     recipe = _RECIPES_BY_NAME.get((entry.get("recipe_tag") or "").strip())
 
+    # Load variant config once — used only for structure fallback now. The design
+    # language (palette, recipe, info-band layout) is dynamic, NOT pinned to the
+    # variant: the variant fixes only the topic (scene + creative brief). Distinctness
+    # across a batch is enforced in output_saver.dedupe_visual_batch().
+    _variant_cfg = _VARIANTS_CONFIG.get(variant_key, {})
+
     palette_config = PALETTE_CONFIGS.get(palette_tag, PALETTE_CONFIGS["navy_gold"])
+
+    # The bottom information layout is PART OF the chosen recipe's design bundle, so it
+    # changes whenever the recipe changes. Falls back to strip_three_col when no recipe.
+    _info_band_style = (recipe or {}).get("info_band_style")
 
     # Structure: recipe.structure_family (list, legacy) or recipe.layout_type (string, new)
     # supersedes the variant→tone default.
@@ -681,7 +932,9 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
         structure_name = _select_structure(variant_key, tone_tag)
         structure_config = AD_STRUCTURES.get(structure_name, AD_STRUCTURES["bordered_campaign"])
 
-    typography_block = _build_typography_block(entry, brief, _recipe_text_roles(recipe))
+    typography_block = _build_typography_block(
+        entry, brief, _recipe_text_roles(recipe), info_band_style=_info_band_style
+    )
 
     recipe_block = (_format_recipe_block(recipe) + "\n\n") if recipe else ""
     layout_block = ""
@@ -692,20 +945,119 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             + "\n\n"
         )
 
+    # Typography quality block — describes typeface characteristics without naming banned fonts.
+    # The image model defaults to system fonts (Arial, Calibri) when not given specific guidance.
+    _TYPEFACE_QUALITY = (
+        "Typeface quality (premium luxury advertisement — system fonts are unacceptable):\n"
+        "• Location name / primary headline: HEAVY or BLACK weight luxury display serif. "
+        "Strokes must be thick and monumental — stroke width at minimum 15% of cap height. "
+        "Scale it so each letter is individually legible at arm's length. "
+        "If the name wraps across two lines, EACH line must be its own large, heavy typographic event. "
+        "DIMENSIONAL QUALITY: the location name letterforms should appear to have subtle depth — "
+        "as if embossed or cast in metal, with a faint natural shadow behind each glyph and a "
+        "highlight catch on the leading edge. They rise from the surface rather than sitting flat on it. "
+        "CRITICAL: Never use medium, regular, book, or light weight for the location name. It will look weak.\n"
+        "• Campaign tagline: italic or oblique of the same display serif, medium-bold — "
+        "refined but not thin.\n"
+        "• Price: same HEAVY display serif as the location name. Large. Gold. Unmissable.\n"
+        "• Spec text, eyebrow, labels: geometric monolinear sans-serif — perfectly circular O, "
+        "uniform stroke, zero humanist influence. Uppercase, generously tracked.\n"
+        "• Badge / CTA: same geometric sans, medium-bold, clearly legible at arm's length. "
+        "NEVER smaller than spec text.\n"
+        "• NUMBER DISAMBIGUATION: If the composition contains '3,300' or '3300', this refers to "
+        "apartment size in square feet — NOT the price. The price is Rs 3 Cr. Treat these as "
+        "two entirely separate elements in different positions.\n"
+        "• NEVER: thin serifs, light weights, rounded soft fonts, or any font from a presentation deck.\n"
+    )
+
+    # composition_notes — scene-specific creative direction written by the visual_prompter.
+    # When present:
+    #   - replaces the generic structure_config template block
+    #   - switches typography block to composition_driven mode (raw strings only, no layout language)
+    #   - compacts palette to hex tokens only (placement already covered by composition_notes)
+    #   - drops the redundant layout_discipline block
+    composition_notes = (entry.get("composition_notes") or "").strip()
+    if composition_notes:
+        # Rebuild typography block in composition_driven mode
+        typography_block = _build_typography_block(
+            entry, brief,
+            allowed_roles=_recipe_text_roles(recipe),
+            info_band_style=_info_band_style,
+            composition_driven=True,
+        )
+        palette_section  = _PALETTE_COMPACT.get(palette_tag, palette_config)
+        layout_section   = f"Composition and layout — how to compose this specific scene:\n{composition_notes}"
+        recipe_section   = ("Design grammar reference (inform the approach, do not override the composition notes):\n"
+                            + _format_recipe_block(recipe) + "\n") if recipe else ""
+        return (
+            f"{scene_prose}\n\n"
+            "Produce a finished luxury real estate advertisement at premium Indian developer quality "
+            "(Lodha / Shivalik / Iscon / Swati). Photography is the hero. "
+            "Typography is placed by reading the scene — shadow pools, open walls, sky, floor — "
+            "not by applying a template. Every placement decision in this prompt is scene-specific.\n\n"
+            "Human subjects: tailored suits, slim-fit blazers, silk resort-wear, elegant dresses only. "
+            "No traditional Indian clothing.\n\n"
+            "PEOPLE DO NOT DISPLACE TEXT: The presence of human subjects in the scene does NOT "
+            "justify reducing, hiding, or removing any required text element. All text listed "
+            "below is mandatory — location name, headline, price, and spec row must appear at "
+            "full size and weight regardless of how many people are in the frame. Work the "
+            "typography around the people using the scene's natural negative space. Never "
+            "sacrifice a text element to accommodate a figure.\n\n"
+            f"{layout_section}\n\n"
+            f"Text strings to render (exact wording, placement per composition notes):\n"
+            f"{typography_block}\n\n"
+            f"Colour tokens: {palette_section}\n\n"
+            f"{_TYPEFACE_QUALITY}\n"
+            f"{recipe_section}"
+            "Legibility rule: every element must be readable at arm's length. "
+            "Where the scene surface behind text is too bright or busy, add a "
+            "minimal contrast aid — soft shadow, thin vignette, or hairline rule — "
+            "in palette colours. Never force a dark panel where the palette or "
+            "composition notes do not call for one.\n\n"
+            "CONFIGURATION TYPE RULE: The apartment configuration (e.g. '4 & 5 BHK') is a "
+            "PRIMARY selling point — it must appear at a prominent, clearly readable size. "
+            "Never place it as tiny corner text, a small watermark-style label, or smaller "
+            "than any other spec element. If it appears in the footer strip, it belongs "
+            "at the same visual weight as the other footer items, not shrunken.\n\n"
+            "No invented text, no logos, no watermarks. One corner kept clean for logo compositing.\n\n"
+            + (
+                f"PROJECT NAME BAN: The name '{brief.get('property_name', '')}' is an internal "
+                f"project identifier — it must NEVER appear anywhere in the rendered image. "
+                f"Not in the footer, not in the photo zone, not as a label. The ad shows only "
+                f"the locality, city, specs, and campaign copy.\n\n"
+                if brief.get("property_name") else ""
+            )
+            + "Aspect ratio 4:5."
+        )
+
+    # ── Legacy path: no composition_notes — use full template assembly ────────
+    layout_section = f"Layout structure:\n{structure_config}"
     # Typography callouts come EARLY — before layout/recipe doctrine — so the image
     # model encounters the exact text strings before any atmospheric instructions.
     return (
         f"{scene_prose}\n\n"
-        "A finished, world-class luxury real estate advertisement — "
-        "premium Indian developer campaign style (Lodha / Shivalik / Iscon / Swati).\n\n"
+        "A finished, world-class luxury real estate advertisement. "
+        "Photography is the hero — the photograph fills 80–90% of the frame. "
+        "Typography integrates with the photograph through the scene's own natural zones — "
+        "shadow pools, open walls, bright floor surfaces, sky — never applied as a generic overlay. "
+        "The headline or a key typographic element IS the creative device. "
+        "Premium Indian developer campaign quality (Lodha / Shivalik / Iscon / Swati).\n\n"
+        "Human subjects: premium luxury Western attire only — tailored suits, slim-fit blazers, silk resort-wear, elegant dresses. "
+        "NEVER traditional Indian clothing (no kurta, no salwar-kameez, no saree, no dhoti). These are aspirational global luxury ads.\n\n"
         "Render these exact text elements into the design (do not alter the wording):\n"
         f"{typography_block}\n\n"
-        "Layout structure:\n"
-        f"{structure_config}\n\n"
+        f"{layout_section}\n\n"
         "Colour & text treatment:\n"
         f"{palette_config}\n\n"
+        f"{_TYPEFACE_QUALITY}\n"
         f"{recipe_block}"
         f"{layout_block}"
+        "Text legibility (non-negotiable): every text element must be clearly readable at arm's length. "
+        "The badge / CTA must be large and bold — never smaller than the spec text. "
+        "Wherever text sits over a busy or low-contrast background, add just enough contrast — "
+        "a subtle shadow, a thin backing strip, a soft vignette — using colours from the palette. "
+        "Do not force dark panels where the palette calls for a bright or warm feel. "
+        "No text should require zooming to read.\n\n"
         "No invented text, no logos, no watermarks. One corner kept clean for logo compositing.\n\n"
         "Aspect ratio 4:5."
     )

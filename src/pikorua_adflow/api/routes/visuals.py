@@ -24,10 +24,12 @@ router = APIRouter()
 _VARIANT_LABELS = {
     "lifestyle_private_retreat": "Lifestyle — Private Retreat",
     "lifestyle_social_home": "Lifestyle — The Social Home",
-    "lifestyle_city_connection": "Lifestyle — City Connection",
-    "exterior_establishing_shot": "Exterior Establishing Shot",
+    "lifestyle_dynamic_a": "Lifestyle — Scene A",
+    "lifestyle_dynamic_b": "Lifestyle — Scene B",
     "interior_signature_moment": "Interior Signature Moment",
+    "exterior_establishing_shot": "Exterior Establishing Shot",
     # legacy keys kept for runs generated before the variant restructure
+    "lifestyle_city_connection": "Lifestyle — The Address",
     "architectural_perspective": "Architectural Perspective",
     "lifestyle_moment": "Lifestyle Moment",
     "iconic_representation": "Iconic Representation",
@@ -89,6 +91,9 @@ def _brief_for_sanitizer(brief: dict) -> dict:
         "verified_awards": bool(brief.get("verified_awards", False)),
         "verified_certifications": bool(brief.get("verified_certifications", False)),
         "verified_landmarks": bool(brief.get("verified_landmarks", False)),
+        "config": brief.get("config", ""),
+        "usps": brief.get("usps", []),
+        "property_name": brief.get("property_name", ""),
     }
 
 

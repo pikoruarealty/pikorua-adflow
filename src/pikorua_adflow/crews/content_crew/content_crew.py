@@ -104,11 +104,19 @@ class ContentCrew:
     # from the crew.kickoff(inputs=...) dict at runtime.
 
     _VISUAL_EXPECTED_OUTPUT = (
-        'Valid JSON (no markdown fences): '
-        '{"ideogram_prompt": "<200-400 word image-generation prompt>", '
-        '"scene_tag": "<exact scene from scene_pool>", '
+        'Valid JSON (no markdown fences, no preamble) with exactly these keys: '
+        '{"scene_prose": "<two paragraphs, 120-140 words, photography description only — '
+        'camera, light, materials, no ad layout language>", '
+        '"headline": "<one headline from the copy context, exact words>", '
+        '"eyebrow": "<short aspirational line or empty string>", '
+        '"palette_tag": "<one of the allowed palette names>", '
+        '"scene_tag": "<exact scene name from scene_pool>", '
         '"tone_tag": "<dark_luxury or bright_aspirational>", '
-        '"logo_corner": "<bottom-left|bottom-right|top-right|top-left>"}'
+        '"recipe_tag": "<chosen recipe name or empty string>", '
+        '"logo_corner": "<bottom-left|bottom-right|top-right|top-left>", '
+        '"composition_notes": "<150-200 words: where location name sits large in the photo '
+        'zone, headline position, price module, footer spec row, legibility aids — '
+        'imperative sentences, concrete scene geometry, location name in photo zone is required>"}'
     )
 
     def _visual_task(self, variant_key: str) -> Task:
@@ -136,8 +144,12 @@ class ContentCrew:
         return self._visual_task("lifestyle_social_home")
 
     @task
-    def lifestyle_city_connection_task(self) -> Task:
-        return self._visual_task("lifestyle_city_connection")
+    def lifestyle_dynamic_a_task(self) -> Task:
+        return self._visual_task("lifestyle_dynamic_a")
+
+    @task
+    def lifestyle_dynamic_b_task(self) -> Task:
+        return self._visual_task("lifestyle_dynamic_b")
 
     @task
     def interior_signature_moment_task(self) -> Task:

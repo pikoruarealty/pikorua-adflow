@@ -9,15 +9,25 @@ from datetime import datetime
 
 
 # Mapping from @task method name → variant_key (canonical order).
-# 5 decided variants: 3 lifestyle + 1 interior + exterior (opt-in, generated last).
+# Main 5: 4 lifestyle (2 static + 2 dynamic) + 1 interior. Exterior is opt-in 6th.
 _VISUAL_TASK_TO_VARIANT = {
     "lifestyle_private_retreat_task": "lifestyle_private_retreat",
     "lifestyle_social_home_task": "lifestyle_social_home",
-    "lifestyle_city_connection_task": "lifestyle_city_connection",
+    "lifestyle_dynamic_a_task": "lifestyle_dynamic_a",
+    "lifestyle_dynamic_b_task": "lifestyle_dynamic_b",
     "interior_signature_moment_task": "interior_signature_moment",
     "exterior_establishing_shot_task": "exterior_establishing_shot",
+    # legacy key — kept for visual_prompts.json entries written before restructure
+    "lifestyle_city_connection_task": "lifestyle_city_connection",
 }
-_VARIANT_ORDER = list(_VISUAL_TASK_TO_VARIANT.values())
+_VARIANT_ORDER = [
+    "lifestyle_private_retreat",
+    "lifestyle_social_home",
+    "lifestyle_dynamic_a",
+    "lifestyle_dynamic_b",
+    "interior_signature_moment",
+    "exterior_establishing_shot",
+]
 
 AD_COPY_TASKS = {
     "write_meta_ads", "write_google_ads", "write_whatsapp_script",
@@ -107,6 +117,14 @@ def save_for_review(content_result, audience_result=None) -> pathlib.Path:
                 entry = {"variant_key": vk, "prompt_num": i}
                 entry.update(visual_by_variant[vk])
                 entries.append(entry)
+
+        # Enforce batch distinctness: no two ads share a palette or recipe (and thus
+        # bottom-band layout). Design language stays dynamic; only collisions are nudged.
+        try:
+            from pikorua_adflow.crews.content_crew.task_composer import dedupe_visual_batch
+            entries = dedupe_visual_batch(entries)
+        except Exception:
+            pass
 
         json_str = json.dumps(entries, indent=2, ensure_ascii=False)
         (folder / "visual_prompts.json").write_text(json_str, encoding="utf-8")

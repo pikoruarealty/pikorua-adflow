@@ -535,10 +535,12 @@ def get_run_detail(run_id: str) -> dict:
     _VP_LABELS = {
         "lifestyle_private_retreat": "Lifestyle — Private Retreat",
         "lifestyle_social_home": "Lifestyle — The Social Home",
-        "lifestyle_city_connection": "Lifestyle — City Connection",
-        "exterior_establishing_shot": "Exterior Establishing Shot",
+        "lifestyle_dynamic_a": "Lifestyle — Scene A",
+        "lifestyle_dynamic_b": "Lifestyle — Scene B",
         "interior_signature_moment": "Interior Signature Moment",
+        "exterior_establishing_shot": "Exterior Establishing Shot",
         # legacy keys kept for runs generated before the variant restructure
+        "lifestyle_city_connection": "Lifestyle — The Address",
         "architectural_perspective": "Architectural Perspective",
         "lifestyle_moment": "Lifestyle Moment",
         "iconic_representation": "Iconic Representation",

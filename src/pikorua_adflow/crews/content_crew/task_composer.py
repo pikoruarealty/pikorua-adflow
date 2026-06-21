@@ -44,15 +44,17 @@ _IMAGE_VARIANTS_PATH = Path(__file__).parent / "config" / "image_variants.yaml"
 
 class VisualPromptOutput(BaseModel):
     """Structured output every visual_prompter task must return."""
-    scene_prose: str       # 60-80 word photography description only
-    headline: str          # one headline selected from the copy output in context
-    eyebrow: str = ""      # optional short aspirational line above the headline
-    palette_tag: str       # one of the allowed palette names for this variant
-    scene_tag: str         # exact scene from scene_pool
-    tone_tag: str          # dark_luxury or bright_aspirational
-    recipe_tag: str = ""   # chosen design recipe (learned coherent design bundle)
-    logo_corner: str       # corner kept clean; composite_logo() uses this post-generation
-    ideogram_prompt: str = ""  # legacy compat — present in old visual_prompts.json entries
+    scene_prose: str            # 120-140 word photography description only
+    headline: str               # one headline selected from the copy output in context
+    eyebrow: str = ""           # optional short aspirational line above the headline
+    palette_tag: str            # one of the allowed palette names for this variant
+    scene_tag: str              # exact scene from scene_pool
+    tone_tag: str               # dark_luxury or bright_aspirational
+    recipe_tag: str = ""        # chosen design recipe (learned coherent design bundle)
+    logo_corner: str            # corner kept clean; composite_logo() uses this post-generation
+    composition_notes: str = "" # scene-specific layout direction (150-200 words); triggers
+                                # the composition-driven path in build_ad_prompt()
+    ideogram_prompt: str = ""   # legacy compat — present in old visual_prompts.json entries
 
 
 def _load_config() -> dict:
@@ -116,6 +118,56 @@ def get_variant_meta(variant_key: str) -> dict:
 def get_hard_bans() -> dict:
     """Convenience accessor — same data image_service.py loads for sanitisation."""
     return _CONFIG.get("hard_bans", {})
+
+
+def dedupe_visual_batch(entries: list) -> list:
+    """
+    Guarantee the five ads in one batch look distinct WITHOUT pinning any design to a
+    topic. The variant fixes only the subject (scene + creative brief); recipe and
+    palette are the dynamic design language. The LLM picks them per scene, but can
+    drift to the same favourites — so here we enforce, in batch order, that no two ads
+    share a palette_tag or recipe_tag.
+
+    A collision is reassigned to the first option in that variant's own allowed pool
+    that is not yet used in this batch. The LLM's first-come choice is always kept;
+    only later duplicates yield. If a pool is exhausted, the original choice stands.
+
+    Mutates and returns the same list of entry dicts (each: variant_key, palette_tag,
+    recipe_tag). info_band_style follows recipe_tag downstream, so deduping recipes
+    also diversifies the bottom-band layouts automatically.
+    """
+    used_palettes: set = set()
+    used_recipes: set = set()
+
+    for entry in entries:
+        meta = _CONFIG["variants"].get(entry.get("variant_key"), {})
+
+        allowed_palettes = meta.get("allowed_palettes", [])
+        palette = entry.get("palette_tag")
+        if (not palette or palette in used_palettes) and allowed_palettes:
+            replacement = next(
+                (p for p in allowed_palettes if p not in used_palettes), palette
+            )
+            if replacement:
+                entry["palette_tag"] = replacement
+                palette = replacement
+        if palette:
+            used_palettes.add(palette)
+
+        allowed_recipes = [
+            r for r in meta.get("allowed_recipes", []) if r in _RECIPES_BY_NAME
+        ]
+        recipe = entry.get("recipe_tag")
+        if recipe and recipe in used_recipes and allowed_recipes:
+            replacement = next(
+                (r for r in allowed_recipes if r not in used_recipes), recipe
+            )
+            entry["recipe_tag"] = replacement
+            recipe = replacement
+        if recipe:
+            used_recipes.add(recipe)
+
+    return entries
 
 
 def compose_description(
@@ -190,7 +242,72 @@ def compose_description(
         "prose — not text layout.\n\n"
         "HEADLINE: The Meta ad copy produced earlier in this crew run is in your "
         "context. Select one headline from it that best fits the scene you are "
-        "describing. Use the exact words — do not paraphrase.\n\n"
+        "describing. Use the exact words — do not paraphrase.\n"
+        "HEADLINE SUBJECT RULE: the property, the address, or the space must be the "
+        "subject of the headline — never a secondary object (a piece of furniture, "
+        "a view, a meal, a lifestyle element). If the best available headline makes "
+        "something other than the property its subject, pick the next best one.\n\n"
+        "COMPOSITION NOTES — write 150-200 words of scene-specific layout direction. "
+        "This drives every placement decision in the final image. Cover these five things "
+        "with concrete, imperative sentences (percentages, positions, backing treatments):\n"
+        "  1. LOCATION NAME (non-negotiable): Where 'SINDHUBHAVAN ROAD' (or the locality) "
+        "sits in the MAIN PHOTO ZONE — it must be large and dominant here, not relegated "
+        "to the footer. This is the primary text event. State its weight (HEAVY/BLACK serif), "
+        "scale, position, and what natural surface of the scene gives it room.\n"
+        "  2. HEADLINE: Where the campaign headline floats — relative to the location name "
+        "and the scene's own geometry (shadow pool, sky zone, open wall, floor plane).\n"
+        "  3. PRICE: Where the price module sits — pill/badge position, backing colour, size.\n"
+        "  4. FOOTER/SPEC ROW: What the bottom spec treatment looks like — backing strip "
+        "or compact row, height, what text it holds (config + USPs). The layout of the "
+        "bottom section must match the chosen recipe's info_band_style:\n"
+        "     compact_spec_row → one narrow spec row at very bottom edge only\n"
+        "     strip_three_col → three equal columns with gold hairlines\n"
+        "     icon_grid_strip → three columns with icon stacked above label\n"
+        "     asymmetric_band → config LARGE on left, stacked USPs on right\n"
+        "     price_hero_strip → price dominant centre, specs flanking\n"
+        "Use the info_band_style that matches your recipe — do not default to the same "
+        "three-column spec strip for every variant.\n"
+        "  5. LEGIBILITY AIDS: Where the scene surface forces a backing treatment (vignette, "
+        "thin strip, shadow overlay) and what palette colour to use.\n"
+        "RULES for composition_notes:\n"
+        "  - The location name MUST appear large in the PHOTO ZONE of every ad. "
+        "The footer strip is for secondary spec info only.\n"
+        "  - NO LOCATION NAME IN FOOTER: If the location name is already dominant in the "
+        "photo zone (which it must be), do NOT also place it in the footer strip. The footer "
+        "holds apartment config, property name, amenities, and sample-ready — not the address. "
+        "Repeating the location name in both zones is a design error.\n"
+        "  - PEOPLE DO NOT DISPLACE TEXT: If a person is in the scene, ALL text elements "
+        "(location name, headline, price, spec row) remain mandatory at full size and weight. "
+        "Work the typography around the figure using natural negative space. A person in the "
+        "frame is never a reason to remove or shrink a text element.\n"
+        "  - PERSON MUST NOT BLOCK THE DARK ZONE: If the location name anchors in a natural "
+        "dark floor zone, a person in the scene must not occupy or crowd that zone. The dark "
+        "floor surface must remain visibly clear on at least one full side of the figure so "
+        "the location name can span full width. If the scene has no such clearance, remove "
+        "the person or choose a different scene.\n"
+        "  - GRADIENT FADE, NOT HARD PANEL: When the location name sits in a naturally dark "
+        "floor or shadow zone, describe it as a gradient — the photo fades organically into "
+        "darkness toward the bottom. Never describe a solid rectangular backing panel with a "
+        "hard top edge. The darkness must feel like it belongs to the scene, not like a band "
+        "placed over it. The spec strip at the very bottom can be a solid band; the text zone "
+        "above it must be a natural gradient from the photo.\n"
+        "  - Never project text onto a wall surface at perspective angle — text must be "
+        "flat overlay in shadow pools, open sky, or frame edges.\n"
+        "  - Never place '4 & 5 BHK' (or any config) as a corner watermark. "
+        "It belongs in the footer strip at full weight, or in the photo zone at reading size.\n"
+        "  - APARTMENT CONFIG IN PHOTO ZONE: The apartment configuration (e.g. '4 & 5 BHK') "
+        "is a primary selling point — prefer placing it prominently in the photo zone or as a "
+        "dominant element in the spec band, not buried as one of three equal-weight footer items. "
+        "The asymmetric_band info_band_style makes BHK LARGE on the left side — use it when "
+        "the recipe calls for it.\n"
+        "  - FULL BADGE CTA IN COMPOSITION NOTES: Write the complete sample-ready badge text "
+        "including the CTA phrase (e.g. 'SAMPLE FLAT READY — STEP INSIDE') — never just "
+        "'SAMPLE FLAT READY' alone. The CTA phrase tells the image model what the full text is.\n"
+        "  - NEVER USE THE PROJECT NAME: The property name (e.g. 'Anamika Heights', or whatever "
+        "the project is called) must NEVER appear in any text element — not in the footer, not "
+        "in the photo zone, not anywhere. The ad shows the locality (SINDHUBHAVAN ROAD), the "
+        "city (AHMEDABAD), and specs. The project name is internal only.\n"
+        "  - Reference the scene's actual geometry, not abstract zones.\n\n"
         "OUTPUT — respond with ONLY valid JSON, no markdown fences, no preamble:\n"
         "{\n"
         '  "scene_prose": "<TWO PARAGRAPHS (120-140 words total). '
@@ -209,7 +326,11 @@ def compose_description(
         '  "tone_tag": "<dark_luxury or bright_aspirational>",\n'
         f'  "recipe_tag": "<one of the allowed recipe names listed above{"" if allowed_recipes else " — leave empty string if none listed"}>",\n'
         '  "logo_corner": "<bottom-left | bottom-right | top-right | top-left — '
-        'choose the corner naturally kept cleanest by the scene composition>"\n'
+        'choose the corner naturally kept cleanest by the scene composition>",\n'
+        '  "composition_notes": "<150-200 words of concrete scene-specific layout direction '
+        'covering: location name placement in photo zone, headline position, price module, '
+        'footer/spec row, legibility aids. Imperative sentences only. Reference actual scene '
+        'geometry. Location name in photo zone is REQUIRED and non-negotiable.>"\n'
         "}"
     )
 

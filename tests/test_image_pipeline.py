@@ -224,20 +224,36 @@ def test_build_gpt_image_prompt_contains_key_sections():
 
 
 def test_recipe_drives_art_direction_and_text_density():
-    # full_detail recipe -> renders the info band + folds in layout discipline
-    full_entry = dict(SAMPLE_ENTRY, recipe_tag="the_horizon_anchor")
+    # info_band_style is now a property of the RECIPE (the design bundle), not the variant.
+    # the_dark_water_canvas declares compact_spec_row → "Specification Row" label.
+    full_entry = dict(SAMPLE_ENTRY, recipe_tag="the_dark_water_canvas")
     full_prompt = build_gpt_image_prompt(full_entry, SAMPLE_BRIEF, "exterior_establishing_shot")
-    assert "the_horizon_anchor" in full_prompt, "recipe art-direction block missing"
+    assert "the_dark_water_canvas" in full_prompt, "recipe art-direction block missing"
     assert "Layout discipline" in full_prompt, "layout discipline missing for full_detail recipe"
-    assert "Bottom Information Band" in full_prompt, "full_detail recipe should render info band"
-
-    # moderate recipe (text_roles without info_band) -> info band suppressed
-    mod_entry = dict(SAMPLE_ENTRY, recipe_tag="the_dark_water_canvas")
-    mod_prompt = build_gpt_image_prompt(mod_entry, SAMPLE_BRIEF, "exterior_establishing_shot")
-    assert "Bottom Information Band" not in mod_prompt, (
-        "moderate recipe without info_band role should suppress the info band"
+    assert "Specification Row" in full_prompt, (
+        "the_dark_water_canvas recipe (compact_spec_row) should render the spec row"
     )
-    assert "Pricing Module" in mod_prompt, "moderate recipe with price role should render price"
+
+    # A different recipe drives a different bottom-band layout from the SAME variant —
+    # the_horizon_anchor declares icon_grid_strip → "Bottom Amenity Grid".
+    grid_entry = dict(SAMPLE_ENTRY, recipe_tag="the_horizon_anchor")
+    grid_prompt = build_gpt_image_prompt(grid_entry, SAMPLE_BRIEF, "exterior_establishing_shot")
+    assert "Bottom Amenity Grid" in grid_prompt, (
+        "the_horizon_anchor recipe (icon_grid_strip) should render the amenity grid"
+    )
+    assert "Specification Row" not in grid_prompt, (
+        "icon_grid_strip recipe must not also render the compact spec row"
+    )
+
+    # Recipe with no info_band in text_roles → spec row suppressed
+    teaser_entry = dict(SAMPLE_ENTRY, recipe_tag="the_backlit_silhouette")
+    teaser_prompt = build_gpt_image_prompt(teaser_entry, SAMPLE_BRIEF, "exterior_establishing_shot")
+    assert "Specification Row" not in teaser_prompt, (
+        "recipe without info_band role should suppress the spec row"
+    )
+    assert "Bottom Information Band" not in teaser_prompt, (
+        "recipe without info_band role should suppress all info band labels"
+    )
     print("  PASS recipe drives art direction and gates text density by text_roles")
 
 
@@ -292,14 +308,34 @@ def test_build_gpt_image_prompt_structure_varies_by_tone():
 
 
 def test_build_gpt_image_prompt_palette_config_injected():
-    for palette_tag in PALETTE_CONFIGS:
+    # Palette is dynamic: the entry's palette_tag (LLM choice) flows straight through,
+    # no longer overridden by a per-variant preferred_palette. Every palette injects.
+    from pikorua_adflow.api.services.image_service import _VARIANTS_CONFIG
+    for palette_tag, expected_config in PALETTE_CONFIGS.items():
+        if not palette_tag.endswith(("_gold", "_cream", "_warmth")):
+            continue  # skip non-palette structure configs in the same dict
         entry = dict(SAMPLE_ENTRY, palette_tag=palette_tag)
-        prompt = build_gpt_image_prompt(entry, SAMPLE_BRIEF, "exterior_establishing_shot")
-        # Each palette has a distinctive phrase; check the first word after "Overall feel:"
-        assert PALETTE_CONFIGS[palette_tag][:30].split("\n")[0][:15] in prompt, (
-            f"Palette '{palette_tag}' config not injected into prompt"
+        prompt = build_gpt_image_prompt(entry, SAMPLE_BRIEF, "lifestyle_private_retreat")
+        first_line_prefix = expected_config.split("\n")[0][:15]
+        assert first_line_prefix in prompt, (
+            f"Palette '{palette_tag}' should inject its colour config "
+            f"(expected '{first_line_prefix}' in prompt)"
         )
-    print("  PASS All 6 palette configs correctly injected")
+    print("  PASS Entry palette_tag flows through to the prompt for every palette")
+
+
+def test_dedupe_visual_batch_enforces_distinct_palette_and_recipe():
+    # The batch distinctness pass guarantees five different palettes + recipes even when
+    # the LLM drifts to the same favourites — without pinning any design to a topic.
+    from pikorua_adflow.crews.content_crew.task_composer import dedupe_visual_batch, VARIANT_KEYS
+    entries = [
+        {"variant_key": vk, "palette_tag": "charcoal_gold", "recipe_tag": "the_horizon_anchor"}
+        for vk in VARIANT_KEYS
+    ]
+    deduped = dedupe_visual_batch(entries)
+    palettes = [e["palette_tag"] for e in deduped]
+    assert len(set(palettes)) == len(palettes), f"palettes not distinct: {palettes}"
+    print("  PASS dedupe_visual_batch yields a distinct palette per variant")
 
 
 def test_build_gpt_image_prompt_includes_scene_prose():

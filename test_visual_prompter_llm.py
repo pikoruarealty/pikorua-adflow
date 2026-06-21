@@ -46,15 +46,16 @@ from pikorua_adflow.api.services.image_service import (
 
 # ── Brief — edit to match the property you want to test ─────────────────────
 BRIEF = {
-    "property_name": "Nehrunagar Heights",
+    "property_name": "Nehrunagar Prelaunch",
     "property_type": "Apartment",
-    "locality": "NEHRUNAGAR",
-    "city": "AHMEDABAD",
-    "price_cr": "1.85",
-    "config": "2 & 3 BHK",
+    "locality": "Nehrunagar",
+    "city": "Ahmedabad",
+    "price_cr": "3",
+    "config": "3 & 4 BHK",
     "sample_ready": True,
     "sample_ready_cta": "Sample Apartment Ready — Visit Today",
-    "standout_feature": "Panoramic city views from high-floor units",
+    "usps": ["Gated Luxury Community / City Centre"],
+    "standout_feature": "Gated luxury community in the heart of Ahmedabad",
     "rera_verified": False,
     "verified_awards": False,
     "verified_certifications": False,
@@ -65,11 +66,11 @@ BRIEF = {
 COPY_CONTEXT = """
 The ad copy variants below are from the copy crew. Pick one headline.
 
-Variant 1: headline="Precision Lives Here." / body="High-rise living redefined for Ahmedabad."
-Variant 2: headline="A City at Your Feet." / body="Every morning, a panoramic reminder of what you've achieved."
-Variant 3: headline="Where Material Meets Intention." / body="Spaces built to the exacting standard of those who occupy them."
-Variant 4: headline="Rise Above Ahmedabad." / body="The city's most anticipated address — now open for preview."
-Variant 5: headline="The Silence of Exceptional Rooms." / body="In a truly premium apartment, the room speaks before the brochure does."
+Variant 1: headline="The Quiet That Only Address Buys." / body="3 & 4 BHK residences from ₹3 Cr. Nehrunagar, Ahmedabad."
+Variant 2: headline="Your Home Has Never Hosted Better." / body="A space built for the way you actually live."
+Variant 3: headline="Above the City, Inside the Moment." / body="Floor-to-ceiling views over Ahmedabad. Prelaunch pricing now open."
+Variant 4: headline="Space That Speaks Before You Enter." / body="Every material chosen for the resident who notices the difference."
+Variant 5: headline="The Building That Changes the Skyline." / body="A prelaunch address that won't wait."
 """
 
 
@@ -187,14 +188,35 @@ def main():
         if entry:
             results.append(entry)
 
+    # Apply batch dedupe so the 5 ads get distinct palettes + recipes
+    if len(results) > 1:
+        from pikorua_adflow.crews.content_crew.task_composer import dedupe_visual_batch
+        results = dedupe_visual_batch(results)
+
     print(f"\n{'='*70}")
     print(f"SUMMARY: {len(results)}/{len(nums)} variants passed validation")
     if len(results) == len(nums):
-        print("All tested variants produce valid scene_prose JSON -- new pipeline is working.")
+        print("All tested variants produce valid prompts — pipeline working.")
     else:
-        failed = len(nums) - len(results)
-        print(f"{failed} variant(s) failed — check LLM output above for issues.")
+        print(f"{len(nums)-len(results)} variant(s) failed — check output above.")
     print(f"{'='*70}")
+
+    # Print all 5 final prompts for manual Ideogram generation
+    if results:
+        print(f"\n{'='*70}")
+        print("FINAL PROMPTS FOR IDEOGRAM / CHATGPT (copy each block):")
+        print(f"{'='*70}\n")
+        for entry in results:
+            vk = entry["variant_key"]
+            n  = entry["prompt_num"]
+            final = build_gpt_image_prompt(entry, BRIEF, vk)
+            final = sanitize_image_prompt(final, BRIEF, assembled=True)
+            print(f"{'─'*70}")
+            print(f"PROMPT {n} — {vk.upper().replace('_',' ')}")
+            print(f"  palette={entry.get('palette_tag')}  recipe={entry.get('recipe_tag')}")
+            print(f"{'─'*70}")
+            print(final)
+            print()
 
 
 if __name__ == "__main__":
