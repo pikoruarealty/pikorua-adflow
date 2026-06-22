@@ -28,6 +28,12 @@ class CampaignBrief(BaseModel):
     daily_budget_inr: int = Field(1000, gt=0, description="Daily budget per Meta ad set in INR")
     cta: str = Field("GET_QUOTE", description="Call to action: GET_QUOTE, CONTACT_US, LEARN_MORE")
     company_name: str = Field("", description="Optional company/page name to reference in copy. Blank = omit.")
+    clientele_type: str = Field(
+        "premium_apartment",
+        description="Buyer-clientele bucket that gates targeting + cross-campaign learning: "
+        "luxury_bungalow | premium_apartment | nri_investment | commercial_office.",
+    )
+    cheque_only: bool = Field(False, description="If true, a '100% Cheque Payment' selling point is surfaced in images + copy.")
     sample_ready: bool = Field(False, description="If true, a 'Sample apartment ready to view' line is included in images.")
     rera_verified: bool = Field(False, description="If true, RERA claims in image prompts are allowed.")
     verified_awards: bool = Field(False, description="If true, award claims in image prompts are allowed.")

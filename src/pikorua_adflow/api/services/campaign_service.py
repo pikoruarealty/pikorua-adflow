@@ -386,6 +386,7 @@ def effective_audience(review_folder, brief: dict) -> dict:
             city, token,
             locality=brief.get("locality", ""),
             nri_geographies=brief.get("nri_geographies", ""),
+            clientele_type=brief.get("clientele_type", ""),
         )
     except Exception as exc:
         audience = {
@@ -706,6 +707,8 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
         "daily_budget_inr": str(brief.daily_budget_inr),
         "cta": brief.cta,
         "sample_ready": "yes" if brief.sample_ready else "no",
+        "cheque_only": "yes" if brief.cheque_only else "no",
+        "clientele_type": brief.clientele_type,
         "standout_feature": brief.standout_feature or "none provided — use the thin-brief fallback",
         "company_name": company_str,
         "persona": "No persona data — audience crew has not run yet.",
@@ -752,6 +755,8 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
     inputs.setdefault("daily_budget_inr", "1000")
     inputs.setdefault("cta", "GET_QUOTE")
     inputs.setdefault("sample_ready", "no")
+    inputs.setdefault("cheque_only", "no")
+    inputs.setdefault("clientele_type", "premium_apartment")
     inputs.setdefault("standout_feature", "none provided — use the thin-brief fallback")
 
     try:

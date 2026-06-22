@@ -118,6 +118,81 @@ def deploy_to_meta(run_id: str):
     return {"run_id": run_id, "deployed": results, "errors": errors, "dropped_locations": dropped}
 
 
+@router.post("/refresh-creatives/{run_id}")
+def refresh_creatives(run_id: str):
+    """
+    Refresh the creative (image + headline + body) on this run's LIVE ads in place —
+    without creating a new campaign, ad set, or ad. Each live ad keeps its id, targeting,
+    budget and delivery history; only its creative is swapped for the run's current
+    effective copy + assigned image. This is the action behind the autopilot's
+    'refresh tired creative' decision and the campaign page's 'Refresh live ads' button.
+
+    Regenerate images / edit copy on the campaign page first; this pushes whatever is
+    current. DRY_RUN returns a preview without touching Meta.
+    """
+    run = cs.require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    brief = run.get("brief", {})
+    ads = ds.real_meta_ads(run)
+    if not ads:
+        raise HTTPException(status_code=400,
+                            detail="No live ads to refresh. Deploy the campaign first.")
+
+    meta_copy = cs.effective_meta(review_folder)
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    if dry_run:
+        return {"ok": True, "dry_run": True,
+                "would_refresh": [a.get("variant") for a in ads if meta_copy.get(a.get("variant"))]}
+
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    account = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+    page_id = os.getenv("META_PAGE_ID", "")
+    lead_form_id = os.getenv("META_LEAD_FORM_ID", "")
+    landing = brief.get("landing_page_url", "https://pikorua.in/")
+    cta = brief.get("cta", "GET_QUOTE")
+
+    from pikorua_adflow.tools.meta_tool import (_fetch_instagram_actor_id, _upload_image,
+                                                swap_ad_creative)
+    from pikorua_adflow.tools.errors import explain_and_log
+    ig_actor = os.getenv("META_INSTAGRAM_ACTOR_ID", "") or (
+        _fetch_instagram_actor_id(page_id, token) if page_id else "")
+    edits = cs.load_edits(review_folder).get("meta", {})
+
+    refreshed, errors = [], []
+    for a in ads:
+        vnum = a.get("variant")
+        copy = meta_copy.get(vnum)
+        if not copy:
+            continue
+        assigned = edits.get(str(vnum), {}).get("image_num")
+        img = None
+        if assigned and (review_folder / "images" / f"image_{assigned}.png").exists():
+            img = review_folder / "images" / f"image_{assigned}.png"
+        elif (review_folder / "images" / f"image_{vnum}.png").exists():
+            img = review_folder / "images" / f"image_{vnum}.png"
+        link_data = {
+            "link": landing, "message": copy.get("body", ""), "name": copy.get("headline", ""),
+            "call_to_action": {"type": cta, "value": {"lead_gen_form_id": lead_form_id}},
+        }
+        try:
+            if img and img.exists():
+                link_data["image_hash"] = _upload_image(account, img, token)
+            oss = {"page_id": page_id, "link_data": link_data}
+            if ig_actor:
+                oss["instagram_actor_id"] = ig_actor
+            result = swap_ad_creative(a["ad_id"], account, oss, token)
+            a["creative_id"] = result["creative_id"]
+            refreshed.append({"variant": vnum, "creative_id": result["creative_id"]})
+        except Exception as exc:
+            friendly = explain_and_log(f"Refresh creative — V{vnum}", exc)
+            errors.append({"variant": vnum, "error": friendly["message"]})
+
+    with RUNS_LOCK:
+        RUNS[run_id]["meta_ads"] = run.get("meta_ads", [])
+    save_runs()
+    return {"ok": True, "refreshed": refreshed, "errors": errors}
+
+
 @router.get("/meta-previews/{run_id}")
 def meta_previews(run_id: str):
     run = RUNS.get(run_id)

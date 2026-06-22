@@ -29,10 +29,10 @@ BRIEF = {
     "price_cr":                "3",
     "config":                  "4 & 5 BHK",
     "sample_ready":            True,
-    "usps":                    ["Clubclass Amenities / 30+ Storey Tower"],
+    "usps":                    ["Clubclass Amenities", "3,300–6,100 sq ft"],
     "standout_feature": (
         "4 & 5 BHK residences from 3,300 to 6,100 sq ft on Sindhubhavan Road, "
-        "Ahmedabad. 30+ storey tower. Clubclass amenities."
+        "Ahmedabad. Clubclass amenities."
     ),
     "rera_verified":           False,
     "verified_awards":         False,
@@ -92,15 +92,17 @@ LLM_OUTPUTS = [
             "luxury print or gold leaf — integrated into the scene, no hard bevel edges, "
             "no reflective sheen, nothing that looks digitally pasted. "
             "Scale: spans the full canvas width edge to edge. "
-            "Gold (#C9A84C). AHMEDABAD in small tracked geometric gold caps directly below.\n"
+            "Gold (#C9A84C). AHMEDABAD in small tracked geometric gold caps directly below. "
+            "'4 & 5 BHK' — compact tracked gold caps directly below 'AHMEDABAD', same gradient "
+            "zone. Three items in the floor text cluster: address → city → config. "
+            "All three items read against the dark floor; none require backing.\n"
             "Price badge: 'FROM ₹3 CR ONWARDS' — bottom-right of the photo zone just above "
             "the spec strip. Charcoal pill (#2B2420), gold hairline border, HEAVY serif gold.\n"
             "Sample badge: 'SAMPLE FLAT READY — COME EXPERIENCE IT' — bottom-left of photo "
             "zone, above spec strip. Charcoal pill (#2B2420), gold hairline border.\n"
             "Spec strip: slim solid charcoal (#2B2420), full canvas width, 7% height. "
             "Bold tracked ALL CAPS geometric gold: "
-            "'4 & 5 BHK RESIDENCES  ·  CLUBCLASS AMENITIES  ·  30+ STOREY TOWER'. "
-            "Same bold weight throughout — '4 & 5 BHK RESIDENCES' is not shrunken.\n"
+            "'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT'. Two items — clean and uncluttered.\n"
             "Bottom-right corner of full canvas: kept entirely clear — logo compositing zone."
         ),
         "headline":    "Some mornings are worth being home for.",
@@ -162,14 +164,14 @@ LLM_OUTPUTS = [
             "sans, gold text.\n"
             "'4 & 5 BHK' rendered boldly in the photo zone at mid-right, just to the right of "
             "the second figure's shoulder — set against the dark charcoal cabinetry wall. "
-            "HEAVY geometric gold sans, large enough to read at arm's length. This is the "
-            "configuration callout in the photo zone, NOT the footer.\n"
-            "Navy footer strip (#0D1B2A), full canvas width, 18-20% height. Icon-grid layout: "
-            "three columns separated by thin gold hairlines. LEFT: stacked — small geometric gold "
-            "icon (tower/building silhouette) above '30+ STOREYS' in tracked gold caps. "
-            "CENTRE: stacked — icon (home/plan) above 'CLUBCLASS AMENITIES'. "
-            "RIGHT: stacked — icon (check) above 'SINDHUBHAVAN ROAD, AHMEDABAD'. "
-            "All columns equal height and visual weight.\n"
+            "HEAVY display serif, gold — same typeface family as the headline, not geometric sans. "
+            "Large enough to read at arm's length. This is the configuration callout in the "
+            "photo zone, NOT the footer.\n"
+            "Navy footer strip (#0D1B2A), full canvas width, 10% height. Two columns separated "
+            "by a thin gold hairline. LEFT: small gold line-art icon (home/floor-plan silhouette) "
+            "above 'CLUBCLASS AMENITIES' in tracked gold caps. RIGHT: small gold icon (ruler/area) "
+            "above '3,300–6,100 SQ FT' in tracked gold caps. Clean, two items only — no storey "
+            "count, no location repeat (location is already dominant in the photo zone).\n"
             "Top-left corner: clear for logo compositing."
         ),
         "headline":    "Full floors. Not floor plans.",
@@ -199,7 +201,9 @@ LLM_OUTPUTS = [
             "zone, shooting across the living room toward full-height glazing. 3:30pm Sunday — "
             "soft overcast daylight at 4000K enters through a 4-metre floor-to-ceiling window; "
             "even, flat, no direct shadows. ISO 200, f/5.6. Very slight atmospheric haze from "
-            "the glass pane creates a faint soft vignette at the far corners.\n\n"
+            "the glass pane creates a faint soft vignette at the far corners. "
+            "The glazing runs floor-to-ceiling with no visible curtain tracks, ceiling rails, "
+            "or mounting hardware — the glass-to-sky transition is fully clean.\n\n"
             "The living room is 24 feet wide, herringbone European oak floor (200x1200mm, "
             "natural oil finish). A woman in a sand-coloured linen dress sits cross-legged on "
             "the floor beside a low walnut coffee table; a girl of about five sits in her lap, "
@@ -217,11 +221,16 @@ LLM_OUTPUTS = [
             "All dominant text lives in this bright sky/glass area, rendered with strong "
             "contrast backing so it reads against the pale ground.\n"
             "'SINDHUBHAVAN ROAD' — HEAVY or BLACK weight luxury display serif, spanning "
-            "roughly 65% of canvas width across the sky zone. Navy-backed: each letter "
-            "on a tight, minimal deep navy backing strip (#0D1B2A, just wide enough to give "
-            "contrast — not a full-width panel). Gold (#C9A84C). Monumental in scale. "
+            "roughly 65% of canvas width across the sky zone. The pale silver-white sky "
+            "is the canvas — use deep navy or deep charcoal text directly on it, no "
+            "backing panel or per-letter strip. The contrast comes from the dark letterform "
+            "against the bright sky, not from a manufactured backing. Monumental in scale. "
             "This is the dominant visual element.\n"
-            "Below: 'AHMEDABAD' — small tracked geometric gold caps, same navy backing.\n"
+            "Below: 'AHMEDABAD' — small tracked geometric caps, same dark tone, same zone.\n"
+            "'4 & 5 BHK' — compact tracked geometric sans-serif in the sky cluster, directly "
+            "below 'AHMEDABAD'. Same deep navy/charcoal tone. This is the third item in the "
+            "sky typographic grouping: SINDHUBHAVAN ROAD (dominant) → AHMEDABAD (small) → "
+            "4 & 5 BHK (compact caps). All three read against the pale sky, no backing.\n"
             "'Built for how you actually live.' — bold italic display serif, pure white, "
             "floats mid-frame at roughly 50% canvas height where the glazing "
             "frame meets the room interior. Reads cleanly against the oak floor zone.\n"
@@ -231,8 +240,8 @@ LLM_OUTPUTS = [
             "Sample badge: 'SAMPLE FLAT READY — STEP INSIDE' — compact navy pill (#0D1B2A "
             "fill, gold hairline border), bottom-left of photo zone above the spec strip.\n"
             "Spec strip: slim navy backing (#0D1B2A), full canvas width, 7% height. "
-            "Bold tracked geometric gold: '4 & 5 BHK RESIDENCES  ·  CLUBCLASS AMENITIES  "
-            "·  30+ STOREY TOWER'. All at equal weight and size.\n"
+            "Bold tracked geometric gold: 'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT'. "
+            "Two items only — clean and legible.\n"
             "Bottom-left corner: clear for logo compositing."
         ),
         "headline":    "Built for how you actually live.",

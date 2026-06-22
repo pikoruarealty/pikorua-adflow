@@ -577,6 +577,71 @@ def top_converting_profiles(leads: list[dict], top_n: int = 5, min_count: int = 
 
 
 # --------------------------------------------------------------------------- #
+# 8b. Campaign lead matching + profile-match quality (autopilot north-star)
+# --------------------------------------------------------------------------- #
+def match_meta_leads(leads: list[dict], campaign_name: str) -> list[dict]:
+    """
+    Return the CRM rows attributed to a given Meta campaign.
+
+    The lead webhook stamps every inbound lead with its `campaign_name`, so we
+    match on that (fuzzy, punctuation-insensitive) rather than re-hashing contacts.
+    Falls back to an empty list when nothing matches — the caller then knows CRM
+    coverage for this campaign is still sparse.
+    """
+    needle = _key(campaign_name)
+    if not needle:
+        return []
+    out = []
+    for row in leads or []:
+        norm = _normalize([row])[0]
+        hay = _key(norm.get("campaign", ""))
+        if hay and (needle in hay or hay in needle):
+            out.append(row)
+    return out
+
+
+def profile_match_score(leads: list[dict], best_profiles: list[dict]) -> dict:
+    """
+    Score how strongly a campaign's leads resemble the best-converting CRM profiles.
+
+    `best_profiles` is top_converting_profiles() output. For each lead we form its
+    (industry, budget bucket, city) signature and check whether it falls inside one
+    of the high-quality profiles. Returns:
+      {score: 0-100, matched: int, total: int, n_quality: int}
+    score = share of leads matching a top profile, nudged by their own quality rate.
+    This is the FALLBACK north-star used while CRM buying_status is still sparse.
+    """
+    rows = _normalize(leads)
+    total = len(rows)
+    if not total:
+        return {"score": 0.0, "matched": 0, "total": 0, "n_quality": 0}
+
+    profile_keys = set()
+    for p in best_profiles or []:
+        pr = p.get("profile", {})
+        profile_keys.add((pr.get("industry", ""), pr.get("budget", ""), pr.get("city", "")))
+
+    matched = 0
+    n_quality = 0
+    for r in rows:
+        if _is_quality(r):
+            n_quality += 1
+        sig = (
+            profession_to_industry(r.get("profession", ""), r.get("company", "")),
+            budget_bucket(r.get("budget", "")),
+            (r.get("city") or r.get("currentcity") or "Unknown").title(),
+        )
+        if sig in profile_keys:
+            matched += 1
+    base = matched / total * 100
+    quality_nudge = (n_quality / total) * 20  # up to +20 for genuinely warm leads
+    return {
+        "score": round(min(100.0, base + quality_nudge), 1),
+        "matched": matched, "total": total, "n_quality": n_quality,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # 9. Full report
 # --------------------------------------------------------------------------- #
 def full_report(leads: list[dict]) -> dict:

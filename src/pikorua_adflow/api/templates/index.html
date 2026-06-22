@@ -57,9 +57,23 @@
           <label class="label-caps text-outline block mb-1" for="standout_feature">What makes it special? <span class="text-outline-variant normal-case">(optional)</span></label>
           <input id="standout_feature" name="standout_feature" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. infinity pool on the 32nd floor"/>
         </div>
+        <div>
+          <label class="label-caps text-outline block mb-1" for="clientele_type">Who is it for?</label>
+          <select id="clientele_type" name="clientele_type" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0">
+            <option value="premium_apartment">Premium apartment buyer — IT / corporate professional (₹1–3 Cr)</option>
+            <option value="luxury_bungalow">Luxury bungalow / villa buyer — HNI business owner (₹5 Cr+)</option>
+            <option value="nri_investment">NRI investor — diaspora buyer seeking yield (₹2–5 Cr)</option>
+            <option value="commercial_office">Commercial / office buyer — business owner (₹2 Cr+)</option>
+          </select>
+          <p class="text-xs text-outline mt-1">We auto-tune the audience to this buyer and only carry learnings between campaigns of the same type.</p>
+        </div>
         <label class="flex items-center gap-3 cursor-pointer text-sm">
           <input type="checkbox" id="sample_ready" name="sample_ready" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
           Sample apartment ready to view
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer text-sm">
+          <input type="checkbox" id="cheque_only" name="cheque_only" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
+          100% cheque payment only
         </label>
 
         <!-- Reference creatives -->
@@ -272,7 +286,9 @@ form.addEventListener('submit', function (e) {
     landing_page_url: form.landing_page_url.value.trim() || 'https://pikorua.in/',
     daily_budget_inr: parseInt(form.daily_budget_inr.value, 10) || 1000,
     cta: form.cta.value, company_name: form.company_name.value.trim(),
+    clientele_type: form.clientele_type.value,
     sample_ready: form.sample_ready.checked,
+    cheque_only: form.cheque_only.checked,
   };
   setStatus('Sending…', 'queued');
   api('/launch-campaign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })

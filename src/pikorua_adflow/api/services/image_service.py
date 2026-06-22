@@ -625,6 +625,8 @@ def _build_typography_block(
         if config_combined:
             spec_items.append(config_combined)
         spec_items.extend(usp_parts)
+        if brief.get("cheque_only"):
+            spec_items.append("100% CHEQUE PAYMENT")
         if spec_items:
             lines.append(f'Specification items: {", ".join(repr(s) for s in spec_items)}')
             lines.append(
@@ -668,6 +670,10 @@ def _build_typography_block(
         usps = [usps]
     usp = usps[0].strip() if usps else ""
     usp_parts = [p.strip() for p in usp.split("/", 1)] if "/" in usp else ([usp] if usp else [])
+    # "100% cheque payment" is a hard selling point for premium Indian buyers — surface
+    # it as a spec/USP callout (never invented; only when the brief flags it).
+    if brief.get("cheque_only") and "100% CHEQUE PAYMENT" not in [p.upper() for p in usp_parts]:
+        usp_parts.append("100% Cheque Payment")
 
     # Config: "3 & 4 BHK" → top="3 & 4", bottom="BHK RESIDENCES"
     config_parts = config_val.rsplit(" ", maxsplit=1) if config_val else []
@@ -965,8 +971,13 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
         "• Campaign tagline: italic or oblique of the same display serif, medium-bold — "
         "refined but not thin.\n"
         "• Price: same HEAVY display serif as the location name. Large. Gold. Unmissable.\n"
-        "• Spec text, eyebrow, labels: geometric monolinear sans-serif — perfectly circular O, "
-        "uniform stroke, zero humanist influence. Uppercase, generously tracked.\n"
+        "• Apartment config (e.g. '4 & 5 BHK') when featured in the photo zone as a large "
+        "typographic element: use the same HEAVY display serif as the location name — NOT "
+        "geometric sans. A BHK callout in the photo zone must carry the same visual weight "
+        "and typeface family as the surrounding ad typography. Geometric sans for this element "
+        "will look like a Word document label dropped into a luxury photograph.\n"
+        "• Spec text, eyebrow, labels (footer strip only): geometric monolinear sans-serif — "
+        "perfectly circular O, uniform stroke, zero humanist influence. Uppercase, generously tracked.\n"
         "• Badge / CTA: same geometric sans, medium-bold, clearly legible at arm's length. "
         "NEVER smaller than spec text.\n"
         "• NUMBER DISAMBIGUATION: If the composition contains '3,300' or '3300', this refers to "
@@ -1002,6 +1013,12 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             "not by applying a template. Every placement decision in this prompt is scene-specific.\n\n"
             "Human subjects: tailored suits, slim-fit blazers, silk resort-wear, elegant dresses only. "
             "No traditional Indian clothing.\n\n"
+            "CLEAN GLAZING ZONE: If the scene uses floor-to-ceiling glazing or a large window as "
+            "the primary light source or typography backdrop, keep the glass-to-sky transition "
+            "completely unobstructed. No visible curtain tracks, ceiling-mounted rails, drape "
+            "hardware, or pelmet boxes crossing the glazing or sky zone. These create horizontal "
+            "bars that interrupt the typography. Sheers or curtains may appear at the very edge "
+            "of frame only — never across the glazing face.\n\n"
             "PEOPLE DO NOT DISPLACE TEXT: The presence of human subjects in the scene does NOT "
             "justify reducing, hiding, or removing any required text element. All text listed "
             "below is mandatory — location name, headline, price, and spec row must appear at "
@@ -1015,9 +1032,15 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             f"{_TYPEFACE_QUALITY}\n"
             f"{recipe_section}"
             "Legibility rule: every element must be readable at arm's length. "
-            "Where the scene surface behind text is too bright or busy, add a "
-            "minimal contrast aid — soft shadow, thin vignette, or hairline rule — "
-            "in palette colours. Never force a dark panel where the palette or "
+            "Read the scene surface before choosing a contrast method. "
+            "A bright surface (pale sky, white wall, frosted glass) is an opportunity "
+            "for dark-toned text — navy, deep charcoal, forest green placed directly "
+            "on the bright field is often more premium than any backing treatment. "
+            "When contrast aid is genuinely needed, prefer a very soft shadow or thin "
+            "vignette that darkens just enough, or a hairline border. "
+            "NEVER a solid rectangular backing strip or per-letter dark panel placed "
+            "over a bright surface — this creates a cheap sign-board effect regardless "
+            "of the colour used. Never force a dark panel where the palette or "
             "composition notes do not call for one.\n\n"
             "CONFIGURATION TYPE RULE: The apartment configuration (e.g. '4 & 5 BHK') is a "
             "PRIMARY selling point — it must appear at a prominent, clearly readable size. "

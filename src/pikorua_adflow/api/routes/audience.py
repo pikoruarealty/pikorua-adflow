@@ -107,13 +107,35 @@ def upload_crm_audience(req: CRMAudienceRequest):
         existing: list[dict] = json.loads(AUDIENCES_REGISTRY_PATH.read_text()) if AUDIENCES_REGISTRY_PATH.exists() else []
     except (ValueError, OSError):
         existing = []
+
+    # Map each result id key → (role, subtype, default-name). `role` is what the
+    # autopilot reads: "lookalike" wires into custom_audiences (rung 3), "exclusion"
+    # wires into excluded_custom_audiences (rung 2). Keys cover BOTH the single-upload
+    # (custom_audience_id / lookalike_audience_id) and split-upload result shapes —
+    # previously the split keys were mismatched, so split audiences never registered.
+    _ID_KEYS = [
+        ("custom_audience_id", "seed", "CUSTOM", "PIKORUA CRM — All Contacts"),
+        ("lookalike_audience_id", "lookalike", "LOOKALIKE", "PIKORUA Lookalike — All Contacts"),
+        ("good_leads_audience_id", "seed", "CUSTOM", "PIKORUA CRM — Good Leads (Hot/Warm)"),
+        ("good_leads_lookalike_id", "lookalike", "LOOKALIKE", "PIKORUA Lookalike — Good Leads"),
+        ("bad_leads_audience_id", "exclusion", "CUSTOM", "PIKORUA CRM — Bad Leads (Exclusion)"),
+    ]
+    _NAME_KEYS = {
+        "good_leads_lookalike_id": "good_lookalike_name",
+        "bad_leads_audience_id": "bad_custom_audience_name",
+    }
     new_entries: list[dict] = []
-    for key in ("custom_audience_id", "lookalike_id",
-                "good_custom_audience_id", "good_lookalike_id", "bad_custom_audience_id"):
+    for key, role, subtype, default_name in _ID_KEYS:
         aid = result.get(key)
-        name = result.get(key.replace("_id", "_name"), key.replace("_id", "").replace("_", " ").title())
-        if aid and not any(e.get("id") == str(aid) for e in existing):
-            entry = {"id": str(aid), "name": str(name), "subtype": "LOOKALIKE" if "lookalike" in key else "CUSTOM"}
+        if not aid:
+            continue
+        name = result.get(_NAME_KEYS.get(key, ""), default_name)
+        # Refresh the entry if the id already exists (id is stable on reuse now), else add.
+        match = next((e for e in existing if e.get("id") == str(aid)), None)
+        entry = {"id": str(aid), "name": str(name), "subtype": subtype, "role": role}
+        if match:
+            match.update(entry)
+        else:
             existing.append(entry)
             new_entries.append(entry)
     try:

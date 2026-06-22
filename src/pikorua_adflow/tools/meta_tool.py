@@ -658,6 +658,146 @@ def swap_ad_creative(ad_id: str, ad_account_id: str,
     return {"creative_id": new_creative_id, "ad_id": ad_id}
 
 
+# ---- Autopilot: account-wide reads + geo edits ---------------------------- #
+
+def fetch_active_campaigns(ad_account_id: str, token: str) -> list[dict]:
+    """All ACTIVE campaigns on the account: [{id, name, daily_budget, objective}].
+    daily_budget is in paise (Meta's unit). Never raises — [] on failure."""
+    acct = ad_account_id.replace("act_", "")
+    try:
+        data = _get(
+            f"act_{acct}/campaigns", token,
+            {"effective_status": json.dumps(["ACTIVE"]),
+             "fields": "id,name,daily_budget,lifetime_budget,objective,effective_status",
+             "limit": "100"},
+        )
+        return data.get("data", [])
+    except Exception:
+        return []
+
+
+def fetch_campaign_adsets(campaign_id: str, token: str) -> list[dict]:
+    """Ad sets under a campaign with their live targeting + budget + status.
+    Returns [] on failure. daily_budget is paise."""
+    try:
+        data = _get(
+            f"{campaign_id}/adsets", token,
+            {"fields": ("id,name,status,effective_status,daily_budget,"
+                        "optimization_goal,targeting"),
+             "limit": "100"},
+        )
+        return data.get("data", [])
+    except Exception:
+        return []
+
+
+def fetch_ads_with_age(campaign_id: str, token: str) -> list[dict]:
+    """Ads under a campaign with creation time (for creative-staleness checks).
+    Returns [{id, name, status, created_time}]. [] on failure."""
+    try:
+        data = _get(
+            f"{campaign_id}/ads", token,
+            {"fields": "id,name,status,effective_status,created_time", "limit": "100"},
+        )
+        return data.get("data", [])
+    except Exception:
+        return []
+
+
+def add_geo_countries(adset_id: str, iso_codes: list[str], token: str) -> bool:
+    """Union extra countries (e.g. NRI geo) into an ad set's existing geo_locations.
+    Reads the live targeting, merges, and PATCHes. Raises on hard failure."""
+    live = _get(adset_id, token, {"fields": "targeting"}).get("targeting", {}) or {}
+    geo = dict(live.get("geo_locations", {}) or {})
+    geo["countries"] = list(dict.fromkeys((geo.get("countries", []) or []) + list(iso_codes)))
+    new_targeting = dict(live)
+    new_targeting["geo_locations"] = geo
+    return update_adset_targeting(adset_id, new_targeting, token)
+
+
+def add_geo_city(adset_id: str, city_name: str, token: str, *,
+                 country: str = "IN", radius_km: int = 25) -> bool:
+    """Resolve a city by name (via the Meta targeting-search taxonomy) and union it
+    into the ad set's geo_locations.cities. Used by autopilot's geo-opportunity 'add'
+    decision. Raises if the city can't be resolved or the PATCH fails."""
+    from pikorua_adflow.tools import meta_targeting as _mt
+    cache = _mt._load_cache()
+    city = _mt._best_city(city_name, token, country, cache)
+    _mt._save_cache(cache)
+    if not city:
+        raise RuntimeError(f"Could not resolve city '{city_name}' on Meta.")
+    live = _get(adset_id, token, {"fields": "targeting"}).get("targeting", {}) or {}
+    geo = dict(live.get("geo_locations", {}) or {})
+    cities = list(geo.get("cities") or [])
+    if any(str(c.get("key")) == str(city["key"]) for c in cities):
+        return True  # already targeted
+    cities.append({"key": str(city["key"]), "radius": int(radius_km),
+                   "distance_unit": "kilometer"})
+    geo["cities"] = cities
+    new_targeting = dict(live)
+    new_targeting["geo_locations"] = geo
+    return update_adset_targeting(adset_id, new_targeting, token)
+
+
+def remove_geo_locations(adset_id: str, token: str, *, keep_city_keys: list[str] | None = None,
+                         keep_countries: list[str] | None = None) -> dict:
+    """
+    Strip wrong-market geo from an ad set, keeping only the allowed city keys /
+    countries. Returns {removed_cities: [...], removed_countries: [...], applied: bool}.
+    Used by autopilot rung 1 (e.g. an Ahmedabad property whose ad set still carries
+    Mumbai/Gurgaon pincodes). Raises on hard PATCH failure.
+    """
+    keep_city_keys = set(str(k) for k in (keep_city_keys or []))
+    keep_countries = set(str(c).upper() for c in (keep_countries or []))
+    live = _get(adset_id, token, {"fields": "targeting"}).get("targeting", {}) or {}
+    geo = dict(live.get("geo_locations", {}) or {})
+
+    removed_cities, removed_countries = [], []
+    if "cities" in geo:
+        kept = [c for c in geo["cities"] if str(c.get("key")) in keep_city_keys]
+        removed_cities = [c.get("name") or c.get("key") for c in geo["cities"]
+                          if str(c.get("key")) not in keep_city_keys]
+        if kept:
+            geo["cities"] = kept
+        else:
+            geo.pop("cities", None)
+    if "countries" in geo and keep_countries:
+        kept_c = [c for c in geo["countries"] if str(c).upper() in keep_countries]
+        removed_countries = [c for c in geo["countries"] if str(c).upper() not in keep_countries]
+        if kept_c:
+            geo["countries"] = kept_c
+        else:
+            geo.pop("countries", None)
+
+    if not (removed_cities or removed_countries):
+        return {"removed_cities": [], "removed_countries": [], "applied": False}
+    new_targeting = dict(live)
+    new_targeting["geo_locations"] = geo
+    update_adset_targeting(adset_id, new_targeting, token)
+    return {"removed_cities": removed_cities, "removed_countries": removed_countries, "applied": True}
+
+
+def add_custom_audiences(adset_id: str, token: str, *, include_ids: list[str] | None = None,
+                         exclude_ids: list[str] | None = None) -> bool:
+    """Union custom-audience include/exclude ids into an ad set's live targeting.
+    Used by autopilot rung 2 (exclusion) + rung 3 (CRM lookalike). Raises on failure."""
+    live = _get(adset_id, token, {"fields": "targeting"}).get("targeting", {}) or {}
+    new_targeting = dict(live)
+    if include_ids:
+        cur = {a.get("id") for a in (new_targeting.get("custom_audiences") or [])}
+        new_targeting["custom_audiences"] = (
+            (new_targeting.get("custom_audiences") or [])
+            + [{"id": str(i)} for i in include_ids if str(i) not in cur]
+        )
+    if exclude_ids:
+        cur = {a.get("id") for a in (new_targeting.get("excluded_custom_audiences") or [])}
+        new_targeting["excluded_custom_audiences"] = (
+            (new_targeting.get("excluded_custom_audiences") or [])
+            + [{"id": str(i)} for i in exclude_ids if str(i) not in cur]
+        )
+    return update_adset_targeting(adset_id, new_targeting, token)
+
+
 # ---- Phase 2: Meta Recommendations ---------------------------------------- #
 
 def fetch_recommendations(

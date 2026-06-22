@@ -93,6 +93,61 @@ DEFAULT_BEHAVIOURS: list[str] = [
     "Frequent international travellers",  # Meta uses British spelling
 ]
 
+# ── Clientele → targeting profile ────────────────────────────────────────────
+# Each property's buyer clientele (chosen on the campaign form) tunes the starting
+# audience: which interests lead, what age band, and whether NRI geo is implied.
+# This is the "different clientele for different projects" rule — a bungalow HNI is
+# NOT a flat buyer, so we never share one type's audience with another's.
+# `interests` here REPLACE DEFAULT_INTERESTS for that clientele (names resolved live;
+# unmatched names are skipped). `age_min/age_max` override the defaults below.
+CLIENTELE_TARGETING_MAP: dict[str, dict] = {
+    "luxury_bungalow": {
+        "label": "Luxury Bungalow / Villa",
+        "interests": [
+            "Luxury goods", "Luxury vehicles", "Private banking", "Wealth management",
+            "Fine dining", "Golf", "Interior design", "Art",
+        ],
+        "behaviours": ["Frequent international travellers"],
+        "age_min": 38, "age_max": 65,
+    },
+    "premium_apartment": {
+        "label": "Premium Apartment",
+        "interests": [
+            "Real estate investing", "Investment", "Interior design",
+            "Entrepreneurship", "Technology", "Personal finance", "Luxury goods",
+        ],
+        "behaviours": [],
+        "age_min": 28, "age_max": 50,
+    },
+    "nri_investment": {
+        "label": "NRI Investment",
+        "interests": [
+            "Real estate investing", "Investment", "Wealth management",
+            "Property", "Non-resident Indian", "Expatriate",
+        ],
+        "behaviours": ["Frequent international travellers", "Expats (All)"],
+        "age_min": 30, "age_max": 60,
+    },
+    "commercial_office": {
+        "label": "Commercial / Office",
+        "interests": [
+            "Real estate investing", "Investment", "Entrepreneurship",
+            "Small business", "Commercial property", "Business",
+        ],
+        "behaviours": ["Small business owners"],
+        "age_min": 30, "age_max": 60,
+    },
+}
+DEFAULT_CLIENTELE = "premium_apartment"
+
+
+def clientele_profile(clientele_type: str) -> dict:
+    """Return the targeting profile for a clientele type (falls back to the default)."""
+    return CLIENTELE_TARGETING_MAP.get(
+        (clientele_type or "").strip().lower(),
+        CLIENTELE_TARGETING_MAP[DEFAULT_CLIENTELE],
+    )
+
 # City radius bounds Meta enforces for kilometre targeting.
 _RADIUS_MIN_KM = 17
 _RADIUS_MAX_KM = 80
@@ -225,13 +280,19 @@ def _best_behaviour(name: str, token: str, cache: dict) -> dict | None:
 
 def build_default_audience(city: str, token: str, *, locality: str = "",
                            country: str = "IN",
-                           nri_geographies: str = "") -> dict:
+                           nri_geographies: str = "",
+                           clientele_type: str = "") -> dict:
     """
     Resolve the curated starting audience for a campaign.
 
+    `clientele_type` (luxury_bungalow | premium_apartment | nri_investment |
+    commercial_office) picks the interest/behaviour/age profile so a bungalow HNI
+    audience never leaks into a flat campaign. When omitted, the generic
+    DEFAULT_INTERESTS list is used (backward-compatible with pre-clientele runs).
+
     Returns an editable audience dict:
       {city, city_key, region, radius_km, age_min, age_max,
-       interests:[{id,name}], behaviours:[{id,name}], country}
+       interests:[{id,name}], behaviours:[{id,name}], country, clientele_type}
     city_key is None if the city couldn't be resolved (deploy then falls back to
     country-level — see meta_tool.build_targeting_spec).
     """
@@ -239,14 +300,24 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
 
     resolved_city = _best_city(city, token, country, cache) if city and city != "India" else None
 
+    if clientele_type:
+        profile = clientele_profile(clientele_type)
+        interest_names = profile["interests"]
+        behaviour_names = profile["behaviours"]
+        age_min, age_max = profile["age_min"], profile["age_max"]
+    else:
+        interest_names = DEFAULT_INTERESTS
+        behaviour_names = DEFAULT_BEHAVIOURS
+        age_min, age_max = DEFAULT_AGE_MIN, DEFAULT_AGE_MAX
+
     interests = []
-    for nm in DEFAULT_INTERESTS:
+    for nm in interest_names:
         hit = _best_interest(nm, token, cache)
         if hit and hit not in interests:
             interests.append(hit)
 
     behaviours = []
-    for nm in DEFAULT_BEHAVIOURS:
+    for nm in behaviour_names:
         try:
             hit = _best_behaviour(nm, token, cache)
         except RuntimeError:
@@ -264,11 +335,12 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
         "city_key": resolved_city["key"] if resolved_city else None,
         "region": resolved_city.get("region", "") if resolved_city else "",
         "radius_km": DEFAULT_RADIUS_KM,
-        "age_min": DEFAULT_AGE_MIN,
-        "age_max": DEFAULT_AGE_MAX,
+        "age_min": age_min,
+        "age_max": age_max,
         "interests": interests,
         "behaviours": behaviours,
         "nri_countries": nri_countries,
+        "clientele_type": (clientele_type or "").strip().lower() or DEFAULT_CLIENTELE,
     }
 
 
@@ -328,6 +400,53 @@ def build_targeting_spec(audience: dict) -> dict:
         spec["excluded_custom_audiences"] = exc
 
     return spec
+
+
+# ── CRM-profile → Meta-interest mapping (autopilot rung 7) ───────────────────
+# Maps the industries crm_analytics.top_converting_profiles() produces onto Meta
+# interest names. Used to lean targeting toward whatever profile actually converts
+# for THIS campaign's clientele — never across clienteles.
+_INDUSTRY_TO_INTERESTS: dict[str, list[str]] = {
+    "IT/Tech": ["Technology", "Software", "Information technology"],
+    "Finance/Banking": ["Investment", "Personal finance", "Private banking"],
+    "Business/Entrepreneur": ["Entrepreneurship", "Small business", "Business"],
+    "Medical/Healthcare": ["Medicine", "Health care"],
+    "Real Estate": ["Real estate investing", "Property"],
+    "Government/PSU": ["Investment", "Wealth management"],
+    "NRI": ["Non-resident Indian", "Real estate investing", "Investment"],
+    "Retired": ["Wealth management", "Investment"],
+}
+
+
+def interests_from_crm_profiles(top_profiles: list[dict], token: str,
+                                cache: dict | None = None, limit: int = 4) -> list[dict]:
+    """
+    Resolve Meta interest {id,name} dicts from CRM top-converting profiles.
+
+    `top_profiles` is the output of crm_analytics.top_converting_profiles() —
+    each has profile.industry. We map those industries to interest names and
+    resolve the best Meta match, highest-quality profile first. Returns at most
+    `limit` resolved interests, de-duplicated. Never raises.
+    """
+    cache = _load_cache() if cache is None else cache
+    out: list[dict] = []
+    seen_ids: set[str] = set()
+    for prof in top_profiles or []:
+        industry = (prof.get("profile", {}) or {}).get("industry", "")
+        for nm in _INDUSTRY_TO_INTERESTS.get(industry, []):
+            try:
+                hit = _best_interest(nm, token, cache)
+            except RuntimeError:
+                hit = None
+            if hit and hit["id"] not in seen_ids:
+                out.append(hit)
+                seen_ids.add(hit["id"])
+            if len(out) >= limit:
+                break
+        if len(out) >= limit:
+            break
+    _save_cache(cache)
+    return out
 
 
 def audience_summary(audience: dict) -> str:

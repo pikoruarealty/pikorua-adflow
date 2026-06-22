@@ -37,5 +37,10 @@
   "behaviour::frequent international travellers": {
     "id": "6022788483583",
     "name": "Frequent international travellers"
+  },
+  "city::IN::surat": {
+    "key": "1044419",
+    "name": "Surat",
+    "region": "Gujarat"
   }
 }

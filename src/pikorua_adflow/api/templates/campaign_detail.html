@@ -810,11 +810,36 @@ function renderPublished() {
   api('/meta-previews/' + RUN_ID).then(d => {
     if (!(d.previews || []).length) return;
     const root = document.getElementById('tab-audience');
-    let html = '<div class="mt-10"><h3 class="font-headline text-xl mb-3">Published ads</h3><div class="flex gap-4 flex-wrap">';
+    let html = '<div class="mt-10"><div class="flex items-center justify-between mb-3">'
+      + '<h3 class="font-headline text-xl">Published ads</h3>'
+      + '<button id="refresh-live-btn" onclick="refreshLive()" class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary transition-colors">Refresh live ads</button>'
+      + '</div>'
+      + '<p class="text-sm text-on-surface-variant mb-3">Pushes the current images &amp; copy onto the live ads in place — same ad set, targeting, budget and delivery history. No new campaign is created.</p>'
+      + '<div id="refresh-live-status" class="text-sm mb-3"></div>'
+      + '<div class="flex gap-4 flex-wrap">';
     d.previews.forEach(p => { (p.previews || []).forEach(pv => { html += '<div class="border border-outline-variant">' + (pv.body || '') + '</div>'; }); });
     html += '</div></div>';
     root.insertAdjacentHTML('beforeend', html);
   }).catch(() => {});
+}
+function refreshLive() {
+  const btn = document.getElementById('refresh-live-btn');
+  const el = document.getElementById('refresh-live-status');
+  const spin = '<span class="inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin align-middle"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Refreshing…'; }
+  if (el) el.innerHTML = '<span class="text-on-surface-variant">Pushing fresh creative to your live ads…</span>';
+  api('/refresh-creatives/' + RUN_ID, { method: 'POST' }).then(d => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Refresh live ads'; }
+    if (d.dry_run) {
+      el.innerHTML = '<span class="text-on-surface-variant">Preview (DRY_RUN): would refresh ' + (d.would_refresh || []).length + ' live ad(s).</span>';
+      return;
+    }
+    const n = (d.refreshed || []).length, errs = (d.errors || []).map(e => e.error).join('; ');
+    el.innerHTML = '<span class="text-ok">✓ Refreshed ' + n + ' live ad(s).</span>' + (errs ? ' <span class="text-error ml-2">' + esc(errs) + '</span>' : '');
+  }).catch(e => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Refresh live ads'; }
+    el.innerHTML = '<span class="text-error">✕ ' + esc(e.message) + '</span>';
+  });
 }
 
 /* ── Optimise tab ── */

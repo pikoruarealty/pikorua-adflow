@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}PIKORUA — Autopilot{% endblock %}
+
+{% block content %}
+<header class="mb-8 border-b border-outline-variant pb-6">
+  <p class="label-caps text-outline mb-2">Self-optimising campaigns</p>
+  <h1 class="font-display text-4xl md:text-5xl">Autopilot</h1>
+  <p class="text-on-surface-variant mt-2 max-w-2xl">It watches every live campaign, fixes the safe things itself, and only asks you about the calls that move money.</p>
+</header>
+
+<div id="ap-loading" class="text-on-surface-variant py-16 text-center">
+  <span class="material-symbols-outlined animate-spin align-middle">progress_activity</span>
+  <span class="align-middle ml-2">Reading your campaigns…</span>
+</div>
+
+<div id="ap-error" class="hidden border border-error/40 bg-error/5 text-error p-5 mb-8"></div>
+
+<div id="ap-body" class="hidden space-y-10">
+
+  <!-- Zone 1 — the one number -->
+  <section id="ap-hero" class="bg-surface-container-low border border-outline-variant p-8 text-center">
+    <p id="ap-hero-label" class="label-caps text-outline mb-2">Cost per quality lead</p>
+    <p id="ap-hero-value" class="font-display text-6xl text-primary">—</p>
+    <p id="ap-hero-sub" class="text-on-surface-variant mt-3"></p>
+  </section>
+
+  <!-- Zone 2 — what I did for you -->
+  <section>
+    <h2 class="font-headline text-2xl mb-1">What I did for you</h2>
+    <p class="text-sm text-on-surface-variant mb-4">Safe fixes applied automatically. Undo any of them.</p>
+    <div id="ap-did" class="space-y-3"></div>
+    <p id="ap-did-empty" class="hidden text-on-surface-variant text-sm">Nothing needed fixing automatically — your targeting basics look clean.</p>
+  </section>
+
+  <!-- Zone 3 — needs your call -->
+  <section>
+    <h2 class="font-headline text-2xl mb-1">Needs your call</h2>
+    <p class="text-sm text-on-surface-variant mb-4">High-impact choices only. Pausing is always the last resort.</p>
+    <div id="ap-decisions" class="space-y-4"></div>
+    <p id="ap-decisions-empty" class="hidden text-on-surface-variant text-sm">No decisions waiting. Autopilot has it handled.</p>
+  </section>
+
+  <!-- Collapsed full numbers -->
+  <details class="border-t border-outline-variant pt-4">
+    <summary class="label-caps text-primary cursor-pointer">See full numbers</summary>
+    <div id="ap-numbers" class="mt-4 grid gap-3"></div>
+  </details>
+
+  <p id="ap-last-run" class="text-xs text-outline text-right"></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = v => (v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN'));
+
+async function apLoad(force) {
+  $('#ap-loading').classList.remove('hidden');
+  $('#ap-error').classList.add('hidden');
+  try {
+    const r = await fetch('/autopilot-data' + (force ? '?force=true' : ''));
+    const d = await r.json();
+    if (d.error) { return apErr(d.error); }
+    render(d);
+  } catch (e) {
+    apErr('Could not reach the campaigns. ' + e.message);
+  }
+}
+
+function apErr(msg) {
+  $('#ap-loading').classList.add('hidden');
+  $('#ap-body').classList.add('hidden');
+  const el = $('#ap-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function render(d) {
+  $('#ap-loading').classList.add('hidden');
+  $('#ap-body').classList.remove('hidden');
+
+  // Zone 1 — pick the account-wide headline: blend of campaigns' quality metric.
+  const camps = d.campaigns || [];
+  const withCpl = camps.filter(c => c.cpl_7d != null);
+  const totalSpend = camps.reduce((a, c) => a + (c.spend_7d || 0), 0);
+  const totalLeads = camps.reduce((a, c) => a + (c.leads_7d || 0), 0);
+  const anyQuality = camps.some(c => c.quality && c.quality.metric_used === 'quality_cpl');
+  const blendedCpl = totalLeads ? Math.round(totalSpend / totalLeads) : null;
+  $('#ap-hero-label').textContent = anyQuality ? 'Cost per quality lead' : 'Cost per lead';
+  $('#ap-hero-value').textContent = money(blendedCpl);
+  const promising = camps.reduce((a, c) => a + ((c.quality && c.quality.n_quality) || 0), 0);
+  let sub = `${camps.length} active campaign${camps.length === 1 ? '' : 's'} · ${money(Math.round(totalSpend))} spent last 7 days · ${totalLeads} lead${totalLeads === 1 ? '' : 's'}`;
+  if (promising) sub += ` · ${promising} look promising`;
+  if (!anyQuality) sub += ' · quality scoring builds as your CRM fills in';
+  $('#ap-hero-sub').textContent = sub;
+
+  // Zone 2 — what I did (applied log).
+  const did = $('#ap-did'); did.innerHTML = '';
+  const log = d.applied_log || [];
+  if (!log.length) { $('#ap-did-empty').classList.remove('hidden'); }
+  else { $('#ap-did-empty').classList.add('hidden'); }
+  log.forEach(e => {
+    const card = document.createElement('div');
+    card.className = 'border border-ok/40 bg-ok/5 p-4 flex justify-between items-start gap-4';
+    card.innerHTML = `<div>
+        <p class="font-medium">✓ ${esc(e.title)}</p>
+        <p class="text-sm text-on-surface-variant mt-1">${esc(e.detail)}</p>
+      </div>
+      <button class="label-caps text-outline hover:text-error shrink-0" data-undo="${esc(e.campaign_id)}|${esc(e.fix_type)}">Undo</button>`;
+    did.appendChild(card);
+  });
+
+  // Zone 3 — decisions.
+  const dec = $('#ap-decisions'); dec.innerHTML = '';
+  const decisions = d.decisions || [];
+  if (!decisions.length) { $('#ap-decisions-empty').classList.remove('hidden'); }
+  else { $('#ap-decisions-empty').classList.add('hidden'); }
+  decisions.forEach(f => {
+    const last = f.rung === 10;
+    const card = document.createElement('div');
+    card.className = 'border p-5 ' + (last ? 'border-error/50 bg-error/5' : 'border-outline-variant');
+    const freshHref = (f.params && f.params.run_id) ? ('/results/' + f.params.run_id) : '/portal';
+    const freshLabel = (f.params && f.params.run_id) ? 'Open campaign' : 'Open Ad Flow';
+    const act = f.action === 'fresh_creative'
+      ? `<a href="${esc(freshHref)}" class="bg-primary text-on-primary label-caps px-5 py-2 inline-block hover:bg-surface-tint">${esc(freshLabel)}</a>`
+      : `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Do it</button>`;
+    card.innerHTML = `<p class="label-caps text-outline mb-1">${esc(f.campaign_name)}</p>
+      <p class="font-headline text-xl mb-2">${esc(f.title)}</p>
+      <p class="text-sm text-on-surface-variant mb-4">${esc(f.detail)}</p>
+      <div class="flex gap-3 items-center">${act}
+        <button class="label-caps text-outline hover:text-on-surface" data-dismiss="1">Not now</button></div>`;
+    dec.appendChild(card);
+  });
+
+  // Full numbers.
+  const nums = $('#ap-numbers'); nums.innerHTML = '';
+  camps.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'border border-outline-variant p-4 text-sm grid grid-cols-2 md:grid-cols-5 gap-2';
+    row.innerHTML = `<div class="font-medium col-span-2 md:col-span-1">${esc(c.campaign_name)}</div>
+      <div>Spend: ${money(Math.round(c.spend_7d))}</div>
+      <div>Leads: ${c.leads_7d}</div>
+      <div>CPL: ${money(c.cpl_7d)}</div>
+      <div>Seen: ${c.frequency}×${c.cpl_rising ? ' · cost rising' : ''}</div>`;
+    nums.appendChild(row);
+  });
+
+  $('#ap-last-run').textContent = d.last_run ? ('Last checked ' + new Date(d.last_run).toLocaleString()) : '';
+}
+
+document.addEventListener('click', async (e) => {
+  const ap = e.target.closest('[data-apply]');
+  const un = e.target.closest('[data-undo]');
+  const di = e.target.closest('[data-dismiss]');
+  if (di) { di.closest('div.border').remove(); return; }
+  if (ap) {
+    const [cid, ft] = ap.dataset.apply.split('|');
+    ap.disabled = true; ap.textContent = 'Applying…';
+    try {
+      const r = await fetch('/autopilot-apply', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({campaign_id: cid, fix_type: ft})});
+      if (!r.ok) { const j = await r.json(); throw new Error(j.detail || 'Failed'); }
+      apLoad(true);
+    } catch (err) { ap.disabled = false; ap.textContent = 'Do it'; alert(err.message); }
+  }
+  if (un) {
+    const [cid, ft] = un.dataset.undo.split('|');
+    un.disabled = true; un.textContent = 'Undoing…';
+    try {
+      const r = await fetch('/autopilot-undo', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({campaign_id: cid, fix_type: ft})});
+      if (!r.ok) { const j = await r.json(); throw new Error(j.detail || 'Failed'); }
+      apLoad(true);
+    } catch (err) { un.disabled = false; un.textContent = 'Undo'; alert(err.message); }
+  }
+});
+
+apLoad(false);
+</script>
+{% endblock %}

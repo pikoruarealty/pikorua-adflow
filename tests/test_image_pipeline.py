@@ -80,7 +80,10 @@ SAMPLE_ENTRY = {
 
 def test_all_variants_non_empty_and_distinct():
     variants = list_variants()
-    assert len(variants) == 5, f"Expected 5 variants, got {len(variants)}"
+    # The variant set is config-driven (image_variants.yaml) — currently 7 lifestyle/
+    # interior/exterior variants. Assert a sane floor + that every one is non-empty and
+    # distinct, rather than pinning an exact count that the config is free to grow.
+    assert len(variants) >= 5, f"Expected at least 5 variants, got {len(variants)}"
     descriptions = {vk: compose_description(vk) for vk in variants}
     for vk, desc in descriptions.items():
         assert desc.strip(), f"compose_description('{vk}') returned empty string"
@@ -90,7 +93,7 @@ def test_all_variants_non_empty_and_distinct():
             assert descs[i] != descs[j], (
                 f"Variants {variants[i]} and {variants[j]} produced identical descriptions"
             )
-    print("  PASS All 5 variant descriptions are non-empty and distinct")
+    print(f"  PASS All {len(variants)} variant descriptions are non-empty and distinct")
 
 
 def test_variant_descriptions_reference_scene_pool():
@@ -325,8 +328,10 @@ def test_build_gpt_image_prompt_palette_config_injected():
 
 
 def test_dedupe_visual_batch_enforces_distinct_palette_and_recipe():
-    # The batch distinctness pass guarantees five different palettes + recipes even when
-    # the LLM drifts to the same favourites — without pinning any design to a topic.
+    # The batch distinctness pass diversifies palettes + recipes even when the LLM drifts
+    # to the same favourites — without pinning any design to a topic. With more variants
+    # than a single variant's allowed-palette pool, perfect distinctness isn't always
+    # possible, but the pass guarantees a strong floor of distinct palettes per batch.
     from pikorua_adflow.crews.content_crew.task_composer import dedupe_visual_batch, VARIANT_KEYS
     entries = [
         {"variant_key": vk, "palette_tag": "charcoal_gold", "recipe_tag": "the_horizon_anchor"}
@@ -334,8 +339,9 @@ def test_dedupe_visual_batch_enforces_distinct_palette_and_recipe():
     ]
     deduped = dedupe_visual_batch(entries)
     palettes = [e["palette_tag"] for e in deduped]
-    assert len(set(palettes)) == len(palettes), f"palettes not distinct: {palettes}"
-    print("  PASS dedupe_visual_batch yields a distinct palette per variant")
+    floor = min(5, len(palettes))
+    assert len(set(palettes)) >= floor, f"too few distinct palettes ({len(set(palettes))}): {palettes}"
+    print(f"  PASS dedupe_visual_batch yields {len(set(palettes))} distinct palettes across {len(palettes)} variants")
 
 
 def test_build_gpt_image_prompt_includes_scene_prose():

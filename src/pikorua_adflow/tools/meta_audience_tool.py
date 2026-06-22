@@ -89,37 +89,67 @@ def _load_leads(crm_path: pathlib.Path) -> list[dict]:
     return leads
 
 
+def find_existing_audience(base_url: str, headers: dict, name: str, requests_lib) -> str | None:
+    """
+    Return the id of an existing Custom Audience with this exact name, or None.
+
+    Dedup guard: the tool used to create a brand-new Custom Audience on every CRM
+    upload, leaving the account with 4× duplicate "Good Leads" / "Bad Leads" CAs and
+    spreading the CRM data thin. Callers reuse the existing CA (and just refresh its
+    members) instead of minting another. Never raises — returns None on any failure.
+    """
+    try:
+        resp = requests_lib.get(
+            f"{base_url}/customaudiences",
+            params={"fields": "id,name", "limit": 200},
+            headers=headers, timeout=30,
+        )
+        if not resp.ok:
+            return None
+        for row in resp.json().get("data", []):
+            if (row.get("name") or "").strip().lower() == name.strip().lower():
+                return str(row["id"])
+    except Exception:
+        pass
+    return None
+
+
 def _create_custom_audience(base_url: str, headers: dict, name: str, description: str,
                              leads: list[dict], requests_lib) -> tuple[str | None, int, str | None]:
     """
-    Create a Meta Custom Audience from a list of hashed leads.
-    Returns (audience_id, rows_uploaded, error_message).
-    """
-    ca_payload = {
-        "name": name,
-        "subtype": "CUSTOM",
-        "customer_file_source": "USER_PROVIDED_ONLY",
-        "description": description,
-    }
-    ca_resp = requests_lib.post(
-        f"{base_url}/customaudiences", json=ca_payload, headers=headers, timeout=30
-    )
-    if not ca_resp.ok:
-        try:
-            err = ca_resp.json().get("error", {})
-            subcode = err.get("error_subcode")
-            msg = err.get("message", ca_resp.text)
-            if subcode == 33:
-                msg = (
-                    "Ad account not found or your access token doesn't have permission for it. "
-                    "Check that META_AD_ACCOUNT_ID matches the account shown in Meta Business Suite, "
-                    "and that the token has ads_management permission."
-                )
-        except Exception:
-            msg = ca_resp.text
-        return None, 0, msg
+    Create (or reuse) a Meta Custom Audience from a list of hashed leads.
 
-    ca_id = ca_resp.json().get("id")
+    If a Custom Audience with the same name already exists it is REUSED — its member
+    list is refreshed rather than creating a duplicate. Returns
+    (audience_id, rows_uploaded, error_message).
+    """
+    ca_id = find_existing_audience(base_url, headers, name, requests_lib)
+    if not ca_id:
+        ca_payload = {
+            "name": name,
+            "subtype": "CUSTOM",
+            "customer_file_source": "USER_PROVIDED_ONLY",
+            "description": description,
+        }
+        ca_resp = requests_lib.post(
+            f"{base_url}/customaudiences", json=ca_payload, headers=headers, timeout=30
+        )
+        if not ca_resp.ok:
+            try:
+                err = ca_resp.json().get("error", {})
+                subcode = err.get("error_subcode")
+                msg = err.get("message", ca_resp.text)
+                if subcode == 33:
+                    msg = (
+                        "Ad account not found or your access token doesn't have permission for it. "
+                        "Check that META_AD_ACCOUNT_ID matches the account shown in Meta Business Suite, "
+                        "and that the token has ads_management permission."
+                    )
+            except Exception:
+                msg = ca_resp.text
+            return None, 0, msg
+
+        ca_id = ca_resp.json().get("id")
 
     has_email = any("email" in lead for lead in leads)
     has_phone = any("phone" in lead for lead in leads)
@@ -296,24 +326,33 @@ def upload_crm_split_audiences(
         else:
             result["good_leads_audience_id"] = good_ca_id
             result["good_leads_uploaded"] = good_count
-            # Create Lookalike from good leads
-            lal_payload = {
-                "name": f"PIKORUA Lookalike — Good Leads — {','.join(target_countries)}",
-                "subtype": "LOOKALIKE",
-                "origin_audience_id": good_ca_id,
-                "lookalike_spec": {
-                    "type": "similarity",
-                    "country": target_countries[0],
-                    "ratio": 0.01,
-                },
-            }
-            lal_resp = requests.post(
-                f"{base_url}/customaudiences", json=lal_payload,
-                headers=auth_headers, timeout=30,
-            )
-            if lal_resp.ok:
+            # Create Lookalike from good leads (reuse if one with this name exists).
+            lal_name = f"PIKORUA Lookalike — Good Leads — {','.join(target_countries)}"
+            existing_lal = find_existing_audience(base_url, auth_headers, lal_name, requests)
+            if existing_lal:
+                result["good_leads_lookalike_id"] = existing_lal
+                result["good_lookalike_name"] = lal_name
+                lal_resp = None
+            else:
+                lal_payload = {
+                    "name": lal_name,
+                    "subtype": "LOOKALIKE",
+                    "origin_audience_id": good_ca_id,
+                    "lookalike_spec": {
+                        "type": "similarity",
+                        "country": target_countries[0],
+                        "ratio": 0.01,
+                    },
+                }
+                lal_resp = requests.post(
+                    f"{base_url}/customaudiences", json=lal_payload,
+                    headers=auth_headers, timeout=30,
+                )
+            if lal_resp is None:
+                pass
+            elif lal_resp.ok:
                 result["good_leads_lookalike_id"] = lal_resp.json().get("id")
-                result["good_lookalike_name"] = lal_payload["name"]
+                result["good_lookalike_name"] = lal_name
             else:
                 try:
                     lal_err = lal_resp.json().get("error", {}).get("message", lal_resp.text)

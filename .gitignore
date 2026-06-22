@@ -41,3 +41,11 @@ graphify-out/
 .idea/
 logs/*.log
 CLIENT_REQUIREMENTS.md
+
+# Local-only scratch at the repo root: manual LLM runs, ad-hoc pipeline tests, and
+# generated prompt dumps. Throwaway dev artifacts — not part of the package.
+# Leading slash anchors these to the root so the real tests/ suite is untouched.
+/_manual_llm_outputs*.py
+/test_*.py
+/*_prompts*.txt
+/tasklist.md
