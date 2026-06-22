@@ -589,7 +589,10 @@ def _build_typography_block(
         price_cr = str(brief.get("price_cr") or "").strip()
         config_v = str(brief.get("config") or "").strip()
         sample_ready = bool(brief.get("sample_ready"))
+        # entry.badge_cta takes priority so the typography block and composition_notes
+        # always agree on badge wording — prevents mismatched text wrapping in the pill.
         sample_cta = (
+            entry.get("badge_cta") or
             brief.get("sample_ready_cta") or
             f"Sample {brief.get('property_type','Apartment')} Ready"
         ).strip().upper()
@@ -621,19 +624,34 @@ def _build_typography_block(
             lines.append(f'Price: "\u20b9{price_cr} Cr ONWARDS"')
         if sample_ready:
             lines.append(f'Sample badge: "{sample_cta}"')
-        spec_items = []
+        # Apartment configuration (BHK) is a PRIMARY photo-zone element — it is kept
+        # OUT of the footer spec list so the model never double-places or shrinks it.
         if config_combined:
-            spec_items.append(config_combined)
-        spec_items.extend(usp_parts)
+            lines.append(
+                f'Apartment configuration (render as a LARGE standalone element in the '
+                f'photo zone — never in the footer, never a corner label): "{config_combined}"'
+            )
+        # Footer / supporting specs: USPs only. BHK excluded above. Fill-to-3 applies
+        # to THESE items so a strip/grid that IS rendered carries balanced content.
+        spec_items = list(usp_parts)
         if brief.get("cheque_only"):
             spec_items.append("100% CHEQUE PAYMENT")
+        # Pad to at least 3 spec items for sparse briefs — same fallback pool as
+        # the legacy icon_grid_strip / compact_spec_row paths. Only relevant WHEN the
+        # composition_notes render a strip/grid; floating-line footers ignore the 3rd.
+        _COMP_FOOTER_DEFAULTS = ["GATED COMMUNITY", "SIGNATURE LIVING", "ELEVATED SPACES"]
+        _used_spec = [s.upper() for s in spec_items]
+        for _d in _COMP_FOOTER_DEFAULTS:
+            if len(spec_items) >= 3:
+                break
+            if _d.upper() not in _used_spec:
+                spec_items.append(_d)
+                _used_spec.append(_d.upper())
         if spec_items:
-            lines.append(f'Specification items: {", ".join(repr(s) for s in spec_items)}')
             lines.append(
-                "(CRITICAL: The apartment configuration — e.g. \"4 & 5 BHK\" — is PRIMARY "
-                "buying information, NOT a watermark or corner label. It must appear at a "
-                "legible, prominent size in the focal composition. Never render it as tiny "
-                "corner text, a barely-visible superscript, or smaller than supporting spec text.)"
+                f'Footer / supporting specs (only if the composition renders a strip or '
+                f'icon grid; a floating spec line may use just the first two): '
+                f'{", ".join(repr(s) for s in spec_items)}'
             )
         lines.append("")
         lines.append("Do not alter any wording. Do not render any text not listed above.")
@@ -806,7 +824,7 @@ def _build_typography_block(
                     "",
                 ]
                 badge_rendered = True
-            _LUXURY_FOOTER_DEFAULTS_SPEC = ["GATED COMMUNITY", "PRIVATE LOBBY", "CONCIERGE SERVICES"]
+            _LUXURY_FOOTER_DEFAULTS_SPEC = ["GATED COMMUNITY", "SIGNATURE LIVING", "ELEVATED SPACES"]
             spec_parts: list[str] = []
             if config_val:
                 spec_parts.append(config_combined)
@@ -818,7 +836,7 @@ def _build_typography_block(
             # Pad to at least 2 items when brief is sparse
             _used_spec = [s.upper() for s in spec_parts]
             for _d in _LUXURY_FOOTER_DEFAULTS_SPEC:
-                if len(spec_parts) >= 2:
+                if len(spec_parts) >= 3:
                     break
                 if _d.upper() not in _used_spec:
                     spec_parts.append(_d)
@@ -839,7 +857,7 @@ def _build_typography_block(
         elif style == "icon_grid_strip":
             # Icon-grid strip: amenities/features as icon+label columns separated by gold rules.
             # Price stays in the standalone Pricing Module above — not repeated here.
-            _LUXURY_FOOTER_DEFAULTS = ["GATED COMMUNITY", "PRIVATE LOBBY", "CONCIERGE SERVICES"]
+            _LUXURY_FOOTER_DEFAULTS = ["GATED COMMUNITY", "SIGNATURE LIVING", "ELEVATED SPACES"]
             grid_items: list[str] = []
             if config_val:
                 grid_items.append(config_combined)
@@ -852,7 +870,7 @@ def _build_typography_block(
             # Pad to at least 2 items with always-true luxury attributes when brief is sparse
             _used = [g.upper() for g in grid_items]
             for _d in _LUXURY_FOOTER_DEFAULTS:
-                if len(grid_items) >= 2:
+                if len(grid_items) >= 3:
                     break
                 if _d.upper() not in _used:
                     grid_items.append(_d)
@@ -1005,6 +1023,14 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
         "apartment size in square feet — NOT the price. The price is Rs 3 Cr. Treat these as "
         "two entirely separate elements in different positions.\n"
         "• NEVER: thin serifs, light weights, rounded soft fonts, or any font from a presentation deck.\n"
+        "• EDITORIAL ACCENTS (optional, scene-permitting): Where the palette and composition "
+        "genuinely support it, tasteful typographic accents add craft and warmth — for example: "
+        "thin gold hairlines flanking a sub-header ('— AHMEDABAD —' style), a very soft "
+        "drop shadow on a photo-zone callout to lift it from a busy background, a refined "
+        "stroke weight or fine outline on a display serif that complements the scene palette. "
+        "Use these as editorial choices, not as decoration for its own sake. "
+        "Never apply them uniformly to every element — one or two accents per ad, placed where "
+        "they add visual richness without cluttering the composition.\n"
     )
 
     # composition_notes — scene-specific creative direction written by the visual_prompter.
@@ -1052,6 +1078,42 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             f"Colour tokens: {palette_section}\n\n"
             f"{_TYPEFACE_QUALITY}\n"
             f"{recipe_section}"
+            "COMPOSITIONAL DISTRIBUTION: Supporting elements do not all need to cluster at "
+            "one edge. The sample badge has no fixed corner — place it where the scene "
+            "creates natural room (mid-frame beside a figure, above a furniture grouping, "
+            "against a clear wall). Distributing elements across the frame does NOT mean "
+            "shrinking them — a distributed element is still rendered at full, prominent size. "
+            "Let the scene geometry decide placement — not a fixed template, and never a "
+            "samey skeleton (location-top → BHK-side → headline → tiny-price → footer-strip) "
+            "repeated across every variant.\n\n"
+            "PRICE & CTA PROMINENCE (non-negotiable): The price and the sample/CTA badge are "
+            "the two primary conversion elements — they must read INSTANTLY, at a single "
+            "glance, from across a room. 'Prominent' means BOTH large AND high-contrast: the "
+            "price is among the two or three largest text events in the whole ad (second only "
+            "to the location name), and the CTA badge text is at least as large as the footer "
+            "spec labels — never a small lozenge or a grey blob. Contrast is GUARANTEED, not "
+            "hoped for: if an element's colour does not clearly pop against the surface behind "
+            "it (gold on a mid-brown wall, pale text on pale stone, a dark pill on a bright "
+            "ceiling), give it a solid palette pill with a gold hairline, OR a strong dark "
+            "halo / soft glow behind it — do NOT leave bare text blending into a similar-toned "
+            "surface. Bare text with no backing is allowed ONLY on a genuinely high-contrast "
+            "surface (gold on a near-black floor, dark text on white). When in doubt, back it. "
+            "CENTRAL-FOCUS CONSTRAINT: both price and CTA sit within the central 70-80% focus "
+            "area — never an extreme corner, never against the frame edge.\n\n"
+            "SCENE NEGATIVE SPACE (compose room for the text): Do NOT let the furniture and "
+            "architecture fill every usable surface so the text elements get crammed into "
+            "whatever narrow strip is left — a thin side wall, a corner, a bright ceiling. "
+            "Frame and compose the scene so it deliberately holds calm, uncluttered zones, "
+            "each sized to carry the BHK, the price and the CTA at full prominent scale, and "
+            "SPREAD these elements across the frame rather than stacking two or three of them "
+            "down one edge. If the scene's natural surfaces cannot host an element at full "
+            "size, reframe wider or open a calm darker zone to make room. Negative space is a "
+            "designed asset created on purpose — not the leftover gaps between objects.\n\n"
+            "ELEMENT SPACING (intentional negative space): Every text element keeps a clear, "
+            "deliberate margin — at least 3-4% of canvas — from every other element and from "
+            "the frame edge. No two elements touch, overlap, or collide by accident. If two "
+            "would clash, reposition or resize one so the spacing reads as a designed decision, "
+            "not a crowding accident.\n\n"
             "Legibility rule: every element must be readable at arm's length. "
             "Read the scene surface before choosing a contrast method. "
             "A bright surface (pale sky, white wall, frosted glass) is an opportunity "
@@ -1077,6 +1139,19 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             "NEVER allow icons to drift independently. NEVER use uneven padding between columns. "
             "NEVER vary icon scale between columns. NEVER offset one column lower than the other. "
             "Nothing in the footer floats — every element is optically anchored within the grid.\n\n"
+            "MINIMUM SCALE (non-negotiable): Typography must be sized for actual legibility, "
+            "not theoretical legibility. Do not scale down to 'fit neatly' — scale up to "
+            "'read instantly'. Specific minimums: (1) Location name SINDHUBHAVAN ROAD must "
+            "span at least 75% of canvas width — each individual letter must be legible at "
+            "arm's length; (2) Campaign headline must be at least 3% of total canvas height — "
+            "never a whisper, always a confident statement; (3) City name (AHMEDABAD) is "
+            "readable tracked caps — never a faint micro-line; (4) Apartment configuration "
+            "(4 & 5 BHK) is a LARGE photo-zone selling point — at least ~50% of the location "
+            "name's cap height; (5) Footer text (spec strip labels) must fill the available "
+            "column width — Bold or ExtraBold, never condensed or compressed to save space; "
+            "(6) Price badge AND sample/CTA badge text must each be PROMINENT and instantly "
+            "readable at across-a-table distance — never a small fraction of the layout, never "
+            "shrunk to fit. If in doubt, size up — never down.\n\n"
             "No invented text, no logos, no watermarks. One corner kept clean for logo compositing.\n\n"
             + (
                 f"PROJECT NAME BAN: The name '{brief.get('property_name', '')}' is an internal "

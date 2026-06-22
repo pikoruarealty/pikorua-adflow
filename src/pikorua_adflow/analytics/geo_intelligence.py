@@ -115,42 +115,82 @@ def targeted_cities(targeting: dict) -> list[dict]:
             for c in (geo.get("cities") or [])]
 
 
+# ── Live signal 3: spend per geo region (Meta region breakdown) ──────────────────
+def _spend_by_region(campaign_id: str, token: str) -> dict[str, float]:
+    """
+    Fetch spend-per-region from Meta for this campaign and return a
+    {region_name_lower: spend_inr} lookup. {} on failure or missing campaign_id.
+    Region names from Meta are state/city strings (e.g. 'Gujarat', 'Ahmedabad').
+    We normalise to lower-case for fuzzy matching against CRM city strings.
+    """
+    if not campaign_id or not token:
+        return {}
+    try:
+        from pikorua_adflow.tools.meta_tool import fetch_insights_by_region
+        rows = fetch_insights_by_region(campaign_id, token)
+        return {_norm(r["region_name"]): r["spend_inr"] for r in rows if r["region_name"]}
+    except Exception:
+        return {}
+
+
 # ── The recommendation engine ──────────────────────────────────────────────────
 def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
                         crm_leads: list[dict], *, base_audience: dict | None = None,
-                        token: str = "", account: str = "") -> dict:
+                        token: str = "", account: str = "",
+                        campaign_id: str = "") -> dict:
     """
     Produce geo suggestions for one campaign. Returns:
       {
-        "trim": [{city, key, leads, quality, reason}],   # REVIEW only, never auto
-        "add":  [{city, leads, quality, reach, reason}],  # opportunity, never auto
+        "trim": [{city, key, leads, quality, spend_wasted, reason}],  # REVIEW only
+        "add":  [{city, leads, quality, reach, reason}],               # opportunity
         "has_data": bool,
       }
+
+    When campaign_id is supplied, trim cards are enriched with spend_wasted (₹ actually
+    spent on that region with no quality result) sourced from Meta's region breakdown.
+    This makes 'should we pull back from Mumbai?' a concrete ₹ decision, not an abstract
+    lead-count judgement.
 
     All suggestions are advisory (the autopilot surfaces them as approve-decisions).
     Nothing here ever removes or adds a geo on its own.
     """
     token = token or os.getenv("META_ACCESS_TOKEN", "")
     account = (account or os.getenv("META_AD_ACCOUNT_ID", "")).replace("act_", "")
+    campaign_id = campaign_id or campaign.get("id", "")
     base_audience = base_audience or {}
     perf = performance_by_city(campaign.get("name", ""), crm_leads)
     result: dict = {"trim": [], "add": [], "has_data": bool(perf)}
     if not perf:
         return result  # cold start — stay inclusive, suggest nothing
 
+    # Fetch real spend-per-region from Meta (best-effort; {} if unavailable).
+    spend_map = _spend_by_region(campaign_id, token)
+
     current = targeted_cities(targeting)
     current_keys = {_norm(c["name"]) for c in current}
 
     # TRIM (review-only): a TARGETED city with enough leads but zero quality. Framed as a
     # question — these buyers may be investors, so the human decides.
+    # When spend data is available, the card shows the actual ₹ at stake.
     for c in current:
         p = perf.get(_norm(c["name"]))
         if p and p["leads"] >= GEO_MIN_LEADS_TO_JUDGE and p["quality"] == 0:
+            # Match city name against Meta's region names (best-effort fuzzy lookup).
+            city_key = _norm(p["display"])
+            spend_wasted = spend_map.get(city_key, 0.0)
+            # Also try the raw city key string in case Meta names differ.
+            if not spend_wasted:
+                for rname, rspend in spend_map.items():
+                    if city_key in rname or rname in city_key:
+                        spend_wasted = rspend
+                        break
+            spend_str = f" ₹{spend_wasted:,.0f} spent here with no quality result." if spend_wasted else ""
             result["trim"].append({
                 "city": p["display"], "key": c["key"],
                 "leads": p["leads"], "quality": 0,
+                "spend_wasted": round(spend_wasted, 2),
                 "reason": (f"{p['leads']} leads from {p['display']} and none have become a "
-                           "quality enquiry yet. They may be investors who take longer — "
+                           f"quality enquiry yet.{spend_str} They may be investors who take longer — "
                            "keep them, or narrow this geo?"),
             })
 

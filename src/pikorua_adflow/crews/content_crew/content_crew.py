@@ -18,11 +18,16 @@ class ContentCrew:
     agents_config = "config/agents.yaml"
     tasks_config = "config/tasks.yaml"
 
-    def __init__(self, prior_visual_state: dict | None = None):
+    def __init__(self, prior_visual_state: dict | None = None,
+                 creative_priors: dict | None = None):
         self._brand_voice = load_brand_voice()
         # prior_visual_state: {variant_key: {"scene": [...], "tone": [...]}}
         # Populated by campaign_service from past RUNS for the same property_name.
         self._prior_visual_state: dict = prior_visual_state or {}
+        # creative_priors (B3): {"palette_tag": "warm_terracotta", "recipe_tag": "..."}
+        # Winning tags from creative_learning.get_priors() for this clientele type.
+        # Prepended (not mandated) so the LLM leans toward proven combinations.
+        self._creative_priors: dict = creative_priors or {}
 
         creative_model = os.getenv("CREATIVE_MODEL", "gemini/gemini-3.5-flash")
         default_model = os.getenv("MODEL", "gemini/gemini-3.1-flash-lite")
@@ -121,11 +126,21 @@ class ContentCrew:
 
     def _visual_task(self, variant_key: str) -> Task:
         ps = self._prior_visual_state.get(variant_key, {})
+        # B3: prepend creative_priors as a soft first-choice hint. The LLM still
+        # sees the full allowed_palettes/recipes list and the dedup guard still runs;
+        # this just raises the probability of the proven winning tag being picked.
+        prior_palettes = list(ps.get("palette", []))
+        prior_recipes  = list(ps.get("recipe", []))
+        if self._creative_priors.get("palette_tag"):
+            prior_palettes = [self._creative_priors["palette_tag"]] + prior_palettes
+        if self._creative_priors.get("recipe_tag"):
+            prior_recipes  = [self._creative_priors["recipe_tag"]] + prior_recipes
         desc = compose_description(
             variant_key,
             prior_scene_tags=ps.get("scene", []),
             prior_tone_tags=ps.get("tone", []),
-            prior_recipe_tags=ps.get("recipe", []),
+            prior_palette_tags=prior_palettes or None,
+            prior_recipe_tags=prior_recipes or None,
         )
         return Task(
             description=desc,

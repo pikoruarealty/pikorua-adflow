@@ -1,14 +1,35 @@
 """
-Fresh Anamika Heights prompts — Session 36.
+Fresh Anamika Heights prompts — Session 39 (distinct-skeleton + dynamic-footer rewrite).
 
-Changes applied vs previous batch:
-  - No golden/amber light unless genuinely scene-warranted (blue-hour, cool morning,
-    crisp overcast, warm tungsten interior preferred over golden-hour as default)
-  - the_architectural_dead_zone: text in shadow pools / open sky only — never on walls
-  - BHK config is PRIMARY info, same bold weight as all other footer items; never a
-    corner watermark or shrunken label
-  - All 5 variants: distinct scenes, distinct palettes, distinct recipes
-  - 5 fresh headlines not used in any prior batch
+Why this batch was redesigned (carried over from Session 38's render feedback):
+  - The previous batch converged on ONE samey skeleton (location top -> BHK side
+    block -> headline -> tiny price bottom-right -> footer strip) across all five.
+  - Price & CTA rendered tiny because the composition_notes literally said
+    "compact pill" — concrete prose beats every abstract size guard downstream.
+  - The footer never filled because the prose said "two items"; code-level
+    padding never reaches the image model. The prose is the law.
+  - Too much default golden light made the batch read cheap and uniform.
+
+What this batch fixes (each authored into the composition_notes prose itself):
+  - DISTINCT SKELETON per variant — each pins a genuinely different element
+    arrangement: location anchored in a different zone every time (foreground
+    floor / arch band / top band / left column / sky band), price & CTA in
+    different positions per scene.
+  - PRICE & CTA always PROMINENT — never "compact" as a size cue. Backing AND
+    placement decided by the surface (solid pill on a dark/busy area; bold text
+    directly on a light/clear surface with no box). Both always inside the
+    central 70-80% focus area, never jammed in a corner.
+  - DYNAMIC FOOTER — none / text-strip / icon-grid / distributed-pair /
+    distributed-line across the five. When a STRIP or GRID is used it carries
+    THREE balanced items (fill with GATED COMMUNITY); a floating/distributed
+    line keeps two and is never padded.
+  - BHK is a STANDALONE LARGE photo-zone element, never a footer label.
+  - LIGHT DIVERSITY — only V2 is warm (evening hosting). V1 cool morning,
+    V3 cool overhead daylight, V4 cool bright morning, V5 blue-hour night.
+  - INTENTIONAL SPACING — every element keeps a clear margin; nothing touches.
+  - Brand-new scenes vs the prior batch (no living-room/kitchen/foyer/study/bath
+    repeats): open-plan dining lounge, evening tasting table, overhead living
+    lounge, panelled reading nook silhouette, corner blue-hour lounge.
 
 Run:  python _manual_llm_outputs_s36.py
 """
@@ -44,355 +65,390 @@ LLM_OUTPUTS = [
 
     # =========================================================================
     # VARIANT 1 — Lifestyle / Private Retreat
-    # scene: bathroom_spa_ritual_morning_light
-    # Light: clean neutral 5200K diffused morning — zero amber, zero golden hour
-    # Recipe: the_open_room_anchor (floating pill upper-left; photo 85%+)
-    # Palette: charcoal_gold
-    # Headline: "Some mornings are worth being home for."
+    # NEW scene: open-plan dining-and-lounge, bright COOL morning
+    # Skeleton: location LOW in dark foreground floor; headline pill upper-left;
+    #           price as bold text on light surface; CTA pill on bright glazing;
+    #           footer = single floating gold line (NO strip).
+    # Palette: charcoal_gold   Recipe: the_open_room_anchor
     # =========================================================================
     {
         "variant_key":  "lifestyle_private_retreat",
         "prompt_num":   1,
         "scene_prose": (
-            "Sony A7R V, 35mm f/4, tripod at the doorway angled toward the freestanding bath "
-            "below a large frosted floor-to-ceiling window, 2.4m wide by 2m tall. 7:20am — "
-            "soft morning light through frosted glass; the shadow of a tree outside is softly "
-            "visible through it, adding organic texture. The room is bright and open — the "
-            "window fills the entire back wall above the tub. ISO 64, f/5.6. Faint chromatic "
-            "aberration at the glass frame edge.\n\n"
-            "Master bathroom, 18 feet wide. Teak-battened coffered ceiling with recessed warm "
-            "ambient lighting — the ceiling warmth is from the room's own architectural "
-            "lighting, complementing the cool morning window light. Freestanding oval tub in "
-            "honed Calacatta Viola marble, 1.8m long, positioned below the large window. "
-            "A woman reclines in the tub, eyes closed, one arm resting along the marble rim — "
-            "private, completely at ease, not aware of the camera. The tub is centred; the "
-            "dark hexagonal floor is clearly visible on both sides of it and in front of it "
-            "between the tub base and the camera — this foreground floor zone must remain "
-            "unobstructed. Full-height book-matched Calacatta Oro slabs on both side walls. "
-            "Hexagonal honed Nero Marquina tile across the entire floor — the dark field "
-            "fades naturally toward the camera as the window light doesn't reach the floor "
-            "plane fully, creating a deep natural gradient from pale marble above to near-black "
-            "tile below. Slim brushed-bronze deck-mount tap."
+            "Sony A7R V, 24mm f/4, tripod at 115cm at the threshold of an open-plan "
+            "dining-and-lounge running the full depth of the apartment toward a wall of glazing. "
+            "8:20am — bright, cool morning daylight pours straight across the room; clean even "
+            "illumination, soft long shadows, absolutely no amber. ISO 200, f/4. The space reads "
+            "airy and full of light, scale and calm established before comfort.\n\n"
+            "A 3.4m travertine dining table runs down the centre with eight sculptural oak chairs, "
+            "a low linen runner and a tall branch arrangement. To the left an open lounge: a deep "
+            "oatmeal sectional, a bouclé armchair, stacked art books on a stone plinth. A woman in "
+            "soft grey cashmere stands at a marble sideboard pouring coffee, unhurried, in profile. "
+            "Floor: wide fumed-oak herringbone, warm mid-brown, falling into deep shadow across the "
+            "foreground where the light drops off. Full-height glazing frames a green podium garden "
+            "beyond. Every surface carries material — the frame is layered, calm, completely full."
         ),
         "composition_notes": (
-            "PEOPLE DO NOT DISPLACE TEXT: The woman in the tub is a scene element only. "
-            "All text below is mandatory at full size — her presence does NOT reduce or "
-            "remove any text element. Work the typography into the natural dark floor zone "
-            "below and beside the tub.\n"
-            "The editorial device: a compact floating pill anchored in the upper-left quarter. "
-            "The pill has a delicate gold hairline border and the lightest possible charcoal "
-            "frost backing — barely opaque; the marble wall behind it is still legible. "
-            "Position: 6% from the left edge, 8% from the top. "
-            "Inside the pill (headline ONLY): 'Some mornings are worth being home for.' "
-            "in conversational italic display serif, warm white, mixed-case.\n"
-            "SINDHUBHAVAN ROAD: HEAVY gold luxury display serif sitting in the natural "
-            "gradient fade zone — the photo darkens organically toward the lower 25% of the "
-            "canvas as the floor recedes from the window light. The text does not sit on a "
-            "panel; it sits in the darkness as the scene fades. Warm gold that reads like "
-            "luxury print or gold leaf — integrated into the scene, no hard bevel edges, "
-            "no reflective sheen, nothing that looks digitally pasted. "
-            "Scale: spans the full canvas width edge to edge. "
-            "Gold (#C9A84C). AHMEDABAD in small tracked geometric gold caps directly below. "
-            "'4 & 5 BHK' — compact tracked gold caps directly below 'AHMEDABAD', same gradient "
-            "zone. Three items in the floor text cluster: address → city → config. "
-            "All three items read against the dark floor; none require backing.\n"
-            "Price badge: 'FROM ₹3 CR ONWARDS' — bottom-right of the photo zone just above "
-            "the spec strip. Charcoal pill (#2B2420), gold hairline border, HEAVY serif gold.\n"
-            "Sample badge: 'SAMPLE FLAT READY — COME EXPERIENCE IT' — bottom-left of photo "
-            "zone, above spec strip. Charcoal pill (#2B2420), gold hairline border.\n"
-            "Spec strip: slim solid charcoal (#2B2420), full canvas width, 7% height. "
-            "Bold tracked ALL CAPS geometric gold: "
-            "'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT'. Two items — clean and uncluttered.\n"
-            "Bottom-right corner of full canvas: kept entirely clear — logo compositing zone."
+            "PEOPLE DO NOT DISPLACE TEXT: the woman at the sideboard is a scene element only — all "
+            "text below is mandatory at full prominent size, worked around her using the room's "
+            "negative space.\n"
+            "'SINDHUBHAVAN' is one unbroken 12-character word (S-I-N-D-H-U-B-H-A-V-A-N) — no "
+            "internal slash, hyphen, space, or split.\n"
+            "DISTINCT SKELETON — this variant anchors the location LOW in the foreground floor. "
+            "The open_room_anchor headline pill: a floating rounded rectangle anchored UPPER-LEFT, "
+            "6% from the left, 7% from the top, with a clear 4% margin from every edge. Backing: "
+            "lightest charcoal frost, barely opaque, the room visible behind it; thin gold "
+            "hairline. Inside (headline ONLY): 'Mornings were made for rooms like this.' in bold "
+            "italic display serif, deep charcoal (#2B2420), mixed-case.\n"
+            "SINDHUBHAVAN ROAD: HEAVY warm-gold luxury display serif spanning 80% of canvas width, "
+            "anchored in the DARK FOREGROUND-FLOOR ZONE across the lower third — the fumed-oak "
+            "herringbone falls dark enough here to carry the letterforms with no backing. "
+            "MONUMENTAL — each individual letter legible at arm's length. Flanked by thin gold "
+            "editorial hairlines. 'AHMEDABAD' in clearly readable tracked geometric gold caps "
+            "directly below in the same floor zone — a confident line, not a faint micro-caption.\n"
+            "'4 & 5 BHK' — a STANDALONE LARGE element, NOT part of the location cluster and NOT in "
+            "any footer. Place it as a bold typographic event at roughly 46% canvas height on the "
+            "RIGHT, against the shadowed wall return beside the glazing. HEAVY gold display serif, "
+            "same family as the location name, at roughly 50% of its cap height. A primary selling "
+            "point.\n"
+            "SCENE NEGATIVE SPACE: frame this open room so the right-hand wall return and the "
+            "dark foreground floor stay calm and uncluttered — these zones carry the BHK, price "
+            "and CTA. Do NOT stack all three down the right edge; spread them and keep generous "
+            "space between each.\n"
+            "PRICE & CTA — both LARGE, both high-contrast, both central, clearly separated (not "
+            "stacked under the BHK). Price 'FROM ₹3 CR ONWARDS' anchors in the LOWER-RIGHT where "
+            "the brown wall meets the dark foreground floor at roughly 62% canvas height — a "
+            "naturally near-black zone — rendered as LARGE bold gold display text, among the "
+            "biggest elements in the ad after the location name; the dark floor gives full "
+            "contrast so no box is needed; keep clear space below it before the SINDHUBHAVAN ROAD "
+            "line. Sample badge 'SAMPLE FLAT READY' sits upper-mid at roughly 28% height as a "
+            "GENEROUSLY SIZED solid charcoal pill with a gold hairline — large enough that the "
+            "three words read instantly across a room, never a small grey lozenge lost against the "
+            "bright ceiling. Neither element is tucked into a corner.\n"
+            "Supporting specs — NO bottom strip; this bright open room must breathe. Float "
+            "'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT' as a single slim tracked gold line on a "
+            "thin gold hairline directly beneath SINDHUBHAVAN ROAD in the floor zone, part of the "
+            "same cluster, with clear spacing above and below. Two items only — do not pad a "
+            "floating line. No sign-board, no boxed strip.\n"
+            "TYPOGRAPHIC INTEGRATION: all text is flat, scene-integrated typography — no bevel, "
+            "metallic sheen, gloss, or 3D depth.\n"
+            "Top-right corner of full canvas: clear — logo compositing zone."
         ),
-        "headline":    "Some mornings are worth being home for.",
+        "headline":    "Mornings were made for rooms like this.",
         "eyebrow":     "",
         "palette_tag": "charcoal_gold",
-        "scene_tag":   "bathroom_spa_ritual_morning_light",
+        "scene_tag":   "open_plan_dining_lounge_bright_cool_morning",
         "tone_tag":    "bright_aspirational",
         "recipe_tag":  "the_open_room_anchor",
-        "logo_corner": "bottom-right",
+        "logo_corner": "top-right",
         "badge_cta":   "SAMPLE FLAT READY",
     },
 
     # =========================================================================
-    # VARIANT 2 — Lifestyle / The Social Home
-    # scene: kitchen_casual_hosting_moment
-    # Light: warm white tungsten at 3000K from recessed ceiling spotlights — interior
-    #        kitchen lighting, NOT golden-hour amber; clean and directive
-    # Recipe: the_horizon_anchor (SINDHUBHAVAN ROAD dominant in photo zone; footer = spec)
-    # Palette: navy_gold
-    # Headline: "Full floors. Not floor plans." — the PROPERTY/SPACE is the subject
+    # VARIANT 2 — Lifestyle / The Social Home  (THE ONE warm scene)
+    # NEW scene: evening tasting / dinner table seen through a plaster archway
+    # Skeleton: location HIGH in arch-reveal band; headline mid-left in reveal;
+    #           price + CTA prominent burgundy pills (dark busy surface);
+    #           footer = TEXT STRIP, three balanced items (fill-to-3).
+    # Palette: burgundy_gold   Recipe: the_golden_archway
     # =========================================================================
     {
         "variant_key":  "lifestyle_social_home",
         "prompt_num":   2,
         "scene_prose": (
-            "Sony A7R V, 28mm f/2.0, handheld at counter height from behind the island, "
-            "looking across toward the kitchen's back wall. 9pm — warm white tungsten at 3000K "
-            "from three rows of flush ceiling spotlights; clean and directive light that renders "
-            "the Statuario marble counter in sharp relief without any amber cast. ISO 400, f/2.8. "
-            "Depth of field falls off at 4 metres; the open dining zone behind goes softly out "
-            "of focus. No lens flare — the fixtures are fully recessed.\n\n"
-            "The kitchen island is 3.6m long, polished Statuario marble worktop with a honed "
-            "prep-zone inset. Two women stand at opposite ends of the island — one in a "
-            "moss-green silk blazer, one in cream wide-leg linen — arranging food casually. "
-            "A third figure, a man in a stone-grey overshirt, is half-visible over one shoulder "
-            "in the background. The back wall: bespoke matte lacquered cabinetry in deep charcoal "
-            "green, brushed-brass bar pulls. A half-sliced mango and a wine glass on the counter "
-            "— nothing else staged beyond the meal. The room is large enough that none of the "
-            "three figures appear crowded against each other."
+            "Sony A7R V, 35mm f/2.0, handheld at 150cm just outside a tall plaster archway, "
+            "looking through it into a warm dining-and-tasting space. 9:10pm — warm 2700K light "
+            "from a low linear pendant over a long table plus a backlit display niche; this is the "
+            "one deliberately warm, social, evening scene of the set. ISO 1000, f/2.0, gentle "
+            "falloff into the archway's shadowed reveal, a whisper of lens warmth at the edge.\n\n"
+            "The archway is a full-height plastered opening with a softly rounded head, its deep "
+            "reveal in warm shadow framing the room beyond. Inside: a long book-matched walnut "
+            "table set for a relaxed dinner — four guests mid-conversation, a decanter and glasses "
+            "poured, a low arrangement of figs and candles. A woman in burgundy silk, a man in "
+            "charcoal, two more in cream and slate. Behind them a backlit fluted-oak display wall "
+            "and full-height glazing onto the Ahmedabad night. Brushed-brass details, deep "
+            "upholstered chairs, layered table linen. The frame is warm, full, and lived-in — no "
+            "empty space anywhere."
         ),
         "composition_notes": (
-            "LOCATION NAME IN PHOTO ZONE (required, non-negotiable):\n"
-            "'SINDHUBHAVAN' is a single unbroken word — 12 consecutive characters (S-I-N-D-H-U-B-H-A-V-A-N) "
-            "with no internal slash, hyphen, full-stop, space, or decorative separator inserted within "
-            "the word itself. It sweeps across the upper photo zone as one continuous typographic "
-            "sequence, HEAVY or BLACK weight gold luxury serif — spanning roughly 70% of canvas width. "
-            "It sits approximately 10-15% from the top of the canvas, anchored against the "
-            "dark ceiling/soffit area of the kitchen. This is the dominant visual element of "
-            "the ad — the space and the address are the same thing.\n"
-            "'ROAD' directly below on its own line, same HEAVY weight, same gold, roughly "
-            "60% of the width of SINDHUBHAVAN. Below that: 'AHMEDABAD' in small tracked "
-            "geometric caps, gold, quieter — city as confirmation, not a banner.\n"
-            "Campaign headline 'Full floors. Not floor plans.' floats in the mid-photo zone "
-            "in bold italic display serif, warm white, at roughly 40% canvas height — the "
-            "creative provocation between the address above and the scene below.\n"
-            "Price: a refined navy pill (#0D1B2A fill, gold hairline border) anchored to the "
-            "right of the photo zone at the figures' eyeline — off-axis. Inside: 'RS 3 CR "
-            "ONWARDS' in HEAVY display serif, gold. Unmissable.\n"
-            "Sample badge: 'SAMPLE FLAT READY — SEE THE SPACE' — compact navy pill (#0D1B2A "
-            "fill, gold hairline border), upper-left corner of the photo zone. Bold geometric "
-            "sans, gold text.\n"
-            "'4 & 5 BHK' rendered boldly in the photo zone at mid-right, just to the right of "
-            "the second figure's shoulder — set against the dark charcoal cabinetry wall. "
-            "HEAVY display serif, gold — same typeface family as the headline, not geometric sans. "
-            "Large enough to read at arm's length. This is the configuration callout in the "
-            "photo zone, NOT the footer.\n"
-            "Navy footer strip (#0D1B2A), full canvas width, 10% height. Two columns separated "
-            "by a thin gold hairline. LEFT: small gold line-art icon (home/floor-plan silhouette) "
-            "above 'CLUBCLASS AMENITIES' in tracked gold caps. RIGHT: small gold icon (ruler/area) "
-            "above '3,300–6,100 SQ FT' in tracked gold caps. Clean, two items only — no storey "
-            "count, no location repeat (location is already dominant in the photo zone).\n"
-            "Top-left corner: clear for logo compositing."
+            "PEOPLE DO NOT DISPLACE TEXT: the four guests are scene elements only — all text below "
+            "is mandatory at full prominent size.\n"
+            "'SINDHUBHAVAN' is one unbroken 12-character word (S-I-N-D-H-U-B-H-A-V-A-N) — no "
+            "internal slash, hyphen, space, or split inside the word.\n"
+            "DISTINCT SKELETON — this variant anchors the location HIGH in the arch reveal. The "
+            "golden_archway device: the deep warm-shadow reveal of the plaster arch frames the "
+            "upper and left edges — this shadowed band is the typography zone, no overlay needed.\n"
+            "SINDHUBHAVAN ROAD: HEAVY gold luxury display serif spanning 78% of canvas width, "
+            "anchored across the dark arch-reveal in the upper 26% of the frame, clear of the top "
+            "edge. MONUMENTAL — each letter legible at arm's length. Flanked by thin gold editorial "
+            "hairlines. 'AHMEDABAD' in clearly readable tracked geometric gold caps below, same "
+            "zone — a confident line, not a faint caption.\n"
+            "'4 & 5 BHK' — a STANDALONE LARGE element at roughly 50% canvas height on the RIGHT, "
+            "against the warm-shadow zone beside the display wall. HEAVY gold display serif, same "
+            "family as the location name, at roughly 50% of its cap height. A primary selling "
+            "point, not a label.\n"
+            "Campaign headline 'The evening has found its address.' — bold italic display serif, "
+            "warm cream, at roughly 40% canvas height in the soft shadow of the archway reveal, "
+            "left of the figures, with clear spacing from the location name above.\n"
+            "SCENE NEGATIVE SPACE: keep the arch-reveal band, the left reveal shadow and the "
+            "foreground table edge as calm text zones; do NOT stack the BHK and the price "
+            "together on the right edge — give them separate stations with a clear vertical "
+            "gap.\n"
+            "PRICE & CTA — both LARGE, both high-contrast, both central, clearly separated. "
+            "Price 'FROM ₹3 CR ONWARDS' sits at the BOTTOM-RIGHT of the photo zone, just above "
+            "the footer strip and well clear of the BHK far above it, as a solid deep-burgundy "
+            "pill (#3A1721) with a gold hairline — among the largest elements in the ad after "
+            "the location name, reading instantly against the warm scene. Sample badge "
+            "'SAMPLE FLAT READY' mid-left at roughly 46% height in the arch-reveal shadow, a "
+            "GENEROUSLY SIZED solid burgundy pill with a gold hairline; three words rendered "
+            "large, never shrunk to fit.\n"
+            "Supporting specs — a TEXT STRIP suits this grounded, hosted evening scene. A slim "
+            "deep-burgundy footer strip (#3A1721) along the base, full width, ~9% height, sitting "
+            "clear of the price above it. THREE balanced items in evenly weighted tracked Bold "
+            "geometric gold caps, separated by small brushed-brass diamond dividers: "
+            "'CLUBCLASS AMENITIES'  ·  '3,300–6,100 SQ FT'  ·  'GATED COMMUNITY'. Intentional even "
+            "spacing, not stretched to fill width.\n"
+            "TYPOGRAPHIC INTEGRATION: flat scene-integrated typography — no bevel, sheen, gloss, "
+            "or 3D depth.\n"
+            "Bottom-right corner of full canvas: clear — logo compositing zone."
         ),
-        "headline":    "Full floors. Not floor plans.",
+        "headline":    "The evening has found its address.",
         "eyebrow":     "",
-        "palette_tag": "navy_gold",
-        "scene_tag":   "kitchen_casual_hosting_moment",
+        "palette_tag": "burgundy_gold",
+        "scene_tag":   "evening_tasting_table_through_archway",
         "tone_tag":    "dark_luxury",
-        "recipe_tag":  "the_horizon_anchor",
-        "logo_corner": "top-left",
-        "badge_cta":   "SAMPLE APARTMENT READY",
+        "recipe_tag":  "the_golden_archway",
+        "logo_corner": "bottom-right",
+        "badge_cta":   "SAMPLE FLAT READY",
     },
 
     # =========================================================================
     # VARIANT 3 — Lifestyle / Dynamic A
-    # scene: parent_and_child_reading_corner
-    # Light: soft overcast Sunday afternoon, 4000K cool-neutral diffused through
-    #        full-height living room glazing. No golden tones — clean flat magazine light.
-    # Recipe: the_zenith_gaze (bright even overhead daylight, text in open sky/ceiling zone)
-    # Palette: burgundy_gold
-    # Headline: "Built for how you actually live."
+    # NEW scene: overhead bird's-eye of an open living lounge, COOL daylight
+    # Skeleton: location in TOP marble band; headline centred on the rug;
+    #           price + CTA as bold text on light marble (no box);
+    #           footer = ICON-GRID, three columns (fill-to-3).
+    # Palette: slate_cream   Recipe: the_zenith_gaze
     # =========================================================================
     {
         "variant_key":  "lifestyle_dynamic_a",
         "prompt_num":   3,
         "scene_prose": (
-            "Sony A7R V, 35mm f/4, tripod at standing eye level slightly back from the seating "
-            "zone, shooting across the living room toward full-height glazing. 3:30pm Sunday — "
-            "soft overcast daylight at 4000K enters through a 4-metre floor-to-ceiling window; "
-            "even, flat, no direct shadows. ISO 200, f/5.6. Very slight atmospheric haze from "
-            "the glass pane creates a faint soft vignette at the far corners. "
-            "The glazing runs floor-to-ceiling with no visible curtain tracks, ceiling rails, "
-            "or mounting hardware — the glass-to-sky transition is fully clean.\n\n"
-            "The living room is 24 feet wide, herringbone European oak floor (200x1200mm, "
-            "natural oil finish). A woman in a sand-coloured linen dress sits cross-legged on "
-            "the floor beside a low walnut coffee table; a girl of about five sits in her lap, "
-            "both absorbed in a large picture book spread across the table. Three more books "
-            "fanned around them — nothing else on the floor. The sofa behind them: deep-set, "
-            "slate-grey bouclé, low profile. Through the glazing: Ahmedabad skyline diffused "
-            "by afternoon haze, sky pale silver-white. The room is entirely still."
+            "Sony A7R V, 24mm f/5.6, mounted directly overhead at 4.5m on a discreet ceiling rig, "
+            "looking straight down at a large open living lounge — a true bird's-eye plan view. "
+            "10:40am — bright, cool, even overhead daylight from a broad skylight slot and the "
+            "perimeter glazing; clean neutral light that reveals every surface texture, crisp "
+            "shadows, no amber. ISO 200, f/5.6.\n\n"
+            "Seen from above: a deep sectional sofa wraps three sides of a large hand-knotted wool "
+            "rug in soft slate and cream, a sculptural travertine coffee table at its centre "
+            "holding a low orchid and stacked books. A couple reclines on the sofa, relaxed — one "
+            "reading, one resting — small and centred within the architecture. The floor around "
+            "the rug is large-format honed Bianco marble with a fine brushed-brass inlay tracing a "
+            "slow curve. A console, a tall floor lamp, a potted olive and a folded throw fill the "
+            "corners. Every plane carries material and texture; the composition reads as a calm, "
+            "full, perfectly balanced overhead canvas."
         ),
         "composition_notes": (
-            "PEOPLE DO NOT DISPLACE TEXT: The mother and child are scene elements. "
-            "All text below is mandatory at full size — their presence does not justify "
-            "removing or reducing any text element.\n"
-            "The zenith_gaze device: the pale silver-white sky through the glazing occupies "
-            "the upper 35-40% of the canvas — this is the primary typography zone. "
-            "All dominant text lives in this bright sky/glass area, rendered with strong "
-            "contrast backing so it reads against the pale ground.\n"
-            "'SINDHUBHAVAN ROAD' — HEAVY or BLACK weight luxury display serif, spanning "
-            "roughly 65% of canvas width across the sky zone. The pale silver-white sky "
-            "is the canvas — use deep navy or deep charcoal text directly on it, no "
-            "backing panel or per-letter strip. The contrast comes from the dark letterform "
-            "against the bright sky, not from a manufactured backing. Monumental in scale. "
-            "This is the dominant visual element.\n"
-            "Below: 'AHMEDABAD' — small tracked geometric caps, same dark tone, same zone.\n"
-            "'4 & 5 BHK' — compact tracked geometric sans-serif in the sky cluster, directly "
-            "below 'AHMEDABAD'. Same deep navy/charcoal tone. This is the third item in the "
-            "sky typographic grouping: SINDHUBHAVAN ROAD (dominant) → AHMEDABAD (small) → "
-            "4 & 5 BHK (compact caps). All three read against the pale sky, no backing.\n"
-            "'Built for how you actually live.' — bold italic display serif, pure white, "
-            "floats mid-frame at roughly 50% canvas height where the glazing "
-            "frame meets the room interior. Reads cleanly against the oak floor zone.\n"
-            "Price badge: 'FROM ₹3 CR ONWARDS' — compact navy pill (#0D1B2A fill, "
-            "gold hairline border), anchored bottom-right of the photo zone above the spec strip. "
-            "HEAVY serif, gold. Unmissable.\n"
-            "Sample badge: 'SAMPLE FLAT READY — STEP INSIDE' — compact navy pill (#0D1B2A "
-            "fill, gold hairline border), bottom-left of photo zone above the spec strip.\n"
-            "Spec strip: slim navy backing (#0D1B2A), full canvas width, 7% height. "
-            "Bold tracked geometric gold: 'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT'. "
-            "Two items only — clean and legible.\n"
-            "Bottom-left corner: clear for logo compositing."
+            "PEOPLE DO NOT DISPLACE TEXT: the reclining couple are scene elements only — all text "
+            "below is mandatory at full prominent size; keep the rug and marble clear around them "
+            "for typography.\n"
+            "'SINDHUBHAVAN' is one unbroken 12-character word (S-I-N-D-H-U-B-H-A-V-A-N) — no "
+            "internal slash, hyphen, space, or split.\n"
+            "DISTINCT SKELETON — this overhead variant anchors the location in a TOP BAND. The "
+            "zenith_gaze device: the broad honed-marble border across the top of the frame is the "
+            "primary typography surface.\n"
+            "SINDHUBHAVAN ROAD: HEAVY or BLACK luxury display serif in warm slate-grey (#2A2E38), "
+            "spanning 82% of canvas width across the cool marble top band, clear of the top edge. "
+            "MONUMENTAL — individual letters legible at arm's length. 'AHMEDABAD' in clearly "
+            "readable tracked geometric caps directly below, same band — a confident line.\n"
+            "'4 & 5 BHK' — a STANDALONE LARGE element, NOT in any footer. Place it at roughly 30% "
+            "canvas height on the RIGHT, against the clear marble floor beside the sofa. HEAVY "
+            "slate display serif, same family as the location name, at roughly 50% of its cap "
+            "height. A primary selling point.\n"
+            "Campaign headline 'Some homes are best seen from above.' — bold italic display serif, "
+            "deep slate, centred on the cream rug surface at roughly 50% canvas height (the rug is "
+            "the natural headline canvas), with clear spacing around the coffee table.\n"
+            "PRICE & CTA — both LARGE, both high-contrast, both within the central focus area, "
+            "clearly separated (BHK sits high-right ~30%, price sits low-right ~70% — a wide "
+            "gap, never stacked). Price 'FROM ₹3 CR ONWARDS' on the clear marble floor: white "
+            "marble gives dark-on-light contrast, so render it as LARGE bold slate display text "
+            "directly on the marble with a faint soft shadow — among the largest elements after "
+            "the location name, no box needed. Sample badge 'SAMPLE FLAT READY' mid-left at "
+            "roughly 46% height on the marble border: also a light surface, so bold slate text "
+            "with a thin slate hairline underline, GENEROUSLY SIZED — unmissable, never a tiny "
+            "tag.\n"
+            "Supporting specs — an ICON-GRID footer suits the architectural overhead balance. A "
+            "dark slate strip (#1E2430), ~10% height, full width, sitting clear of the price "
+            "above. FOOTER GRID GEOMETRY: THREE equal columns on a strict invisible grid, each "
+            "centred on its own axis, gold icon above gold label, two thin gold vertical hairlines "
+            "at the exact column divisions, equal outer margins. LEFT: clubhouse icon + "
+            "'CLUBCLASS AMENITIES'. CENTRE: ruler icon + '3,300–6,100 SQ FT'. RIGHT: gate icon + "
+            "'GATED COMMUNITY'. Bold geometric gold caps filling each column generously.\n"
+            "TYPOGRAPHIC INTEGRATION: flat scene-integrated typography — no bevel, sheen, gloss, "
+            "or 3D depth.\n"
+            "Top-left corner of full canvas: clear — logo compositing zone."
         ),
-        "headline":    "Built for how you actually live.",
+        "headline":    "Some homes are best seen from above.",
         "eyebrow":     "",
         "palette_tag": "slate_cream",
-        "scene_tag":   "parent_and_child_reading_corner",
+        "scene_tag":   "overhead_living_lounge_cool_daylight",
         "tone_tag":    "bright_aspirational",
         "recipe_tag":  "the_zenith_gaze",
-        "logo_corner": "bottom-left",
+        "logo_corner": "top-left",
         "badge_cta":   "SAMPLE FLAT READY",
     },
 
     # =========================================================================
     # VARIANT 4 — Lifestyle / Dynamic B
-    # scene: home_office_afternoon_focus
-    # Light: late afternoon west-facing window light, 3800K warm amber slant.
-    #        This is the ONE case where warm directional light is justified —
-    #        west afternoon in a focus-oriented room; it's earned, not defaulted.
-    # Recipe: the_architectural_dead_zone (shadow zones for text, no wall projection)
-    # Palette: forest_gold
-    # Headline: "Some offices are worth commuting home to."
+    # NEW scene: panelled reading nook, figure silhouetted at a bright window,
+    #            COOL bright overcast morning (rebalanced away from warm lamp)
+    # Skeleton: location in LEFT VERTICAL COLUMN (panel shadow); headline on the
+    #           bright limestone foreground; CTA MID-FRAME above the seating
+    #           group (the user's liked "above the sofa" placement);
+    #           footer = DISTRIBUTED pair of floating lines (NO strip).
+    # Palette: forest_gold   Recipe: the_backlit_silhouette
     # =========================================================================
     {
         "variant_key":  "lifestyle_dynamic_b",
         "prompt_num":   4,
         "scene_prose": (
-            "Sony A7R V, 50mm f/3.5, tripod at seated eye level, slightly off-axis to the "
-            "right of the desk looking across toward a narrow west-facing window. 4:45pm — "
-            "warm directional sunlight at 3800K cuts a diagonal across the desk surface from "
-            "the upper-right, rendering the walnut grain in fine relief. ISO 100, f/4. A faint "
-            "lens flare at the window edge — the sun just catching the front element.\n\n"
-            "The study: a custom floor-to-ceiling walnut bookcase on the left wall, shelves "
-            "sparse (five books upright, one bronze cylindrical object, one folded document). "
-            "A wide custom walnut desk, 2.2m long, honed dark-grey Dekton surface. A man in "
-            "his early thirties, fitted charcoal linen overshirt, seated at the desk reading "
-            "a printed document — back three-quarters to camera, not aware of it. A slim "
-            "brushed-steel desk lamp (off) at the far end. The city is barely visible through "
-            "the narrow window — a vertical strip of Ahmedabad skyline, warm with afternoon "
-            "haze. Floor: 300x1200 honed dark basalt, wide-jointed. The room is designed for "
-            "one thing: uninterrupted thought."
+            "Sony A7R V, 35mm f/2.2, tripod at 130cm deep in a panelled reading nook, looking "
+            "toward a vast floor-to-ceiling picture window where a man stands silhouetted. 7:50am "
+            "— bright, cool, slightly overcast morning light floods through the glass and blows "
+            "out the sky behind him; the figure reads as a clean dark silhouette, the room's "
+            "foreground lit by soft bounced daylight. ISO 400, f/2.2, no amber, crisp and "
+            "contemplative.\n\n"
+            "The nook is lined in emerald-stained oak panelling and integrated shelving — books, a "
+            "brass globe, framed prints, a rolling library ladder. A man in a dark tailored shirt "
+            "stands at the window holding a coffee, back to camera, watching the city wake. A "
+            "deep-green velvet armchair and a leather ottoman sit on a patterned wool rug; a "
+            "brass-and-marble side table holds a folded newspaper. Floor: pale honed limestone, "
+            "brightly daylit in the foreground — a clean illuminated surface. The panelling falls "
+            "into soft shadow up the left side, while the bright window dominates the centre-right. "
+            "Layered, quietly expensive, every surface carrying material."
         ),
         "composition_notes": (
-            "PEOPLE DO NOT DISPLACE TEXT: The man at the desk is a scene element. "
-            "All text below is mandatory at full size. Work the typography into the dark "
-            "zones the scene naturally provides around and above the figure.\n"
-            "The architectural_dead_zone device: the deep shadow along the left wall "
-            "(bookcase side, away from window) and the dark basalt floor zone below the "
-            "desk both provide natural text surfaces. Text lives only here — never on any "
-            "lit wall or surface catching the afternoon light.\n"
-            "'SINDHUBHAVAN ROAD' — HEAVY gold luxury display serif, rendered in the deep "
-            "shadow zone of the upper-left (bookcase wall area), spanning roughly 55% of "
-            "canvas width. Gold (#C9A84C) against the natural dark — no backing needed if "
-            "the shadow is deep enough; add a minimal vignette only if the contrast fails. "
-            "AHMEDABAD in small tracked geometric caps directly below, same zone.\n"
-            "'Some offices are worth commuting home to.' — bold italic display serif, "
-            "warm cream, anchored just above the desk surface in the mid-frame area. "
-            "The warm afternoon light grazes above it; the headline sits in the cooler "
-            "shadow just under the light beam.\n"
-            "Price badge: 'FROM ₹3 CR ONWARDS' — compact forest-green pill (#1C3325 fill, "
-            "gold border), anchored bottom-right of the photo zone above the spec strip. "
-            "HEAVY serif, gold.\n"
-            "Sample badge: 'SAMPLE FLAT OPEN — EXPERIENCE IT' — compact forest-green pill "
-            "(#1C3325 fill, gold hairline border), bottom-left of photo zone.\n"
-            "Asymmetric spec band at very bottom, forest-green (#1C3325), 9-10% canvas height. "
-            "LEFT 40%: '4 & 5 BHK' in LARGE gold display serif — dominant, the configuration "
-            "as a typographic event in its own right. RIGHT 60%: two rows of tracked geometric "
-            "gold caps — 'CLUBCLASS AMENITIES' above, '3,300–6,100 SQ FT' below. Thin gold "
-            "vertical hairline divides left from right.\n"
-            "Top-left corner: the deep shadow zone of the bookcase wall keeps this area "
-            "compositionally clean — logo compositing zone."
+            "PEOPLE DO NOT DISPLACE TEXT: the silhouetted man is a scene element only — all text "
+            "below is mandatory at full prominent size.\n"
+            "'SINDHUBHAVAN' is one unbroken 12-character word (S-I-N-D-H-U-B-H-A-V-A-N) — no "
+            "internal slash, hyphen, space, or split.\n"
+            "DISTINCT SKELETON — this variant anchors the location in a LEFT VERTICAL COLUMN. The "
+            "backlit_silhouette device: the bright daylit limestone foreground is the headline "
+            "canvas; the dark emerald-panel shadow up the left side carries the location name. "
+            "Keep all typography off the blown-out window.\n"
+            "SINDHUBHAVAN ROAD: HEAVY gold luxury display serif set as a strong upper-left presence "
+            "reading across the dark emerald-panelled zone, spanning at least 75% of canvas width "
+            "with a clear top and left margin. MONUMENTAL — each letter legible at arm's length; "
+            "gold integrates against the deep green with no backing. Flanked by thin gold hairlines. "
+            "'AHMEDABAD' in clearly readable tracked geometric gold caps below, same shadow "
+            "column.\n"
+            "'4 & 5 BHK' — a STANDALONE LARGE element at roughly 40% canvas height on the LEFT, "
+            "against the dark panelling beside the shelving. HEAVY gold display serif, same family "
+            "as the location name, at roughly 50% of its cap height. A primary selling point.\n"
+            "Campaign headline 'Room enough for the long view.' — bold italic display serif, gold, "
+            "on the bright daylit limestone foreground at roughly 80% canvas height where the "
+            "recipe places it, with clear spacing from the price.\n"
+            "PRICE & CTA — both LARGE, both high-contrast, both central, clearly spaced. Price "
+            "'FROM ₹3 CR ONWARDS' mid-right at roughly 58% height against the darkest panel "
+            "return beside the window (a deep-shadow zone, not the mid-tone panel): render as a "
+            "solid near-black pill (#14110E) with a gold hairline and gold text — among the "
+            "largest elements after the location name, reading instantly against the silhouette. "
+            "Sample badge 'SAMPLE FLAT READY' placed MID-FRAME at roughly 42% height just above "
+            "the armchair grouping (a CTA that sits above the seating, not in a corner): the "
+            "emerald panelling behind it is the same green family as a forest pill and would "
+            "swallow it, so use a solid NEAR-BLACK pill (#14110E) with a gold hairline and gold "
+            "text, GENEROUSLY SIZED so the three words pop clearly off the green panelling.\n"
+            "Supporting specs — DISTRIBUTED, no heavy strip; this quiet contemplative scene should "
+            "not be capped by a band. Set 'CLUBCLASS AMENITIES' and '3,300–6,100 SQ FT' as a "
+            "distributed pair of slim engraved-style gold lines, each on its own thin gold "
+            "hairline, tucked into the lower-left panel shadow with clear spacing between them. "
+            "Two items only — do not pad a distributed pair.\n"
+            "TYPOGRAPHIC INTEGRATION: flat scene-integrated typography — no bevel, sheen, gloss, "
+            "or 3D depth.\n"
+            "Bottom-left corner of full canvas: clear — logo compositing zone."
         ),
-        "headline":    "Some offices are worth commuting home to.",
+        "headline":    "Room enough for the long view.",
         "eyebrow":     "",
         "palette_tag": "forest_gold",
-        "scene_tag":   "home_office_afternoon_focus",
-        "tone_tag":    "dark_luxury",
-        "recipe_tag":  "the_architectural_dead_zone",
-        "logo_corner": "top-left",
-        "badge_cta":   "SAMPLE FLAT OPEN",
+        "scene_tag":   "panelled_reading_nook_window_silhouette_cool_morning",
+        "tone_tag":    "bright_aspirational",
+        "recipe_tag":  "the_backlit_silhouette",
+        "logo_corner": "bottom-left",
+        "badge_cta":   "SAMPLE FLAT READY",
     },
 
     # =========================================================================
     # VARIANT 5 — Interior Signature Moment
-    # scene: study_or_reading_nook_lamp_glow
-    # Light: cool overcast ambient (6000K from clerestory) + ONE precise warm lamp
-    #        circle (2700K). The contrast between cool ambient and warm lamp IS the drama.
-    #        Not over-golden — restrained, composed, architectural.
-    # Recipe: the_glass_morphism_shield (floating pill upper-left, bright daylight)
-    # Palette: ivory_warmth
-    # Headline: "Space that earns its silence."
+    # NEW scene: corner sitting room, two glazed walls, BLUE-HOUR city horizon
+    # Skeleton: location in SKY BAND (upper navy); headline on dark marble mid;
+    #           price BOTTOM-MID as bold gold text on dark stone (no box);
+    #           CTA in sky zone; footer = single DISTRIBUTED floating line.
+    # Palette: navy_gold   Recipe: the_horizon_anchor
     # =========================================================================
     {
         "variant_key":  "interior_signature_moment",
         "prompt_num":   5,
         "scene_prose": (
-            "Sony A7R V, 50mm f/5.6, tripod at standing eye level pulled back to show the full "
-            "reading alcove in context. 3pm — soft diffused afternoon light at 5000K enters "
-            "through a tall arched opening in the left wall (2.2m wide, 2.8m tall), partially "
-            "shaded by a deep reveal; the light falls across the stone floor in a broad gentle "
-            "wash. The floor lamp (on) adds a warm 2700K circle that pools at the base of the "
-            "chaise. ISO 100, f/5.6. The contrast between the broad cool daylight wash and the "
-            "precise warm lamp pool is the entire emotional event.\n\n"
-            "The reading alcove: warm lime-plaster walls in a pale sand tone — a material that "
-            "reads premium, not raw concrete. Full-height oiled walnut bookcase on the right wall, "
-            "shelves intentionally sparse — four books stacked, one low bronze bowl, open space. "
-            "A low Italian chaise in slate-grey bouclé, profile to the camera. Floor: 900×900 "
-            "honed Pietra grey limestone with a distinct warm undertone in the afternoon light — "
-            "the joints are tight, the surface reflects softly. The floor lamp: slim powder-coated "
-            "brass, ivory shade casting the warm circle precisely downward. No person present. "
-            "The alcove reads as a room within a room — calm, considered, clearly premium."
+            "Sony A7R V, 28mm f/4, tripod at 125cm in a corner sitting room where two walls of "
+            "frameless glazing wrap the city. 7:25pm — deep blue hour; the Ahmedabad sky is rich "
+            "navy-indigo with a low warm band of city lights along the horizon, cool ambient light "
+            "inside meeting the warm horizon glow on the stone. ISO 500, f/4, a faint reflection "
+            "of the city in the polished floor. A single figure is seated low, gazing out.\n\n"
+            "The corner lounge is a pure material set-piece: a low travertine plinth bench runs "
+            "along the glazing, dressed with linen cushions; a sculptural lounge chair in cognac "
+            "leather sits angled to the view. The inner wall is a full-height book-matched grey "
+            "marble slab, mirror-polished, with a slim recessed bronze shelf holding a single "
+            "sculpture. Floor: large-format honed stone catching the city reflection. A low "
+            "brass-and-glass table holds a decanter and one glass. The glazing is frameless, the "
+            "navy horizon unbroken. Quiet, exact and expensive — the frame is full of surface, "
+            "reflection and the held blue light."
         ),
         "composition_notes": (
-            "The glass_morphism_shield device: a small, clean floating pill in the upper-left "
-            "corner of the frame. This is the ONLY text in the photo zone above the lower 15%.\n"
-            "Pill shape: soft rounded rectangle, about 22% of canvas width. Backing: very light "
-            "ivory frost — the bookcase shelves remain visible through it. Gold hairline border. "
-            "Position: 6% from the left edge, 8% from the top.\n"
-            "Inside the pill (headline ONLY): 'Space that earns its silence.' — italic display "
-            "serif, deep charcoal (#2B2420), mixed-case. The room behind the pill remains legible.\n"
-            "Photo fills 85%+ of the canvas. The lamp, chaise, bookcase, and floor are undisturbed "
-            "above the lower 15%. Let the warm lamp circle against the cool stone be uninterrupted.\n"
-            "SINDHUBHAVAN ROAD: HEAVY gold luxury display serif spanning 70%+ of canvas width, "
-            "anchored in the lower photo zone — the stone floor in the foreground, beyond the "
-            "warm lamp circle, fades toward shadow near the camera. The text sits flat IN this "
-            "shadow zone — no backing panel. Text colour per the palette — integrated into "
-            "the scene, no hard bevel, no reflective sheen, nothing that looks digitally pasted. "
-            "The contrast comes entirely from the dark floor beneath "
-            "the text. AHMEDABAD in small tracked geometric gold caps directly below it. "
-            "'4 & 5 BHK' — compact tracked gold caps directly below 'AHMEDABAD', same shadow zone. "
-            "Three items in the floor text cluster: SINDHUBHAVAN ROAD → AHMEDABAD → 4 & 5 BHK. "
-            "Each item is smaller than the one above. No backing needed. No crowding.\n"
-            "Price badge: 'FROM ₹3 CR ONWARDS' — anchored bottom-right of the photo zone, just "
-            "above the spec row. Ivory fill, gold hairline border (ivory_warmth palette — no dark "
-            "panels). HEAVY display serif in deep charcoal.\n"
-            "Sample badge: 'STEP INSIDE — SAMPLE FLAT READY' — compact ivory pill with gold border, "
-            "bottom-left of the photo zone above the spec row. Bold geometric sans, charcoal.\n"
-            "Spec row at very bottom: slim warm charcoal backing (#2B2420), 7% canvas height. "
-            "One compact row: bold tracked ALL CAPS geometric gold — "
-            "'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT'. Equal weight.\n"
-            "Bottom-right corner of full canvas: kept entirely clear — logo compositing zone."
+            "PEOPLE DO NOT DISPLACE TEXT: the seated figure is a scene element only — all text "
+            "below is mandatory at full prominent size.\n"
+            "'SINDHUBHAVAN' is one unbroken 12-character word (S-I-N-D-H-U-B-H-A-V-A-N) — no "
+            "internal slash, hyphen, space, or split inside the word.\n"
+            "DISTINCT SKELETON — this variant anchors the location in the SKY BAND. The "
+            "horizon_anchor device: the deep navy blue-hour sky in the upper 30% of the wrapping "
+            "glazing is dark enough to carry monumental letterforms with no backing; the warm "
+            "city-light horizon sits just below as a natural baseline.\n"
+            "SINDHUBHAVAN ROAD: HEAVY gold luxury display serif spanning 80% of canvas width "
+            "across the navy sky band, clear of the top edge. MONUMENTAL — each individual letter "
+            "legible at arm's length. Flanked by thin gold editorial hairlines. 'AHMEDABAD' in "
+            "clearly readable tracked geometric gold caps below, same sky zone.\n"
+            "'4 & 5 BHK' — a STANDALONE LARGE element at roughly 48% canvas height on the RIGHT, "
+            "against the dark book-matched marble veining. HEAVY gold display serif, same family "
+            "as the location name, at roughly 50% of its cap height. A primary selling point, not "
+            "a label.\n"
+            "Campaign headline 'The skyline keeps you company.' — bold italic display serif, warm "
+            "cream, at roughly 40% canvas height set against the darker marble mid-zone, never "
+            "over the bright city-light band.\n"
+            "PRICE & CTA — both LARGE, both high-contrast, both within the central focus area, "
+            "clearly spaced (price bottom-mid, CTA upper-left, BHK right — three separate "
+            "stations, never stacked). Price 'FROM ₹3 CR ONWARDS' BOTTOM-MID at roughly 72% "
+            "height on the dark polished-stone foreground: gold on near-black stone is full "
+            "contrast, so render as LARGE bold gold display text with a faint soft glow — among "
+            "the largest elements after the location name, no box needed. Sample badge "
+            "'SAMPLE FLAT READY' upper-mid-left at roughly 36% height in the navy sky zone: gold "
+            "on deep navy is full contrast, so bold gold text with a thin gold hairline "
+            "underline, GENEROUSLY SIZED — not a tiny corner tag.\n"
+            "Supporting specs — DISTRIBUTED, no strip, no box; this pristine material set-piece "
+            "deserves the most refined treatment. Float 'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ "
+            "FT' as a single slim tracked gold line on a thin gold hairline set into the dark "
+            "polished-stone foreground, just below the price, with clear spacing. Two items only "
+            "— do not pad. The base of the frame stays open polished stone.\n"
+            "TYPOGRAPHIC INTEGRATION: flat scene-integrated typography — no bevel, sheen, gloss, "
+            "or 3D depth.\n"
+            "Bottom-right corner of full canvas: clear — logo compositing zone."
         ),
-        "headline":    "Space that earns its silence.",
+        "headline":    "The skyline keeps you company.",
         "eyebrow":     "",
-        "palette_tag": "ivory_warmth",
-        "scene_tag":   "study_or_reading_nook_lamp_glow",
-        "tone_tag":    "bright_aspirational",
-        "recipe_tag":  "the_glass_morphism_shield",
+        "palette_tag": "navy_gold",
+        "scene_tag":   "corner_lounge_blue_hour_city_horizon",
+        "tone_tag":    "dark_luxury",
+        "recipe_tag":  "the_horizon_anchor",
         "logo_corner": "bottom-right",
-        "badge_cta":   "SAMPLE FLAT OPEN",
+        "badge_cta":   "SAMPLE FLAT READY",
     },
 ]
 

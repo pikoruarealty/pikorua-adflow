@@ -1,11 +1,158 @@
-# Session 36 Handoff — Campaign Autopilot
+# Session 38 Handoff — Dynamic Footer & Material Density
+
+**Date:** 2026-06-22  
+**User:** Bhavarth  
+**Milestone:** 5 new material-dense scenes generated, footer treatment made dynamic, production pipeline verified  
+**Status:** All composition_notes rewritten, task_composer rules updated, prompts ready for render test
+
+## What Was Built in Session 38
+
+### 1. Scene Rewrite — Material Density Over Minimalism
+All 5 LLM_OUTPUTS completely redesigned to fill the frame with layered material:
+- **V1** (charcoal_gold, the_open_room_anchor): Double-height living room, bright cool afternoon, full-height fluted-oak library wall, Pietra Grey marble foreground
+- **V2** (burgundy_gold, the_golden_archway): Kitchen island with Calacatta Viola marble through plaster archway, warm evening hosting, backlit onyx wine wall  
+- **V3** (slate_cream, the_zenith_gaze): Grand double-height foyer, curved staircase, crystal chandelier cascade, cool bright morning
+- **V4** (forest_gold, the_backlit_silhouette): Panelled study, dusk city silhouette, warm 2700K lamp + backlit shelving, emerald-stained oak
+- **V5** (navy_gold, the_horizon_anchor): Marble bathroom, Ahmedabad night through frameless glazing, honed stone bath, pure material set-piece
+
+**Why:** Previous scenes (dawn balcony, daybed) rendered as sparse lifestyle photos with vast empty dark interior columns. New scenes are material-dense, architectural, every surface carries weight.
+
+### 2. Footer Treatment — Dynamic Per Scene (NOT Forced 3-Column)
+**Root cause of earlier error:** I had hardcoded "FOOTER ALWAYS 3 ITEMS" in task_composer.py, forcing GATED COMMUNITY onto every footer. This is template thinking — the exact opposite of what the pipeline is designed to do.
+
+**The fix:** Removed the mandate. Composition_notes prose is the source of truth — the image model reads it, not code-level fallbacks.
+
+Each scene now gets a scene-appropriate footer treatment:
+- **V1** (bright open): Single slim tracked line ('CLUBCLASS AMENITIES · 3,300–6,100 SQ FT') on a gold hairline beneath location name in floor zone — lets marble breathe
+- **V2** (warm hosting): Slim deep-burgundy strip with diamond divider, 2 items centred — grounded but not heavyweight
+- **V3** (grand foyer): Two-column icon grid (clubhouse + ruler icons) — architectural balance suits the staircase
+- **V4** (study): Single centred line, understated — fits quiet masculine palette
+- **V5** (pure material): Float on thin hairline in dark marble foreground, no strip — respect the pristine surface
+
+### 3. Production Pipeline Rules Updated & Verified
+
+**Files modified:**
+- `task_composer.py` (3 edits):
+  - SCENE FABRICATION RULE: "The scene may only show what the property brief supports. Generic USP such as 'Clubclass Amenities' does NOT authorise showing a specific amenity."
+  - BADGE TEXT LENGTH: "Corner pill = 3-word form 'SAMPLE FLAT READY'. Only use longer phrase for mid-frame badge with 30%+ canvas width."
+  - SUPPORTING SPECS ARE DYNAMIC (replaced "FOOTER ALWAYS 3 ITEMS"): "Let item count follow the brief — usually two. Never force a third as default."
+  - MINIMUM SCALE: "Location name ≥ 75% canvas width; headline ≥ 3% height; footer fills column (Bold/ExtraBold, never condensed); price instantly readable."
+
+- `_manual_llm_outputs_s36.py` (all 5 composition_notes):
+  - Rewritten with material-dense scenes
+  - Dynamic footer prose matching scene geometry, not a forced template
+  - Explicit scale percentages (75-82% for location name, 55% for BHK in photo zone)
+  - Verified: SINDHUBHAVAN ROAD broken into 12 characters (no slashes), BHK as standalone large element
+
+- `image_service.py` (already correct from prior session):
+  - badge_cta priority: `entry.get("badge_cta")` first, then `brief.get("sample_ready_cta")`
+  - Fallback pool padding intact (dead code in composition-driven path, safe in legacy)
+  - MINIMUM SCALE rule in build_ad_prompt composition-driven path
+
+## Key Decisions & Corrections
+
+### The Mandate Mistake
+**What I did:** Added "FOOTER ALWAYS 3 ITEMS" rule, forcing GATED COMMUNITY + SIGNATURE LIVING + ELEVATED SPACES onto every footer.
+**Why it was wrong:** User correctly called this out: "you dumb piece of ai, i am telling keep the design dynamic then why are you forcing the bottom strip and 3 footer items in every recipe/composition"
+**The fix:** Removed the mandate. Composition_notes prose is the law. Code-level fallbacks (in `_build_typography_block`) don't reach the image model — only the prose does.
+
+### Footer Sparseness (2 Items)
+**User complaint:** "bottom STILL has only 2 elements!!!"
+**Root cause:** Composition_notes explicitly said "Two items, uncluttered" — the image model obeyed the prose, not my code-level padding.
+**Fix:** Rewrite composition_notes prose to specify scene-appropriate treatment. If a wide strip needs a third item to balance, add one. If a scene needs just a single line, write that. Let the scene geometry decide.
+
+### Material Density vs Minimalism
+**User feedback:** "the ads look too simple to me, doesnt give that luxury feeling and also feels too empty"
+**Root cause:** Open-room-anchor recipe (headline pill + location name + minimal layout) is elegant and editorial, but reads as lifestyle not advertising.
+**Fix:** Chose scenes that are material-dense (double-height rooms, full-height libraries, marble, panelling, lighting fixtures) and fill the frame. Every surface carries architectural weight.
+
+## What Stays the Same
+
+- **5-variant architecture** (lifestyle_private_retreat, lifestyle_social_home, lifestyle_dynamic_a/b, interior_signature_moment)
+- **Recipe system** (the_open_room_anchor, the_golden_archway, the_zenith_gaze, the_backlit_silhouette, the_horizon_anchor)
+- **Palette diversity** (5 distinct palettes per batch, deduped by dedupe_visual_batch)
+- **Composition-driven path** (composition_notes prose + scene_prose → build_ad_prompt → image model)
+- **All hard bans, scene fabrication checks, sanitizer rules** (no changes to enforcement)
+
+## Next Steps for Next Session
+
+### 1. Render the 5 New Prompts
+Generate to Ideogram/gpt-image-1 to verify:
+- Material density reads as premium, not sparse
+- Light diversity (afternoon, evening, morning, dusk, night) works
+- No dead interior columns
+
+### 2. Verify Footer Rendering Per Scene
+- **V1** should render as single line on hairline (not a strip)
+- **V2** should render as 2-item slim strip with divider (not 3-column grid)
+- **V3** should render as 2-column icon grid with hairline between
+- **V4** should render as single centred line (not a strip)
+- **V5** should render as floating text on dark marble (not a strip)
+
+### 3. Validate Key Text Elements
+- **SINDHUBHAVAN ROAD** spanning 75-82% canvas width
+- **4 & 5 BHK** as standalone large element in photo zone (not footer label)
+- **Location name:** each individual letter legible at arm's length
+- **Price badge** (bottom-right): instantly readable at across-a-table distance
+- **Sample badge** (varies per scene): 3-word form, appropriately placed
+
+### 4. Confirm No Amenity Fabrication
+- V3: no pool (brief only says "Clubclass Amenities", not a specific pool)
+- All variants: only scenes supported by brief USPs
+
+### 5. Compare to Prior Batch
+Do these feel premium/architectural vs. the sparse daybed/balcony scenes from prior run?
+
+## Design Philosophy Reminder
+
+The image pipeline is **data-driven and dynamic**, not template-based:
+- Palette picked per-scene, deduped across batch
+- Recipe is advisory; **composition_notes prose is what the image model reads**
+- Footer treatment flows from scene geometry, NOT a fixed rule
+- Every rule (SCENE FABRICATION, BADGE TEXT LENGTH, MINIMUM SCALE) serves legibility and authenticity
+
+**If the next session finds prompts still rendering as sparse or generic**, the fix is NOT another rule but a deeper rewrite of the **scene prose itself** — light direction, material specificity, spatial layering, how surfaces carry meaning.
+
+---
+
+# Session 37 Handoff — AutoOptimiser Phase B Extensions
+
+**Date:** 2026-06-22  
+**User:** Bhavarth  
+**Milestone:** Phase B AutoOptimiser Extensions Complete (B1, B2, B3, B4)  
+**Status:** All four Phase B extensions built, wired up, and logic tested successfully. The roadmap's Phase B is now complete.
+
+---
+
+## What Was Built in Session 37
+
+### 1. B4 — Per-Geo Spend Breakdown (Smart Location Budgets)
+- Added `fetch_insights_by_region` to pull exact ₹ spend per city from Meta.
+- Trim cards now show exact "spend wasted" (e.g. ₹8,400 spent on Mumbai → 0 quality leads), making location decisions data-driven rather than just based on lead count.
+
+### 2. B1 — Creative Winner/Loser Auto-Management
+- Created a comparative scoring logic in `creative_performance.py`.
+- Added a "Rung 0" to the Autopilot ladder that runs before anything else.
+- If an ad costs 2x the average cost-per-lead (with at least 1,000 impressions and 3 leads), it gets automatically paused, and the winning ad in that adset gets a boost.
+
+### 3. B2 — A/B Safe-Swap on Refresh
+- Extended the Ad Flow deployment so that clicking "refresh creatives" can safely run a new ad side-by-side with an existing one instead of just replacing it.
+- Registered A/B groups in the autopilot state tracking.
+- Autopilot runs a nightly check to resolve these tests after a 7-day window, automatically keeping the winner and pausing the loser.
+
+### 4. B3 — Clientele-Scoped Creative Learning (AI Memory)
+- Created an Exponential Moving Average (EMA) memory module (`creative_learning.py`).
+- As the autopilot runs, it tracks which color palettes and design recipes bring in high-quality leads for specific buyer types (e.g., Luxury Bungalow vs NRI).
+- When generating new ads, this memory is fed into the CrewAI agents as a "soft prior" to subtly bias the AI toward proven winning design choices.
+
+---
+
+# Session 36 Handoff — Campaign Autopilot (Core)
 
 **Date:** 2026-06-22  
 **User:** Bhavarth  
 **Milestone:** Autopilot brain complete + UI scaffolded + clientele targeting + 100% cheque flag  
-**Status:** All code in place, logic verified, routes registered. Ready for end-to-end test with live Meta account.
-
----
+**Status:** All core code in place, logic verified.
 
 ## What Was Built
 

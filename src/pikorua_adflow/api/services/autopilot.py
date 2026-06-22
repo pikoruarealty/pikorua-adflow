@@ -37,6 +37,8 @@ CPL_CEILING = 500           # ₹ — a campaign above this is bleeding
 CPL_RISING_RATIO = 1.3      # 7d/30d CPL ratio that counts as "getting worse"
 QUALITY_LEAD_MIN = 5        # matched quality leads needed to trust real quality-CPL
 COOLDOWN_DAYS = 5           # wait for Meta's learning phase before stacking changes
+AB_WINDOW_DAYS = 7          # days to run A/B pairs before declaring a winner (B2)
+AB_WINDOW_EXTENSION = 2     # days to extend once if result is inconclusive
 
 _STATE_PATH = OUTPUT_DIR / "autopilot_state.json"
 _NRI_DEFAULT = ["AE", "GB", "US", "SG"]
@@ -52,9 +54,10 @@ def _load_state() -> dict:
         data = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
         data.setdefault("campaigns", {})   # campaign_id -> {applied: [...], cooldowns: {fix_type: iso}}
         data.setdefault("last_run", None)
+        data.setdefault("ab_groups", {})   # key -> {control_ad_id, challenger_ad_id, ...}
         return data
     except Exception:
-        return {"campaigns": {}, "last_run": None}
+        return {"campaigns": {}, "last_run": None, "ab_groups": {}}
 
 
 def _save_state(state: dict) -> None:
@@ -78,6 +81,98 @@ def _in_cooldown(camp_state: dict, fix_type: str) -> bool:
         return (_now() - when) < timedelta(days=COOLDOWN_DAYS)
     except Exception:
         return False
+
+
+# ── A/B group registration + resolve (B2) ─────────────────────────────────────
+def _register_ab_group(*, run_id: str, adset_id: str,
+                       control_ad_id: str, challenger_ad_id: str) -> None:
+    """
+    Record a new A/B pair in autopilot state. Called by the refresh-creatives
+    endpoint when ab=True. The nightly resolve pass checks this table.
+    """
+    state = _load_state()
+    key = f"{run_id}|{adset_id}"
+    state.setdefault("ab_groups", {})[key] = {
+        "run_id": run_id,
+        "adset_id": adset_id,
+        "control_ad_id": control_ad_id,
+        "challenger_ad_id": challenger_ad_id,
+        "started_at": _now().isoformat(),
+        "window_days": AB_WINDOW_DAYS,
+        "extensions": 0,
+        "resolved": False,
+    }
+    _save_state(state)
+
+
+def _resolve_ab_groups(state: dict) -> list[dict]:
+    """
+    Check all unresolved A/B groups. For each group whose window has elapsed:
+      - Compare control vs challenger using creative_performance.compare_ab_pair()
+      - If a winner is clear: pause the loser, mark resolved, log to applied
+      - If inconclusive + first time: extend window by AB_WINDOW_EXTENSION days
+      - If inconclusive + already extended: surface as human decision
+    Returns a list of resolve-action dicts for the caller to surface in the UI.
+    """
+    from pikorua_adflow.analytics import creative_performance as _cp
+    from pikorua_adflow.tools import meta_tool as mt
+
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    resolutions: list[dict] = []
+
+    for key, grp in list(state.get("ab_groups", {}).items()):
+        if grp.get("resolved"):
+            continue
+        started = datetime.fromisoformat(grp["started_at"])
+        window = int(grp.get("window_days", AB_WINDOW_DAYS))
+        if (_now() - started) < timedelta(days=window):
+            continue  # window not elapsed yet
+
+        verdict = _cp.compare_ab_pair(
+            control_ad_id=grp["control_ad_id"],
+            challenger_ad_id=grp["challenger_ad_id"],
+            control_adset_id=grp["adset_id"],
+            challenger_adset_id=grp["adset_id"],
+            token=token,
+        )
+
+        if verdict["verdict"] == "challenger_wins":
+            if not dry_run:
+                try:
+                    mt.pause_variant(grp["control_ad_id"], token)
+                except Exception:
+                    pass
+            grp["resolved"] = True
+            grp["winner"] = "challenger"
+            resolutions.append({"key": key, "verdict": verdict["verdict"],
+                                 "reason": verdict["reason"], "auto": True})
+
+        elif verdict["verdict"] == "control_wins":
+            if not dry_run:
+                try:
+                    mt.pause_variant(grp["challenger_ad_id"], token)
+                except Exception:
+                    pass
+            grp["resolved"] = True
+            grp["winner"] = "control"
+            resolutions.append({"key": key, "verdict": verdict["verdict"],
+                                 "reason": verdict["reason"], "auto": True})
+
+        else:  # inconclusive
+            if grp.get("extensions", 0) < 1:
+                grp["window_days"] = window + AB_WINDOW_EXTENSION
+                grp["extensions"] = grp.get("extensions", 0) + 1
+                resolutions.append({"key": key, "verdict": "extended",
+                                    "reason": f"Extended by {AB_WINDOW_EXTENSION}d. "
+                                               + verdict["reason"], "auto": True})
+            else:
+                # Max extensions reached — surface as human decision.
+                grp["resolved"] = True
+                resolutions.append({"key": key, "verdict": "inconclusive",
+                                    "reason": verdict["reason"], "auto": False})
+    _save_state(state)
+    return resolutions
 
 
 # ── Audience registry (exclusion / lookalike ids) ─────────────────────────────
@@ -189,6 +284,58 @@ def adaptive_quality(campaign_name: str, spend_7d: float, leads_7d: int,
     }
 
 
+# ── Plain-language verdict (no jargon) ────────────────────────────────────────
+def _plain_metrics(m: dict) -> dict:
+    """Translate the raw 7-day metrics into phrases a non-marketer reads at a glance."""
+    cpl = m.get("cpl")
+    ctr = m.get("ctr") or 0
+    freq = m.get("frequency") or 0
+    seen = ("each person has seen it about once" if freq < 1.6
+            else f"each person has seen it ~{round(freq)} times")
+    clicks = ("almost nobody who sees it clicks" if ctr < 0.8
+              else "click-through is healthy" if ctr >= 1.2 else "click-through is okay")
+    return {
+        "cost_each": (f"₹{round(cpl):,} per enquiry" if cpl else "no enquiries yet"),
+        "seen": seen, "clicks": clicks,
+    }
+
+
+def _verdict(m: dict, quality: dict, best_cpl: int | None) -> dict:
+    """A one-glance verdict for a campaign: winning / okay / bleeding / idle.
+
+    Anchored to the account's OWN best live cost-per-enquiry (dynamic — not a frozen
+    number), so 'good' always means good *for this account right now*.
+    """
+    spend = m.get("spend") or 0
+    leads = m.get("leads") or 0
+    cpl = m.get("cpl")
+    ctr = m.get("ctr") or 0
+    anchor = best_cpl or BENCHMARK_CPL
+
+    if spend < 1 or leads == 0:
+        return {"state": "idle", "emoji": "⚪", "label": "Not running",
+                "line": "This campaign isn't spending or bringing enquiries right now."}
+
+    multiple = (cpl / anchor) if (cpl and anchor) else 1
+    weak_clicks = ctr and ctr < 0.8
+
+    if (cpl and multiple >= 2.5) or (cpl and cpl > CPL_CEILING and weak_clicks):
+        bits = [f"costs ₹{round(cpl):,} per enquiry"]
+        if anchor and multiple >= 1.5:
+            bits.append(f"{multiple:.1f}× your best campaign (₹{anchor:,})")
+        if weak_clicks:
+            bits.append(f"and only {ctr}% of viewers click the ad")
+        return {"state": "bleeding", "emoji": "🔴", "label": "Bleeding money",
+                "line": "This " + ", ".join(bits) + "."}
+
+    if cpl and multiple <= 1.3 and ctr >= 1.0:
+        return {"state": "winning", "emoji": "🟢", "label": "Winning",
+                "line": f"₹{round(cpl):,} per enquiry — among your best. Worth copying for new launches."}
+
+    return {"state": "okay", "emoji": "🟡", "label": "Doing okay",
+            "line": f"₹{round(cpl):,} per enquiry. Steady, with room to improve."}
+
+
 # ── The decision ladder ───────────────────────────────────────────────────────
 def _audience_from_targeting(targeting: dict) -> dict:
     """Reconstruct a light audience dict from a live ad-set targeting spec, so geo
@@ -240,6 +387,45 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
                       "fix_type": fix_type, "rung": rung, "mode": mode,
                       "title": title, "detail": detail, "action": action, "params": params})
 
+    # Rung 0 (AUTO) — creative winner/loser within a multi-variant campaign.
+    # When one variant is provably worse (CPL ≥ 2× avg AND enough data), pause it
+    # and shift 30% extra budget to the winner. This is the highest-leverage lever
+    # on a live campaign — it fires before geo fixes so budget stops going to the
+    # loser immediately.
+    # Per-ad cooldowns are tracked separately under camp_state["ad_cooldowns"].
+    from pikorua_adflow.analytics import creative_performance as _cp
+    from pikorua_adflow.tools.meta_tool import fetch_ads_with_age as _fads
+    # Only meaningful when there's more than one ad in the campaign.
+    if not _in_cooldown(camp_state, "winner_loser"):
+        try:
+            live_ads_full = [a for a in ads if (a.get("effective_status") or "") in ("ACTIVE", "")]
+            if len(live_ads_full) >= 2:
+                token = os.getenv("META_ACCESS_TOKEN", "")
+                ad_records = [
+                    {"ad_id": a["id"], "variant": i + 1, "adset_id": adset_id}
+                    for i, a in enumerate(live_ads_full)
+                ]
+                perf = _cp.compare_variants(ad_records, token)
+                if perf["has_winner_loser"]:
+                    w_cpl = perf["winner_cpl"] or 0
+                    l_cpl = perf["loser_cpl"] or 0
+                    budget_paise = campaign.get("daily_budget")
+                    cur_budget = int(int(budget_paise) / 100) if budget_paise else 1000
+                    new_budget = min(int(cur_budget * 1.30), cur_budget + 2000)
+                    add("winner_loser", 0, "auto",
+                        "Pause the weaker ad, give budget to the winner",
+                        (f"One creative costs ₹{round(l_cpl):,}/enquiry — "
+                         f"{round(l_cpl / max(w_cpl, 1), 1)}× more than the other at ₹{round(w_cpl):,}. "
+                         "Pausing it and shifting its budget to the winner."),
+                        "winner_loser",
+                        {"loser_ad_id": perf["loser_ad_id"],
+                         "winner_adset_id": perf["winner_adset_id"],
+                         "new_budget_inr": new_budget,
+                         "base_budget": cur_budget,
+                         "adset_id": adset_id})
+        except Exception:
+            pass  # never let B1 break the ladder
+
     # Rung 1 (APPROVE, NEVER auto) — dynamic geo opportunity.
     # Out-of-city buyers are often the highest-value segment (investors, diaspora,
     # relocators), so geo is NEVER changed automatically. The engine computes live
@@ -252,7 +438,8 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
     all_city_keys = [str(c.get("key")) for c in (geo.get("cities") or [])]
     try:
         georecs = _geoi.geo_recommendations(campaign, targeting, brief, crm_leads,
-                                            base_audience=base_aud)
+                                            base_audience=base_aud,
+                                            campaign_id=cid)
     except Exception:
         georecs = {"trim": [], "add": []}
     for t in georecs.get("trim", []):
@@ -330,13 +517,20 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
                               "clientele_type": (brief or {}).get("clientele_type", "")})
 
     # Rung 8 (APPROVE) — fresh creative (human makes it).
+    # Fires on weak click-through ALONE — a low CTR means the ad isn't landing,
+    # whether the cost is climbing or has simply been poor from day one. (Previously
+    # this also required cost to be rising, so a consistently weak ad never surfaced.)
     stale = ctr and ctr < 0.8
-    if stale and rising:
+    if stale:
+        only_few = "barely anyone who sees it clicks"
+        why = (f"Only {ctr}% of people who see this ad click it — {only_few}. "
+               + ("Cost is climbing too. " if rising else ""))
+        how = ("Open this campaign to regenerate and push fresh images & copy onto the live ads."
+               if run_id else
+               "This campaign wasn't built in PIKORUA, so rebuild it here to give it fresh images & copy.")
         add("fresh_creative", 8, "approve",
-            "Refresh the ad images & copy",
-            f"Click-through is low ({ctr}%) and cost is rising — the creative is tired. "
-            + ("Open this campaign to regenerate and push fresh creative onto the live ads."
-               if run_id else "Generate a new set in Ad Flow."),
+            "The ad isn't landing — refresh it",
+            why + how,
             "fresh_creative", {"campaign_id": cid, "run_id": run_id})
 
     # Rung 9 (APPROVE) — reduce budget to sustainable level.
@@ -427,7 +621,28 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
     undo: dict = {}
 
     try:
-        if action == "remove_geo":
+        if action == "winner_loser":
+            # Pause the loser ad, boost the winner's ad-set budget.
+            loser_ad_id = params.get("loser_ad_id", "")
+            winner_adset_id = params.get("winner_adset_id", "")
+            new_budget_inr = int(params.get("new_budget_inr", 0))
+            base_budget = int(params.get("base_budget", new_budget_inr))
+            if loser_ad_id:
+                mt.pause_variant(loser_ad_id, token)
+            if winner_adset_id and new_budget_inr:
+                mt.update_adset_budget(winner_adset_id, new_budget_inr, token)
+            undo = {
+                "action": "resume_loser_restore_budget",
+                "loser_ad_id": loser_ad_id,
+                "winner_adset_id": winner_adset_id,
+                "base_budget": base_budget,
+            }
+            impact = {
+                "summary": (f"Paused loser ad; winner ad-set budget → ₹{new_budget_inr:,}/day"),
+                "loser_paused": loser_ad_id,
+                "winner_budget": new_budget_inr,
+            }
+        elif action == "remove_geo":
             from . import deploy_service as ds
             before = ds.live_adset_targeting(adset_id, token)
             res = mt.remove_geo_locations(adset_id, token,
@@ -542,7 +757,15 @@ def undo_fix(campaign_id: str, fix_type: str) -> dict:
     undo = entry.get("undo", {})
     try:
         ua = undo.get("action")
-        if ua == "restore_targeting":
+        if ua == "resume_loser_restore_budget":
+            loser_ad_id = undo.get("loser_ad_id", "")
+            winner_adset_id = undo.get("winner_adset_id", "")
+            base_budget = int(undo.get("base_budget", 0))
+            if loser_ad_id:
+                mt.resume_variant(loser_ad_id, token)
+            if winner_adset_id and base_budget:
+                mt.update_adset_budget(winner_adset_id, base_budget, token)
+        elif ua == "restore_targeting":
             mt.update_adset_targeting(undo["adset_id"], undo["targeting"], token)
         elif ua == "toggle_advantage":
             mt.toggle_advantage_audience(undo["adset_id"], undo["enable"], token)
@@ -607,10 +830,27 @@ def run_autopilot(apply_safe: bool = True) -> dict:
         except Exception:
             continue
 
+    # Dynamic anchor: the best cost-per-enquiry actually being achieved on this account
+    # right now (not a frozen number). Everything is judged relative to this.
+    live_cpls = [ev["metrics"]["d7"]["cpl"] for ev in evals
+                 if ev["metrics"]["d7"]["cpl"] and ev["metrics"]["d7"]["leads"]]
+    best_cpl = int(min(live_cpls)) if live_cpls else BENCHMARK_CPL
+    star = None
+    for ev in evals:
+        m = ev["metrics"]["d7"]
+        ev["verdict"] = _verdict(m, ev["quality"], best_cpl)
+        if m["cpl"] == best_cpl and m["leads"]:
+            star = {"campaign_name": ev["campaign_name"], "cost_each": f"₹{best_cpl:,} per enquiry"}
+
+    # Severity rank per state so the action feed shows the worst problem first.
+    _SEV = {"bleeding": 0, "okay": 1, "winning": 2, "idle": 3}
+
     auto_applied: list[dict] = []
     decisions: list[dict] = []
     for ev in evals:
+        sev = _SEV.get(ev["verdict"]["state"], 1)
         for fix in ev["fixes"]:
+            fix = {**fix, "verdict": ev["verdict"]["state"], "_sev": sev}
             if fix["mode"] == "auto" and apply_safe and not dry_run:
                 res = apply_fix(fix, auto=True)
                 if res.get("ok"):
@@ -621,9 +861,30 @@ def run_autopilot(apply_safe: bool = True) -> dict:
             else:
                 decisions.append(fix)
 
-    # Keep "Needs your call" to the highest-impact 2 per the product spec.
-    decisions.sort(key=lambda f: f["rung"])
+    # Worst campaign first, then by ladder rung (targeting before budget before pause).
+    decisions.sort(key=lambda f: (f.get("_sev", 1), f["rung"]))
+
+    # CRM coverage — be honest about the signal that powers quality scoring.
+    total_matched = sum((ev["quality"].get("n_matched") or 0) for ev in evals)
+    total_quality = sum((ev["quality"].get("n_quality") or 0) for ev in evals)
+    crm_coverage = {
+        "matched": total_matched, "quality": total_quality,
+        "untagged": max(total_matched - total_quality, 0),
+        "scoring_on": total_quality >= QUALITY_LEAD_MIN,
+    }
+
     state["last_run"] = _now().isoformat()
+
+    # B2: resolve any A/B groups whose window has elapsed.
+    ab_resolutions = _resolve_ab_groups(state)
+
+    # B3: update per-clientele creative memory from this pass's quality data.
+    try:
+        from pikorua_adflow.analytics import creative_learning as _cl
+        _cl.update_memory(evals, token)
+    except Exception:
+        pass  # never let memory write break the autopilot
+
     _save_state(state)
 
     return {
@@ -631,17 +892,23 @@ def run_autopilot(apply_safe: bool = True) -> dict:
         "auto_applied": auto_applied,
         "decisions": decisions[:2],
         "all_decisions": decisions,
+        "crm_coverage": crm_coverage,
+        "star": star,
+        "best_cpl": best_cpl,
         "last_run": state["last_run"],
         "benchmark_cpl": BENCHMARK_CPL,
+        "ab_resolutions": ab_resolutions,
     }
 
 
 def _public_campaign(ev: dict) -> dict:
-    """Trim an evaluation to what the page needs (the collapsed 'full numbers')."""
+    """Trim an evaluation to what the page needs: a plain verdict up top, the raw
+    numbers underneath for anyone who wants them."""
     m = ev["metrics"]["d7"]
     return {
         "campaign_id": ev["campaign_id"], "campaign_name": ev["campaign_name"],
         "clientele_type": ev["clientele_type"], "quality": ev["quality"],
+        "verdict": ev.get("verdict", {}), "plain": _plain_metrics(m),
         "spend_7d": m["spend"], "leads_7d": m["leads"], "cpl_7d": m["cpl"],
         "ctr_7d": m["ctr"], "frequency": m["frequency"],
         "cpl_rising": ev["metrics"]["cpl_rising"], "has_brief": ev["has_brief"],

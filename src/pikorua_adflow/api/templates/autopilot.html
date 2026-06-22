@@ -3,9 +3,9 @@
 
 {% block content %}
 <header class="mb-8 border-b border-outline-variant pb-6">
-  <p class="label-caps text-outline mb-2">Self-optimising campaigns</p>
+  <p class="label-caps text-outline mb-2">Your campaigns, looked after</p>
   <h1 class="font-display text-4xl md:text-5xl">AutoOptimiser</h1>
-  <p class="text-on-surface-variant mt-2 max-w-2xl">It watches every live campaign, fixes the safe things itself, and only asks you about the calls that move money.</p>
+  <p class="text-on-surface-variant mt-2 max-w-2xl">It checks every live campaign, fixes the safe things itself, and tells you in plain words what's working, what's bleeding money, and the one thing worth doing about it.</p>
 </header>
 
 <div id="ap-loading" class="text-on-surface-variant py-16 text-center">
@@ -17,34 +17,46 @@
 
 <div id="ap-body" class="hidden space-y-10">
 
-  <!-- Zone 1 — the one number -->
+  <!-- The one number -->
   <section id="ap-hero" class="bg-surface-container-low border border-outline-variant p-8 text-center">
-    <p id="ap-hero-label" class="label-caps text-outline mb-2">Cost per quality lead</p>
+    <p id="ap-hero-label" class="label-caps text-outline mb-2">Cost per enquiry</p>
     <p id="ap-hero-value" class="font-display text-6xl text-primary">—</p>
     <p id="ap-hero-sub" class="text-on-surface-variant mt-3"></p>
+    <p id="ap-star" class="hidden text-sm text-ok mt-2"></p>
   </section>
 
-  <!-- Zone 2 — what I did for you -->
+  <!-- Honest CRM banner -->
+  <div id="ap-crm" class="hidden border border-warn/40 bg-warn/5 p-5 flex items-start gap-3">
+    <span class="material-symbols-outlined text-warn shrink-0">lightbulb</span>
+    <div>
+      <p class="font-medium" id="ap-crm-title"></p>
+      <p class="text-sm text-on-surface-variant mt-1" id="ap-crm-body"></p>
+      <a href="/crm-dashboard" class="label-caps text-primary inline-block mt-2 hover:underline">Tag leads in Lead Insights →</a>
+    </div>
+  </div>
+
+  <!-- Zone — what needs doing (ranked, worst first) -->
   <section>
-    <h2 class="font-headline text-2xl mb-1">What I did for you</h2>
+    <h2 class="font-headline text-2xl mb-1">What needs doing</h2>
+    <p class="text-sm text-on-surface-variant mb-4">Ranked by how much it's costing you — the worst problem is first.</p>
+    <div id="ap-actions" class="space-y-4"></div>
+    <p id="ap-actions-empty" class="hidden text-on-surface-variant text-sm">Nothing needs a decision right now — your live campaigns look healthy.</p>
+  </section>
+
+  <!-- Zone — what I did automatically -->
+  <section>
+    <h2 class="font-headline text-2xl mb-1">What I handled for you</h2>
     <p class="text-sm text-on-surface-variant mb-4">Safe fixes applied automatically. Undo any of them.</p>
     <div id="ap-did" class="space-y-3"></div>
-    <p id="ap-did-empty" class="hidden text-on-surface-variant text-sm">Nothing needed fixing automatically — your targeting basics look clean.</p>
+    <p id="ap-did-empty" class="hidden text-on-surface-variant text-sm">Nothing needed an automatic fix — your targeting basics look clean.</p>
   </section>
 
-  <!-- Zone 3 — needs your call -->
+  <!-- Zone — every campaign at a glance -->
   <section>
-    <h2 class="font-headline text-2xl mb-1">Needs your call</h2>
-    <p class="text-sm text-on-surface-variant mb-4">High-impact choices only. Pausing is always the last resort.</p>
-    <div id="ap-decisions" class="space-y-4"></div>
-    <p id="ap-decisions-empty" class="hidden text-on-surface-variant text-sm">No decisions waiting. AutoOptimiser has it handled.</p>
+    <h2 class="font-headline text-2xl mb-1">Every campaign at a glance</h2>
+    <p class="text-sm text-on-surface-variant mb-4">Plain verdict for each. Open one for the raw numbers.</p>
+    <div id="ap-cards" class="space-y-3"></div>
   </section>
-
-  <!-- Collapsed full numbers -->
-  <details class="border-t border-outline-variant pt-4">
-    <summary class="label-caps text-primary cursor-pointer">See full numbers</summary>
-    <div id="ap-numbers" class="mt-4 grid gap-3"></div>
-  </details>
 
   <p id="ap-last-run" class="text-xs text-outline text-right"></p>
 </div>
@@ -54,6 +66,8 @@
 <script>
 const $ = s => document.querySelector(s);
 const money = v => (v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN'));
+
+const DOT = { bleeding: '🔴', okay: '🟡', winning: '🟢', idle: '⚪' };
 
 async function apLoad(force) {
   $('#ap-loading').classList.remove('hidden');
@@ -81,22 +95,58 @@ function render(d) {
   $('#ap-loading').classList.add('hidden');
   $('#ap-body').classList.remove('hidden');
 
-  // Zone 1 — pick the account-wide headline: blend of campaigns' quality metric.
   const camps = d.campaigns || [];
-  const withCpl = camps.filter(c => c.cpl_7d != null);
+  const cov = d.crm_coverage || {};
+
+  // ── The one number ──
   const totalSpend = camps.reduce((a, c) => a + (c.spend_7d || 0), 0);
   const totalLeads = camps.reduce((a, c) => a + (c.leads_7d || 0), 0);
-  const anyQuality = camps.some(c => c.quality && c.quality.metric_used === 'quality_cpl');
   const blendedCpl = totalLeads ? Math.round(totalSpend / totalLeads) : null;
-  $('#ap-hero-label').textContent = anyQuality ? 'Cost per quality lead' : 'Cost per lead';
+  $('#ap-hero-label').textContent = cov.scoring_on ? 'Cost per quality enquiry' : 'Cost per enquiry';
   $('#ap-hero-value').textContent = money(blendedCpl);
-  const promising = camps.reduce((a, c) => a + ((c.quality && c.quality.n_quality) || 0), 0);
-  let sub = `${camps.length} active campaign${camps.length === 1 ? '' : 's'} · ${money(Math.round(totalSpend))} spent last 7 days · ${totalLeads} lead${totalLeads === 1 ? '' : 's'}`;
-  if (promising) sub += ` · ${promising} look promising`;
-  if (!anyQuality) sub += ' · quality scoring builds as your CRM fills in';
+  let sub = `${camps.length} live campaign${camps.length === 1 ? '' : 's'} · ${money(Math.round(totalSpend))} spent in the last 7 days · ${totalLeads} enquir${totalLeads === 1 ? 'y' : 'ies'}`;
   $('#ap-hero-sub').textContent = sub;
+  if (d.star) {
+    $('#ap-star').textContent = `★ Best right now: “${d.star.campaign_name}” at ${d.star.cost_each}`;
+    $('#ap-star').classList.remove('hidden');
+  } else {
+    $('#ap-star').classList.add('hidden');
+  }
 
-  // Zone 2 — what I did (applied log).
+  // ── Honest CRM banner ──
+  const crm = $('#ap-crm');
+  if (!cov.scoring_on && (cov.untagged || 0) > 0) {
+    $('#ap-crm-title').textContent = 'Quality scoring is off — and it’s your biggest missing advantage';
+    $('#ap-crm-body').textContent =
+      `${cov.untagged} enquiries linked to your campaigns aren’t marked with how serious the buyer is. `
+      + `Tag them and AutoOptimiser switches from “cost per enquiry” to “cost per genuine buyer” — the thing Meta can’t see.`;
+    crm.classList.remove('hidden');
+  } else { crm.classList.add('hidden'); }
+
+  // ── What needs doing (ranked) ──
+  const acts = $('#ap-actions'); acts.innerHTML = '';
+  const decisions = d.all_decisions || [];
+  if (!decisions.length) { $('#ap-actions-empty').classList.remove('hidden'); }
+  else { $('#ap-actions-empty').classList.add('hidden'); }
+  decisions.forEach(f => {
+    const last = f.rung === 10;
+    const dot = DOT[f.verdict] || '🟡';
+    const card = document.createElement('div');
+    card.className = 'border p-5 ' + (last ? 'border-error/50 bg-error/5' : 'border-outline-variant');
+    const freshHref = (f.params && f.params.run_id) ? ('/results/' + f.params.run_id) : '/portal';
+    const freshLabel = (f.params && f.params.run_id) ? 'Open campaign' : 'Rebuild in PIKORUA';
+    const act = f.action === 'fresh_creative'
+      ? `<a href="${esc(freshHref)}" class="bg-primary text-on-primary label-caps px-5 py-2 inline-block hover:bg-surface-tint">${esc(freshLabel)}</a>`
+      : `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Do it</button>`;
+    card.innerHTML = `<p class="label-caps text-outline mb-1">${dot} ${esc(f.campaign_name)}</p>
+      <p class="font-headline text-xl mb-2">${esc(f.title)}</p>
+      <p class="text-sm text-on-surface-variant mb-4">${esc(f.detail)}</p>
+      <div class="flex gap-3 items-center">${act}
+        <button class="label-caps text-outline hover:text-on-surface" data-dismiss="1">Not now</button></div>`;
+    acts.appendChild(card);
+  });
+
+  // ── What I handled for you ──
   const did = $('#ap-did'); did.innerHTML = '';
   const log = d.applied_log || [];
   if (!log.length) { $('#ap-did-empty').classList.remove('hidden'); }
@@ -112,42 +162,33 @@ function render(d) {
     did.appendChild(card);
   });
 
-  // Zone 3 — decisions.
-  const dec = $('#ap-decisions'); dec.innerHTML = '';
-  const decisions = d.decisions || [];
-  if (!decisions.length) { $('#ap-decisions-empty').classList.remove('hidden'); }
-  else { $('#ap-decisions-empty').classList.add('hidden'); }
-  decisions.forEach(f => {
-    const last = f.rung === 10;
-    const card = document.createElement('div');
-    card.className = 'border p-5 ' + (last ? 'border-error/50 bg-error/5' : 'border-outline-variant');
-    const freshHref = (f.params && f.params.run_id) ? ('/results/' + f.params.run_id) : '/portal';
-    const freshLabel = (f.params && f.params.run_id) ? 'Open campaign' : 'Open Ad Flow';
-    const act = f.action === 'fresh_creative'
-      ? `<a href="${esc(freshHref)}" class="bg-primary text-on-primary label-caps px-5 py-2 inline-block hover:bg-surface-tint">${esc(freshLabel)}</a>`
-      : `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Do it</button>`;
-    card.innerHTML = `<p class="label-caps text-outline mb-1">${esc(f.campaign_name)}</p>
-      <p class="font-headline text-xl mb-2">${esc(f.title)}</p>
-      <p class="text-sm text-on-surface-variant mb-4">${esc(f.detail)}</p>
-      <div class="flex gap-3 items-center">${act}
-        <button class="label-caps text-outline hover:text-on-surface" data-dismiss="1">Not now</button></div>`;
-    dec.appendChild(card);
-  });
+  // ── Every campaign at a glance (verdict + collapsible numbers) ──
+  const cards = $('#ap-cards'); cards.innerHTML = '';
+  // bleeding first, then okay, winning, idle
+  const order = { bleeding: 0, okay: 1, winning: 2, idle: 3 };
+  [...camps].sort((a, b) => (order[(a.verdict || {}).state] ?? 1) - (order[(b.verdict || {}).state] ?? 1))
+    .forEach(c => {
+      const v = c.verdict || {}; const p = c.plain || {};
+      const det = document.createElement('details');
+      det.className = 'border border-outline-variant';
+      det.innerHTML = `
+        <summary class="p-4 cursor-pointer flex justify-between items-center gap-4">
+          <span class="min-w-0">
+            <span class="font-medium">${esc(v.emoji || '🟡')} ${esc(c.campaign_name)}</span>
+            <span class="block text-sm text-on-surface-variant mt-1">${esc(v.line || '')}</span>
+          </span>
+          <span class="label-caps shrink-0 ${v.state === 'bleeding' ? 'text-error' : v.state === 'winning' ? 'text-ok' : 'text-outline'}">${esc(v.label || '')}</span>
+        </summary>
+        <div class="px-4 pb-4 text-sm text-on-surface-variant border-t border-outline-variant pt-3 grid gap-1">
+          <div>${esc(p.cost_each || '')}</div>
+          <div>${esc(p.clicks || '')}</div>
+          <div>${esc(p.seen || '')}</div>
+          <div class="text-xs text-outline mt-1">${money(Math.round(c.spend_7d))} spent · ${c.leads_7d} enquiries · last 7 days</div>
+        </div>`;
+      cards.appendChild(det);
+    });
 
-  // Full numbers.
-  const nums = $('#ap-numbers'); nums.innerHTML = '';
-  camps.forEach(c => {
-    const row = document.createElement('div');
-    row.className = 'border border-outline-variant p-4 text-sm grid grid-cols-2 md:grid-cols-5 gap-2';
-    row.innerHTML = `<div class="font-medium col-span-2 md:col-span-1">${esc(c.campaign_name)}</div>
-      <div>Spend: ${money(Math.round(c.spend_7d))}</div>
-      <div>Leads: ${c.leads_7d}</div>
-      <div>CPL: ${money(c.cpl_7d)}</div>
-      <div>Seen: ${c.frequency}×${c.cpl_rising ? ' · cost rising' : ''}</div>`;
-    nums.appendChild(row);
-  });
-
-  $('#ap-last-run').textContent = d.last_run ? ('Last checked ' + new Date(d.last_run).toLocaleString()) : '';
+  $('#ap-last-run').textContent = d.last_run ? ('Last checked ' + fmtIST(d.last_run)) : '';
 }
 
 document.addEventListener('click', async (e) => {

@@ -10,17 +10,37 @@ Pick from B + C next session.
 
 ---
 
-## A. Current state (built + verified this session — 24/24 tests pass)
+## A. Current state (built + verified — 24/24 tests pass + Phase B complete)
 
+- **AutoOptimiser core** — `services/autopilot.py`: 10-rung ladder, adaptive quality-CPL
+  north-star, cooldowns, auto-apply safe fixes (DRY_RUN-gated), Undo.
+- **Plain-English verdict system** — `_verdict()` / `_plain_metrics()` in `autopilot.py`.
+  Per-campaign: 🔴 Bleeding / 🟡 Doing okay / 🟢 Winning / ⚪ Not running. Anchored to the
+  **dynamic best live CPL on the account** (not a frozen number). No jargon — "CPL" → "cost
+  per enquiry", "frequency" → "each person's seen it ~N times", etc.
+- **Ranked action feed** — worst-severity campaign first, then by rung. Previously rung-only
+  ordering let a low-priority fix on a winning campaign appear before an urgent fix on a
+  bleeding one.
+- **Rung-8 broadened** — "tired creative" now fires on weak CTR **alone** (< 0.8%), not only
+  when cost is also rising. Fix: consistently-bad campaigns (GODREJ: ₹524 CPL, 0.74% CTR,
+  low frequency) were getting **zero** recommendations before this change.
+- **Honest CRM coverage banner** — shown when quality scoring is off; links to Lead Insights
+  to tag enquiries. Real situation: 1,067 Supabase leads live, 76 tagged — but none of the
+  76 tagged leads match the 6 active campaigns (tagged leads are on older paused runs).
 - **Dynamic Geo Opportunity engine** — `analytics/geo_intelligence.py`. No static city tables.
-  Live signals: CRM quality-by-city + Meta reach. Never auto-removes geo; surfaces *review*
-  (targeted city, leads but 0 quality) and *add* (untargeted city your CRM proves) decisions.
-  Wired into `autopilot._ladder` rung 1 (APPROVE-only) + `meta_tool.add_geo_city` + apply/undo.
-- **Refresh Creatives** — `POST /refresh-creatives/{run_id}` swaps creative on live ads in place
-  (same ad/adset/targeting/budget/history). "Refresh live ads" button on campaign page.
-  Rung-8 `fresh_creative` deep-links to the matched campaign (`/results/{run_id}`).
-- **AutoOptimiser core** (prev session) — `services/autopilot.py`: 10-rung ladder, adaptive
-  quality-CPL north-star, cooldowns, auto-apply safe fixes (DRY_RUN-gated), Undo, 3-zone UI.
+  Never auto-removes geo; APPROVE-only trim/add decisions from live CRM + Meta reach.
+- **Refresh Creatives** — `POST /refresh-creatives/{run_id}` swaps creative on live ads in
+  place (same ad/adset/targeting/budget/history). Rung-8 deep-links to matched campaign.
+
+**Live account snapshot (2026-06-22):**
+| Campaign | 7d CPL | Verdict |
+|---|---|---|
+| bungalow ahmd general (old) | ₹102 | 🟢 Winning — the star to copy |
+| LAARGE Apts | ₹224 | 🟡 Doing okay |
+| bungalow ahmd general – quality lead | ₹330 | 🔴 Bleeding (3.2× anchor) |
+| NN New Leads | ₹344 | 🔴 Bleeding (3.4× anchor) |
+| GODREJ VASTRAPUR | ₹524 | 🔴 Bleeding (5.1× anchor, 0.74% CTR) |
+| FINAL New Engagement | ₹0 | ⚪ Not running |
 
 **Key invariant:** `DRY_RUN` defaults to `true` — AutoOptimiser never writes to Meta until
 `DRY_RUN=false` is set in `.env`. Nothing has touched the live account yet.

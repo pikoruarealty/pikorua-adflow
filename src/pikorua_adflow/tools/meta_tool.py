@@ -582,6 +582,44 @@ def fetch_insights(object_id: str, token: str, date_preset: str = "last_7d") -> 
         return []
 
 
+def fetch_insights_by_region(campaign_id: str, token: str,
+                             date_preset: str = "last_7d") -> list[dict]:
+    """Spend + leads breakdown by region (city/state) for a campaign.
+    Uses Graph API insights with breakdowns=['region'] so each row carries
+    the region_name, spend, impressions, and lead-action count.
+    Returns [{region_name, spend_inr, impressions, leads}]. [] on any failure.
+
+    Used by geo_intelligence to show '₹X wasted on [City] → 0 quality leads'
+    on trim cards, making human geo decisions concrete rather than abstract.
+    """
+    try:
+        data = _get(
+            f"{campaign_id}/insights", token,
+            {
+                "fields": "spend,impressions,actions",
+                "date_preset": date_preset,
+                "breakdowns": "region",
+                "level": "campaign",
+                "limit": "500",
+            },
+        )
+        out: list[dict] = []
+        for row in data.get("data", []):
+            leads = 0
+            for act in (row.get("actions") or []):
+                if act.get("action_type") in ("lead", "onsite_conversion.lead_grouped"):
+                    leads += int(float(act.get("value", 0)))
+            out.append({
+                "region_name": (row.get("region") or "").strip(),
+                "spend_inr": round(float(row.get("spend") or 0), 2),
+                "impressions": int(float(row.get("impressions") or 0)),
+                "leads": leads,
+            })
+        return out
+    except Exception:
+        return []
+
+
 def fetch_relevance_diagnostics(ad_ids: list[str], token: str) -> dict[str, dict]:
     """Per-ad relevance rankings (quality/engagement/conversion). {} entries on failure."""
     out: dict[str, dict] = {}
@@ -656,6 +694,32 @@ def swap_ad_creative(ad_id: str, ad_account_id: str,
     new_creative_id = creative["id"]
     _patch(ad_id, {"creative": {"creative_id": new_creative_id}}, token)
     return {"creative_id": new_creative_id, "ad_id": ad_id}
+
+
+def create_ad_in_adset(adset_id: str, ad_account_id: str,
+                       object_story_spec: dict, ad_name: str,
+                       token: str) -> dict:
+    """Create a fresh ad under an existing ad set, inheriting its targeting and
+    budget. Used by the A/B safe-swap refresh flow (B2): the challenger runs
+    alongside the control until one clearly wins, then the loser is paused.
+
+    Returns {ad_id, creative_id}. Raises on any API failure (caller handles).
+    """
+    acct = ad_account_id.replace("act_", "")
+    creative = _post(
+        f"act_{acct}/adcreatives",
+        {"name": f"{ad_name} — challenger creative",
+         "object_story_spec": object_story_spec},
+        token,
+    )
+    creative_id = creative["id"]
+    ad = _post(
+        f"act_{acct}/ads",
+        {"name": ad_name, "adset_id": adset_id,
+         "creative": {"creative_id": creative_id}, "status": "ACTIVE"},
+        token,
+    )
+    return {"ad_id": ad["id"], "creative_id": creative_id}
 
 
 # ---- Autopilot: account-wide reads + geo edits ---------------------------- #

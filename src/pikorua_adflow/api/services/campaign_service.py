@@ -775,8 +775,16 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
         with RUNS_LOCK:
             RUNS[run_id]["status"] = "running_stage2"
         prior_visual_state = _collect_prior_visual_state(brief.property_name)
+        # B3: read per-clientele creative priors (palette/recipe that won before).
+        # {} on first run — no prior knowledge, no bias.
+        try:
+            from pikorua_adflow.analytics import creative_learning as _cl
+            creative_priors = _cl.get_priors(brief.clientele_type or "")
+        except Exception:
+            creative_priors = {}
         content_result = ContentCrew(
-            prior_visual_state=prior_visual_state
+            prior_visual_state=prior_visual_state,
+            creative_priors=creative_priors,
         ).crew().kickoff(inputs=inputs)
         review_folder = save_for_review(content_result, audience_result=audience_output)
         summary = None

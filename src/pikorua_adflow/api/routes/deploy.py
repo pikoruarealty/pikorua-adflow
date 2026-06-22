@@ -119,17 +119,24 @@ def deploy_to_meta(run_id: str):
 
 
 @router.post("/refresh-creatives/{run_id}")
-def refresh_creatives(run_id: str):
+def refresh_creatives(run_id: str, ab: bool = False):
     """
-    Refresh the creative (image + headline + body) on this run's LIVE ads in place —
-    without creating a new campaign, ad set, or ad. Each live ad keeps its id, targeting,
-    budget and delivery history; only its creative is swapped for the run's current
-    effective copy + assigned image. This is the action behind the autopilot's
-    'refresh tired creative' decision and the campaign page's 'Refresh live ads' button.
+    Refresh the creative (image + headline + body) on this run's LIVE ads.
+
+    Default (ab=False): swaps the creative in place on every live ad. The ad
+    keeps its id, targeting, budget and delivery history — only the creative changes.
+
+    A/B safe mode (ab=True): instead of replacing the existing ad, creates a NEW
+    ad in the same ad set with the fresh creative. Both ads run simultaneously.
+    The autopilot's A/B resolve pass (runs daily) compares them after AB_WINDOW_DAYS
+    (default 7 days) and auto-pauses the loser, so a working ad is NEVER silently
+    replaced by an unproven one.
 
     Regenerate images / edit copy on the campaign page first; this pushes whatever is
     current. DRY_RUN returns a preview without touching Meta.
     """
+    from pikorua_adflow.api.services import autopilot as _autopilot_svc
+
     run = cs.require_complete(run_id)
     review_folder = Path(run["review_folder"])
     brief = run.get("brief", {})
@@ -141,7 +148,8 @@ def refresh_creatives(run_id: str):
     meta_copy = cs.effective_meta(review_folder)
     dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
     if dry_run:
-        return {"ok": True, "dry_run": True,
+        mode = "ab" if ab else "swap"
+        return {"ok": True, "dry_run": True, "mode": mode,
                 "would_refresh": [a.get("variant") for a in ads if meta_copy.get(a.get("variant"))]}
 
     token = os.getenv("META_ACCESS_TOKEN", "")
@@ -152,13 +160,26 @@ def refresh_creatives(run_id: str):
     cta = brief.get("cta", "GET_QUOTE")
 
     from pikorua_adflow.tools.meta_tool import (_fetch_instagram_actor_id, _upload_image,
-                                                swap_ad_creative)
+                                                swap_ad_creative, create_ad_in_adset)
     from pikorua_adflow.tools.errors import explain_and_log
     ig_actor = os.getenv("META_INSTAGRAM_ACTOR_ID", "") or (
         _fetch_instagram_actor_id(page_id, token) if page_id else "")
     edits = cs.load_edits(review_folder).get("meta", {})
 
     refreshed, errors = [], []
+
+    def _build_oss(copy: dict, img_hash: str | None) -> dict:
+        link_data = {
+            "link": landing, "message": copy.get("body", ""), "name": copy.get("headline", ""),
+            "call_to_action": {"type": cta, "value": {"lead_gen_form_id": lead_form_id}},
+        }
+        if img_hash:
+            link_data["image_hash"] = img_hash
+        oss = {"page_id": page_id, "link_data": link_data}
+        if ig_actor:
+            oss["instagram_actor_id"] = ig_actor
+        return oss
+
     for a in ads:
         vnum = a.get("variant")
         copy = meta_copy.get(vnum)
@@ -170,19 +191,41 @@ def refresh_creatives(run_id: str):
             img = review_folder / "images" / f"image_{assigned}.png"
         elif (review_folder / "images" / f"image_{vnum}.png").exists():
             img = review_folder / "images" / f"image_{vnum}.png"
-        link_data = {
-            "link": landing, "message": copy.get("body", ""), "name": copy.get("headline", ""),
-            "call_to_action": {"type": cta, "value": {"lead_gen_form_id": lead_form_id}},
-        }
+
         try:
+            img_hash = None
             if img and img.exists():
-                link_data["image_hash"] = _upload_image(account, img, token)
-            oss = {"page_id": page_id, "link_data": link_data}
-            if ig_actor:
-                oss["instagram_actor_id"] = ig_actor
-            result = swap_ad_creative(a["ad_id"], account, oss, token)
-            a["creative_id"] = result["creative_id"]
-            refreshed.append({"variant": vnum, "creative_id": result["creative_id"]})
+                img_hash = _upload_image(account, img, token)
+            oss = _build_oss(copy, img_hash)
+
+            if ab:
+                # A/B mode: create a new challenger ad in the same ad set.
+                adset_id = a.get("adset_id", "")
+                if not adset_id:
+                    errors.append({"variant": vnum, "error": "No adset_id on live ad — cannot create challenger."})
+                    continue
+                ad_name = f"{brief.get('property_name', 'Pikorua')} — V{vnum} — Challenger"
+                result = create_ad_in_adset(adset_id, account, oss, ad_name, token)
+                challenger_ad_id = result["ad_id"]
+                # Register the A/B pair in autopilot state for nightly resolve pass.
+                _autopilot_svc._register_ab_group(
+                    run_id=run_id,
+                    adset_id=adset_id,
+                    control_ad_id=a["ad_id"],
+                    challenger_ad_id=challenger_ad_id,
+                )
+                refreshed.append({
+                    "variant": vnum, "ab_mode": True,
+                    "control_ad_id": a["ad_id"],
+                    "challenger_ad_id": challenger_ad_id,
+                    "creative_id": result["creative_id"],
+                })
+            else:
+                # Standard swap: replace creative in place.
+                result = swap_ad_creative(a["ad_id"], account, oss, token)
+                a["creative_id"] = result["creative_id"]
+                refreshed.append({"variant": vnum, "ab_mode": False,
+                                  "creative_id": result["creative_id"]})
         except Exception as exc:
             friendly = explain_and_log(f"Refresh creative — V{vnum}", exc)
             errors.append({"variant": vnum, "error": friendly["message"]})
@@ -191,6 +234,7 @@ def refresh_creatives(run_id: str):
         RUNS[run_id]["meta_ads"] = run.get("meta_ads", [])
     save_runs()
     return {"ok": True, "refreshed": refreshed, "errors": errors}
+
 
 
 @router.get("/meta-previews/{run_id}")
