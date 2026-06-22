@@ -806,6 +806,7 @@ def _build_typography_block(
                     "",
                 ]
                 badge_rendered = True
+            _LUXURY_FOOTER_DEFAULTS_SPEC = ["GATED COMMUNITY", "PRIVATE LOBBY", "CONCIERGE SERVICES"]
             spec_parts: list[str] = []
             if config_val:
                 spec_parts.append(config_combined)
@@ -814,6 +815,14 @@ def _build_typography_block(
             for part in usp_parts:
                 if part:
                     spec_parts.append(part)
+            # Pad to at least 2 items when brief is sparse
+            _used_spec = [s.upper() for s in spec_parts]
+            for _d in _LUXURY_FOOTER_DEFAULTS_SPEC:
+                if len(spec_parts) >= 2:
+                    break
+                if _d.upper() not in _used_spec:
+                    spec_parts.append(_d)
+                    _used_spec.append(_d.upper())
             if spec_parts:
                 spec_line = "  ·  ".join(spec_parts)
                 lines += [
@@ -830,6 +839,7 @@ def _build_typography_block(
         elif style == "icon_grid_strip":
             # Icon-grid strip: amenities/features as icon+label columns separated by gold rules.
             # Price stays in the standalone Pricing Module above — not repeated here.
+            _LUXURY_FOOTER_DEFAULTS = ["GATED COMMUNITY", "PRIVATE LOBBY", "CONCIERGE SERVICES"]
             grid_items: list[str] = []
             if config_val:
                 grid_items.append(config_combined)
@@ -839,13 +849,22 @@ def _build_typography_block(
             if sample_ready and want("badge"):
                 grid_items.append(sample_cta)
                 badge_rendered = True
+            # Pad to at least 2 items with always-true luxury attributes when brief is sparse
+            _used = [g.upper() for g in grid_items]
+            for _d in _LUXURY_FOOTER_DEFAULTS:
+                if len(grid_items) >= 2:
+                    break
+                if _d.upper() not in _used:
+                    grid_items.append(_d)
+                    _used.append(_d.upper())
             if grid_items:
                 col_str = "  |  ".join(f'"{g}"' for g in grid_items)
                 lines += [
                     "Bottom Amenity Grid (dark backing strip, maximum 12% canvas height — slim branded footer, never dominant):",
-                    "Each column: a THIN LINE-ART GOLD ICON relevant to the feature (location pin for locality, gate/shield for gated community, etc. — distinct icons per column, never generic).",
-                    "Icon sits above a short ALL CAPS label, 2-3 words max, in tracked geometric sans. Gold on dark — fully legible.",
-                    "Columns evenly spaced, separated by thin vertical gold hairlines. Effect: editorial premium data matrix.",
+                    "Each column: a THIN LINE-ART GOLD ICON relevant to the feature (distinct per column — e.g. sofa/amenities for clubhouse, ruler/area for size, shield/gate for gated community). Never use a generic or identical icon across columns.",
+                    "FOOTER GRID GEOMETRY: The footer follows a strict column grid. A vertical gold hairline marks the exact centre between columns. Each column has its own axis — the icon is horizontally centred on that axis, and the label text is centred directly beneath the icon on the same axis. Both columns are identical in width with equal outer margins and equal distance from hairline to icon centre. Every element snaps to this invisible grid — nothing floats independently.",
+                    "Typography: Bold or ExtraBold geometric sans, ALL CAPS, generously tracked. Gold on dark — fully legible from several feet away. Identical optical weight across all columns.",
+                    "NEGATIVE CONSTRAINTS: Never allow icons to drift independently. Never use uneven padding between columns. Never vary icon scale between columns. Never offset one column lower than the other. Never make one label visually heavier than its opposite.",
                     f"Columns (left to right): {col_str}",
                     "",
                 ]
@@ -976,9 +995,11 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
         "geometric sans. A BHK callout in the photo zone must carry the same visual weight "
         "and typeface family as the surrounding ad typography. Geometric sans for this element "
         "will look like a Word document label dropped into a luxury photograph.\n"
-        "• Spec text, eyebrow, labels (footer strip only): geometric monolinear sans-serif — "
-        "perfectly circular O, uniform stroke, zero humanist influence. Uppercase, generously tracked.\n"
-        "• Badge / CTA: same geometric sans, medium-bold, clearly legible at arm's length. "
+        "• Spec text, eyebrow, labels (footer strip only): Bold or ExtraBold geometric monolinear "
+        "sans-serif — perfectly circular O, uniform stroke, zero humanist influence. "
+        "Uppercase, generously tracked. Never Regular or Medium weight — footer text must be "
+        "optically heavy enough to read clearly from several feet away.\n"
+        "• Badge / CTA: same Bold geometric sans, medium-bold, clearly legible at arm's length. "
         "NEVER smaller than spec text.\n"
         "• NUMBER DISAMBIGUATION: If the composition contains '3,300' or '3300', this refers to "
         "apartment size in square feet — NOT the price. The price is Rs 3 Cr. Treat these as "
@@ -1047,6 +1068,15 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             "Never place it as tiny corner text, a small watermark-style label, or smaller "
             "than any other spec element. If it appears in the footer strip, it belongs "
             "at the same visual weight as the other footer items, not shrunken.\n\n"
+            "FOOTER GRID GEOMETRY: If the footer uses an icon-grid layout (icon above label, "
+            "multiple columns), every element must snap to a strict invisible column grid. "
+            "A vertical hairline marks the exact centre between columns. Each column has its "
+            "own axis — the icon is horizontally centred on that axis, and the label text is "
+            "centred directly beneath it on the same axis. Both columns are identical in width "
+            "with equal outer margins and equal distance from the hairline to each icon centre. "
+            "NEVER allow icons to drift independently. NEVER use uneven padding between columns. "
+            "NEVER vary icon scale between columns. NEVER offset one column lower than the other. "
+            "Nothing in the footer floats — every element is optically anchored within the grid.\n\n"
             "No invented text, no logos, no watermarks. One corner kept clean for logo compositing.\n\n"
             + (
                 f"PROJECT NAME BAN: The name '{brief.get('property_name', '')}' is an internal "
@@ -1054,6 +1084,24 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
                 f"Not in the footer, not in the photo zone, not as a label. The ad shows only "
                 f"the locality, city, specs, and campaign copy.\n\n"
                 if brief.get("property_name") else ""
+            )
+            + (
+                f"TEXT FIDELITY (non-negotiable — enforced above all styling decisions): "
+                f"Every text element must be rendered character-for-character exactly as supplied. "
+                f"Do not substitute, omit, duplicate, merge, split, transpose, or hallucinate any letter. "
+                + (
+                    f"'{(brief.get('locality') or '').upper()}' is a proper place name — render every "
+                    f"one of its characters in exact sequence as a single continuous typographic word. "
+                    f"Common failure modes to explicitly avoid: inserting a slash, hyphen, full-stop, "
+                    f"or decorative rule mid-word; doubling a letter (extra vowel or consonant); "
+                    f"dropping a letter; splitting the word across two lines or two typographic zones "
+                    f"as if it were two separate words. It is one unbroken word. "
+                    if brief.get("locality") else ""
+                )
+                + "Text correctness has higher priority than artistic styling or decorative effects. "
+                "If a ligature, swash, decorative separator, or dimensional treatment conflicts with "
+                "accurate character rendering, drop the decoration — never alter the character. "
+                "Verify every rendered character against the supplied string before finalising.\n\n"
             )
             + "Aspect ratio 4:5."
         )

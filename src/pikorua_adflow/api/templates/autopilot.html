@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}PIKORUA — Autopilot{% endblock %}
+{% block title %}PIKORUA — AutoOptimiser{% endblock %}
 
 {% block content %}
 <header class="mb-8 border-b border-outline-variant pb-6">
   <p class="label-caps text-outline mb-2">Self-optimising campaigns</p>
-  <h1 class="font-display text-4xl md:text-5xl">Autopilot</h1>
+  <h1 class="font-display text-4xl md:text-5xl">AutoOptimiser</h1>
   <p class="text-on-surface-variant mt-2 max-w-2xl">It watches every live campaign, fixes the safe things itself, and only asks you about the calls that move money.</p>
 </header>
 
@@ -37,7 +37,7 @@
     <h2 class="font-headline text-2xl mb-1">Needs your call</h2>
     <p class="text-sm text-on-surface-variant mb-4">High-impact choices only. Pausing is always the last resort.</p>
     <div id="ap-decisions" class="space-y-4"></div>
-    <p id="ap-decisions-empty" class="hidden text-on-surface-variant text-sm">No decisions waiting. Autopilot has it handled.</p>
+    <p id="ap-decisions-empty" class="hidden text-on-surface-variant text-sm">No decisions waiting. AutoOptimiser has it handled.</p>
   </section>
 
   <!-- Collapsed full numbers -->
@@ -53,7 +53,6 @@
 {% block scripts %}
 <script>
 const $ = s => document.querySelector(s);
-const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const money = v => (v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN'));
 
 async function apLoad(force) {
@@ -62,6 +61,7 @@ async function apLoad(force) {
   try {
     const r = await fetch('/autopilot-data' + (force ? '?force=true' : ''));
     const d = await r.json();
+    if (!r.ok) { return apErr(d.detail || d.error || `Server error ${r.status}`); }
     if (d.error) { return apErr(d.error); }
     render(d);
   } catch (e) {

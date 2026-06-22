@@ -145,8 +145,10 @@ LLM_OUTPUTS = [
         ),
         "composition_notes": (
             "LOCATION NAME IN PHOTO ZONE (required, non-negotiable):\n"
-            "'SINDHUBHAVAN' sweeps across the upper photo zone as a single unbroken line of "
-            "HEAVY or BLACK weight gold luxury serif — spanning roughly 70% of the canvas width. "
+            "'SINDHUBHAVAN' is a single unbroken word — 12 consecutive characters (S-I-N-D-H-U-B-H-A-V-A-N) "
+            "with no internal slash, hyphen, full-stop, space, or decorative separator inserted within "
+            "the word itself. It sweeps across the upper photo zone as one continuous typographic "
+            "sequence, HEAVY or BLACK weight gold luxury serif — spanning roughly 70% of canvas width. "
             "It sits approximately 10-15% from the top of the canvas, anchored against the "
             "dark ceiling/soffit area of the kitchen. This is the dominant visual element of "
             "the ad — the space and the address are the same thing.\n"
@@ -308,7 +310,7 @@ LLM_OUTPUTS = [
             "Asymmetric spec band at very bottom, forest-green (#1C3325), 9-10% canvas height. "
             "LEFT 40%: '4 & 5 BHK' in LARGE gold display serif — dominant, the configuration "
             "as a typographic event in its own right. RIGHT 60%: two rows of tracked geometric "
-            "gold caps — 'CLUBCLASS AMENITIES' above, '30+ STOREY TOWER' below. Thin gold "
+            "gold caps — 'CLUBCLASS AMENITIES' above, '3,300–6,100 SQ FT' below. Thin gold "
             "vertical hairline divides left from right.\n"
             "Top-left corner: the deep shadow zone of the bookcase wall keeps this area "
             "compositionally clean — logo compositing zone."
@@ -370,7 +372,9 @@ LLM_OUTPUTS = [
             "the scene, no hard bevel, no reflective sheen, nothing that looks digitally pasted. "
             "The contrast comes entirely from the dark floor beneath "
             "the text. AHMEDABAD in small tracked geometric gold caps directly below it. "
-            "These two lines are the ONLY text elements in this floor zone — no crowding.\n"
+            "'4 & 5 BHK' — compact tracked gold caps directly below 'AHMEDABAD', same shadow zone. "
+            "Three items in the floor text cluster: SINDHUBHAVAN ROAD → AHMEDABAD → 4 & 5 BHK. "
+            "Each item is smaller than the one above. No backing needed. No crowding.\n"
             "Price badge: 'FROM ₹3 CR ONWARDS' — anchored bottom-right of the photo zone, just "
             "above the spec row. Ivory fill, gold hairline border (ivory_warmth palette — no dark "
             "panels). HEAVY display serif in deep charcoal.\n"
@@ -378,7 +382,7 @@ LLM_OUTPUTS = [
             "bottom-left of the photo zone above the spec row. Bold geometric sans, charcoal.\n"
             "Spec row at very bottom: slim warm charcoal backing (#2B2420), 7% canvas height. "
             "One compact row: bold tracked ALL CAPS geometric gold — "
-            "'4 & 5 BHK RESIDENCES  ·  CLUBCLASS AMENITIES  ·  30+ STOREY TOWER'. Equal weight.\n"
+            "'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT'. Equal weight.\n"
             "Bottom-right corner of full canvas: kept entirely clear — logo compositing zone."
         ),
         "headline":    "Space that earns its silence.",
