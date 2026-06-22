@@ -549,6 +549,69 @@ def revert_logo(run_id: str, prompt_num: int):
     return {"ok": True}
 
 
+@router.post("/inpaint/{run_id}/{prompt_num}")
+async def inpaint_image(run_id: str, prompt_num: int, request: Request):
+    """Inpaint a masked region of an existing generated image.
+
+    Accepts multipart/form-data with:
+      - mask_png  : PNG file (white = regenerate, black = keep)
+      - edit_prompt : plain text describing the change
+      - source_file : optional filename of the image to edit (defaults to latest variant)
+    Returns the new variant filename.
+    """
+    ideogram_key = os.getenv("IDEOGRAM_API_KEY", "")
+    if not ideogram_key:
+        raise HTTPException(status_code=400, detail="IDEOGRAM_API_KEY not configured.")
+    run = cs.require_complete(run_id)
+    images_dir = Path(run["review_folder"]) / "images"
+
+    form = await request.form()
+    edit_prompt = (form.get("edit_prompt") or "").strip()
+    if not edit_prompt:
+        raise HTTPException(status_code=400, detail="edit_prompt is required.")
+
+    # Resolve source image
+    source_file = (form.get("source_file") or "").strip()
+    if source_file:
+        if not re.fullmatch(r'image_\d+(?:_v\d+)?\.png', source_file):
+            raise HTTPException(status_code=400, detail="Invalid source_file.")
+        src_path = images_dir / source_file
+    else:
+        # Use latest variant: prefer highest _vN, fall back to base image
+        variants = sorted(
+            [f for f in images_dir.glob(f"image_{prompt_num}_v*.png")],
+            key=lambda p: int(re.search(r"_v(\d+)", p.name).group(1))
+        )
+        src_path = variants[-1] if variants else images_dir / f"image_{prompt_num}.png"
+    if not src_path.exists():
+        raise HTTPException(status_code=404, detail="Source image not found.")
+
+    mask_file = form.get("mask_png")
+    if mask_file is None:
+        raise HTTPException(status_code=400, detail="mask_png is required.")
+    mask_bytes = await mask_file.read()
+    image_bytes = src_path.read_bytes()
+
+    # Determine aspect from the run's visual brief (default 4:5)
+    aspect = "4x5"
+
+    result_bytes = imgs.call_ideogram_inpaint(
+        image_bytes=image_bytes,
+        mask_bytes=mask_bytes,
+        prompt=edit_prompt,
+        key=ideogram_key,
+        aspect=aspect,
+    )
+
+    # Save as next available variant slot
+    k = 2
+    while (images_dir / f"image_{prompt_num}_v{k}.png").exists():
+        k += 1
+    out_path = images_dir / f"image_{prompt_num}_v{k}.png"
+    out_path.write_bytes(result_bytes)
+    return {"file": out_path.name, "prompt_num": prompt_num}
+
+
 @router.post("/assign-image/{run_id}/{variant_num}")
 def assign_image(run_id: str, variant_num: int, payload: AssignImagePayload):
     run = cs.require_complete(run_id)

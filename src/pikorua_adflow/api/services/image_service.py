@@ -376,12 +376,12 @@ PALETTE_CONFIGS: dict[str, str] = {
 # Compact palette reference — used when composition_notes drives layout.
 # Only the colour tokens; placement is handled by the scene-specific composition_notes.
 _PALETTE_COMPACT: dict[str, str] = {
-    "charcoal_gold":  "Gold #C9A84C on warm charcoal #2B2420 backing. Secondary text warm white #F8F4F0. Gold hairline accents. Apply these tokens exactly as described in the composition notes above.",
-    "burgundy_gold":  "Amber-gold #B8860B on dark burgundy #3D0C02 backing. Secondary text warm ivory #F5F0E8. Bronze hairlines #9A7B4F. Apply these tokens exactly as described in the composition notes above.",
-    "forest_gold":    "Gold #C9A84C on deep forest green #1C3325 backing. Secondary text cream #F5F0E8. Gold hairlines. Apply these tokens exactly as described in the composition notes above.",
-    "navy_gold":      "Gold #C9A84C on deep navy #0D1B2A backing. Secondary text pure white. Gold hairlines. Apply these tokens exactly as described in the composition notes above.",
-    "slate_cream":    "Gold #C9A84C on cool dark slate #1E2430 backing. Secondary text platinum white #E8E8E8. Gold or platinum hairlines. Apply these tokens exactly as described in the composition notes above.",
-    "ivory_warmth":   "Gold #C9A84C. Secondary text deep charcoal #2B2420. No solid dark panels anywhere — text sits on natural scene surfaces. Apply these tokens exactly as described in the composition notes above.",
+    "charcoal_gold":  "Gold #C9A84C on warm charcoal #2B2420 backing. Secondary text warm white #F8F4F0. Gold hairline accents. These are the palette anchor colours — each element adapts for contrast based on its specific surface.",
+    "burgundy_gold":  "Amber-gold #B8860B on dark burgundy #3D0C02 backing. Secondary text warm ivory #F5F0E8. Bronze hairlines #9A7B4F. These are the palette anchor colours — each element adapts for contrast based on its specific surface.",
+    "forest_gold":    "Gold #C9A84C on deep forest green #1C3325 backing. Secondary text cream #F5F0E8. Gold hairlines. These are the palette anchor colours — each element adapts for contrast based on its specific surface.",
+    "navy_gold":      "Gold #C9A84C on deep navy #0D1B2A backing. Secondary text pure white. Gold hairlines. These are the palette anchor colours — each element adapts for contrast based on its specific surface.",
+    "slate_cream":    "Gold #C9A84C on cool dark slate #1E2430 backing. Secondary text platinum white #E8E8E8. Gold or platinum hairlines. These are the palette anchor colours — each element adapts for contrast based on its specific surface.",
+    "ivory_warmth":   "Gold #C9A84C. Secondary text deep charcoal #2B2420. No solid dark panels anywhere — text sits on natural scene surfaces. These are the palette anchor colours — each element adapts for contrast based on its specific surface.",
 }
 
 # Three ad structures — all carry full developer-ad information density.
@@ -1075,7 +1075,18 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             f"{layout_section}\n\n"
             f"Text strings to render (exact wording, placement per composition notes):\n"
             f"{typography_block}\n\n"
-            f"Colour tokens: {palette_section}\n\n"
+            f"Colour tokens: {palette_section}\n"
+            "TEXT COLOUR IS PER-ELEMENT: each text element independently picks the colour "
+            "that maximises contrast on its specific backing surface. The headline may be "
+            "gold, the CTA badge may be white or cream, the price may be cream, a spec line "
+            "may be charcoal on a pale surface — they do NOT all need to match each other. "
+            "SPEC VISIBILITY IS CRITICAL: footer/spec text is already small — if the surface "
+            "behind the specs is dark, mid-dark, or the same tonal family as gold (dark green, "
+            "dark charcoal, dark brown), do NOT use gold for specs. Use cream or white instead. "
+            "Gold spec text on a dark surface at small size disappears. Contrast for small "
+            "text must be absolute, not approximate. Gold hairlines are the accent thread, not "
+            "the mandatory text colour for every element. On a very light surface, deep charcoal "
+            "or navy is often more premium than forced gold. Choose colour per element.\n\n"
             f"{_TYPEFACE_QUALITY}\n"
             f"{recipe_section}"
             "COMPOSITIONAL DISTRIBUTION: Supporting elements do not all need to cluster at "
@@ -1151,7 +1162,12 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             "column width — Bold or ExtraBold, never condensed or compressed to save space; "
             "(6) Price badge AND sample/CTA badge text must each be PROMINENT and instantly "
             "readable at across-a-table distance — never a small fraction of the layout, never "
-            "shrunk to fit. If in doubt, size up — never down.\n\n"
+            "shrunk to fit; (7) DISTRIBUTED FLOATING SPEC LINES — when specs are not in a strip "
+            "or grid but float as individual lines, each line must be rendered at the same optical "
+            "weight and cap height as the CTA badge text. 'Slim', 'fine', 'engraved', or 'delicate' "
+            "are NEVER valid size descriptors for spec lines — they mean illegible. Bold or "
+            "ExtraBold geometric sans, generously tracked, clearly readable at arm's length. "
+            "If in doubt, size up — never down.\n\n"
             "No invented text, no logos, no watermarks. One corner kept clean for logo compositing.\n\n"
             + (
                 f"PROJECT NAME BAN: The name '{brief.get('property_name', '')}' is an internal "
@@ -1396,6 +1412,99 @@ def call_ideogram(
         detail = e.read().decode(errors="replace")
         raise RuntimeError(
             f"Ideogram image download failed [{e.code}]: {detail}"
+        ) from e
+
+
+def call_ideogram_inpaint(
+    image_bytes: bytes,
+    mask_bytes: bytes,
+    prompt: str,
+    key: str,
+    speed: str = "QUALITY",
+    aspect: str = "4x5",
+) -> bytes:
+    """Ideogram v4 inpainting — edit a masked region of an existing image.
+
+    mask_bytes: PNG where white = regenerate, black = keep unchanged.
+    Returns the full edited image as PNG bytes.
+    """
+    import json as _json
+    import time
+    import urllib.error
+    import urllib.request
+
+    speed = speed.upper() if speed else "QUALITY"
+    _RESOLUTION_MAP = {
+        "1x1": "2048x2048",
+        "4x5": "1792x2240",
+        "16x9": "2560x1440",
+        "9x16": "1440x2560",
+        "2x3": "1664x2496",
+        "3x2": "2496x1664",
+    }
+    clean_aspect = aspect.lower().replace(":", "x") if aspect else "4x5"
+    resolution = _RESOLUTION_MAP.get(clean_aspect, "1792x2240")
+
+    boundary = "----PikoruaInpaintBoundary9Xk2mRwQ"
+
+    def _field(name: str, value: str) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n"
+        ).encode("utf-8")
+
+    def _file_field(name: str, filename: str, content: bytes, mime: str = "image/png") -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
+            f"Content-Type: {mime}\r\n\r\n"
+        ).encode("utf-8") + content + b"\r\n"
+
+    body = (
+        _file_field("image", "image.png", image_bytes)
+        + _file_field("mask", "mask.png", mask_bytes)
+        + _field("prompt", prompt)
+        + _field("resolution", resolution)
+        + _field("rendering_speed", speed)
+        + f"--{boundary}--\r\n".encode("utf-8")
+    )
+
+    req = urllib.request.Request(
+        "https://api.ideogram.ai/v1/ideogram-v4/edit",
+        data=body,
+        headers={
+            "Api-Key": key,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST",
+    )
+
+    data = None
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = _json.loads(resp.read())
+            break
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")
+            is_rate_limit = e.code == 429 or (e.code == 403 and "1010" in detail)
+            if is_rate_limit and attempt < 3:
+                time.sleep(5 * (attempt + 1))
+                continue
+            raise RuntimeError(
+                f"Ideogram inpaint request failed [{e.code}]: {detail}"
+            ) from e
+
+    img_url = data["data"][0]["url"]
+    img_req = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(img_req, timeout=60) as img_resp:
+            return img_resp.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")
+        raise RuntimeError(
+            f"Ideogram inpaint download failed [{e.code}]: {detail}"
         ) from e
 
 

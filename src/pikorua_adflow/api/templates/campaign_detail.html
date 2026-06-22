@@ -39,6 +39,34 @@
   <button class="absolute top-4 right-4 text-white material-symbols-outlined text-[32px] hover:text-on-surface-variant transition-colors" onclick="closeLightbox()">close</button>
 </div>
 
+<!-- Inpaint brush-edit modal -->
+<div id="inpaint-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-surface border border-outline-variant flex flex-col gap-3 p-4 w-full max-w-md" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between">
+      <span class="label-caps text-[11px]">Brush Edit — paint the area to change</span>
+      <button onclick="closeInpaint()" class="material-symbols-outlined text-[20px] text-on-surface-variant hover:text-on-surface">close</button>
+    </div>
+    <!-- Canvas overlay on top of image -->
+    <div id="inpaint-canvas-wrap" class="relative w-full bg-surface-container-low overflow-hidden" style="aspect-ratio:3/4">
+      <img id="inpaint-src-img" src="" class="absolute inset-0 w-full h-full object-cover pointer-events-none"/>
+      <canvas id="inpaint-canvas" class="absolute inset-0 w-full h-full cursor-crosshair"></canvas>
+    </div>
+    <div class="flex items-center gap-3">
+      <label class="label-caps text-[9px] text-on-surface-variant whitespace-nowrap">Brush size</label>
+      <input type="range" id="inpaint-brush-size" min="10" max="120" value="40" class="flex-1 accent-primary h-1"/>
+      <button onclick="clearInpaintMask()" class="label-caps text-[9px] border border-outline rounded px-2 py-1 hover:bg-surface-container-low transition-colors whitespace-nowrap">Clear mask</button>
+    </div>
+    <textarea id="inpaint-prompt" rows="3" placeholder="Describe the change — e.g. 'move the price badge lower, use a bold gold pill with more spacing from the BHK'" class="w-full text-xs border border-outline-variant rounded bg-surface p-2 font-body resize-none"></textarea>
+    <div class="flex gap-2">
+      <button onclick="applyInpaint()" class="flex-1 bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5">
+        <span class="material-symbols-outlined text-[14px]">auto_fix_high</span> Apply
+      </button>
+      <button onclick="closeInpaint()" class="px-4 py-2 border border-outline rounded label-caps text-[10px] hover:bg-surface-container-low transition-colors">Cancel</button>
+    </div>
+    <p id="inpaint-status" class="text-xs text-on-surface-variant hidden"></p>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -360,6 +388,7 @@ function renderVisuals() {
         '<button onclick="document.getElementById(\'upl-' + p.num + '\').click()" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Upload your own image"><span class="material-symbols-outlined text-[16px]">upload</span></button>' +
         (has ? '<button onclick="revertImg(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Revert to AI-generated version"><span class="material-symbols-outlined text-[16px]">history</span></button>' : '') +
         (has ? '<button onclick="revertLogo(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Remove logo composite"><span class="material-symbols-outlined text-[16px]">hide_image</span></button>' : '') +
+        (has ? '<button onclick="openInpaint(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Brush edit — repaint a region"><span class="material-symbols-outlined text-[16px]">brush</span></button>' : '') +
         '<button onclick="togglePrompt(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Edit prompt"><span class="material-symbols-outlined text-[16px]">edit_note</span></button>' +
       '</div>' +
       '<div id="pe-' + p.num + '" class="hidden">' +
@@ -1002,5 +1031,144 @@ loadDetail().then(() => { renderVisuals(); showTab('copy'); }).catch(e => {
   document.getElementById('d-title').textContent = 'Could not load campaign';
   document.getElementById('d-sub').textContent = e.message;
 });
+
+// ── Inpaint brush tool ────────────────────────────────────────────────────────
+let _inpaintPromptNum = null;
+let _inpaintSourceFile = null;
+let _inpaintDrawing = false;
+
+function openInpaint(n) {
+  _inpaintPromptNum = n;
+  // Find the currently displayed image file for this prompt
+  const mainImg = document.getElementById('main-img-' + n);
+  if (!mainImg) return;
+  const srcUrl = mainImg.src;
+  // Extract filename from URL like /image/{run_id}/image_4_v2.png?t=...
+  const match = srcUrl.match(/\/image\/[^/]+\/([^?]+)/);
+  _inpaintSourceFile = match ? match[1] : null;
+
+  const srcImg = document.getElementById('inpaint-src-img');
+  srcImg.src = srcUrl;
+
+  clearInpaintMask();
+  document.getElementById('inpaint-prompt').value = '';
+  document.getElementById('inpaint-status').classList.add('hidden');
+
+  const modal = document.getElementById('inpaint-modal');
+  modal.classList.remove('hidden');
+
+  // Size canvas to match the wrap container
+  srcImg.onload = _sizeInpaintCanvas;
+  if (srcImg.complete) _sizeInpaintCanvas();
+}
+
+function _sizeInpaintCanvas() {
+  const wrap = document.getElementById('inpaint-canvas-wrap');
+  const canvas = document.getElementById('inpaint-canvas');
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  _attachInpaintListeners();
+}
+
+function _attachInpaintListeners() {
+  const canvas = document.getElementById('inpaint-canvas');
+  // Remove old listeners by replacing with clone
+  const fresh = canvas.cloneNode(true);
+  canvas.parentNode.replaceChild(fresh, canvas);
+  const c = document.getElementById('inpaint-canvas');
+
+  function getPos(e) {
+    const r = c.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - r.left, y: src.clientY - r.top };
+  }
+  function startDraw(e) { _inpaintDrawing = true; draw(e); }
+  function stopDraw() { _inpaintDrawing = false; }
+  function draw(e) {
+    if (!_inpaintDrawing) return;
+    e.preventDefault();
+    const ctx = c.getContext('2d');
+    const pos = getPos(e);
+    const r = parseInt(document.getElementById('inpaint-brush-size').value) / 2;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(255, 100, 30, 0.55)';
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  c.addEventListener('mousedown', startDraw);
+  c.addEventListener('mousemove', draw);
+  c.addEventListener('mouseup', stopDraw);
+  c.addEventListener('mouseleave', stopDraw);
+  c.addEventListener('touchstart', startDraw, { passive: false });
+  c.addEventListener('touchmove', draw, { passive: false });
+  c.addEventListener('touchend', stopDraw);
+}
+
+function clearInpaintMask() {
+  const canvas = document.getElementById('inpaint-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function closeInpaint() {
+  document.getElementById('inpaint-modal').classList.add('hidden');
+  _inpaintPromptNum = null;
+  _inpaintSourceFile = null;
+}
+
+function applyInpaint() {
+  const prompt = document.getElementById('inpaint-prompt').value.trim();
+  if (!prompt) { alert('Please describe the change you want.'); return; }
+  if (_inpaintPromptNum === null) return;
+
+  // Build mask PNG: white where user painted, black elsewhere
+  const drawCanvas = document.getElementById('inpaint-canvas');
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = drawCanvas.width;
+  maskCanvas.height = drawCanvas.height;
+  const mCtx = maskCanvas.getContext('2d');
+  mCtx.fillStyle = 'black';
+  mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+  // For each painted pixel, write white
+  const src = drawCanvas.getContext('2d').getImageData(0, 0, drawCanvas.width, drawCanvas.height);
+  const dst = mCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+  for (let i = 0; i < src.data.length; i += 4) {
+    if (src.data[i + 3] > 30) { // painted
+      dst.data[i] = 255; dst.data[i+1] = 255; dst.data[i+2] = 255; dst.data[i+3] = 255;
+    }
+  }
+  mCtx.putImageData(dst, 0, 0);
+
+  maskCanvas.toBlob(async (blob) => {
+    const status = document.getElementById('inpaint-status');
+    status.textContent = 'Sending to Ideogram — this takes 30–60 s…';
+    status.classList.remove('hidden');
+
+    const fd = new FormData();
+    fd.append('mask_png', blob, 'mask.png');
+    fd.append('edit_prompt', prompt);
+    if (_inpaintSourceFile) fd.append('source_file', _inpaintSourceFile);
+
+    try {
+      const resp = await fetch('/inpaint/' + RUN_ID + '/' + _inpaintPromptNum, {
+        method: 'POST', body: fd
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || resp.statusText);
+      }
+      const data = await resp.json();
+      status.textContent = 'Done — new variant saved.';
+      closeInpaint();
+      // Reload visuals so the new variant thumbnail appears
+      await loadDetail();
+      renderVisuals();
+    } catch (err) {
+      status.textContent = 'Error: ' + err.message;
+    }
+  }, 'image/png');
+}
 </script>
 {% endblock %}
