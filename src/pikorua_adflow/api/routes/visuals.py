@@ -12,8 +12,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
 from ..config import BRAND_LOGO_PATH, REFERENCE_IMAGES_DIR
-from ..models import (AssignImagePayload, ImageGenReq, RegeneratePromptPayload,
-                      SavePromptPayload)
+from ..models import (AssignImagePayload, GenerateRefVariantPayload, ImageGenReq,
+                      RegeneratePromptPayload, SavePromptPayload)
 from ..services import campaign_service as cs
 from ..services import image_service as imgs
 from ..state import RUNS
@@ -478,7 +478,7 @@ def serve_image(run_id: str, filename: str):
 
 @router.delete("/image/{run_id}/{fname}")
 def delete_generated_image(run_id: str, fname: str):
-    if not re.fullmatch(r'image_\d+(?:_v\d+)?\.png', fname):
+    if not re.fullmatch(r'image_(?:\d+|r\d+)(?:_v\d+)?\.png', fname):
         raise HTTPException(status_code=400, detail="Invalid filename.")
     run = cs.require_complete(run_id)
     images = Path(run["review_folder"]) / "images"
@@ -535,13 +535,15 @@ def revert_image(run_id: str, variant: int):
     return {"ok": True, "restored": False}
 
 
-@router.post("/revert-logo/{run_id}/{prompt_num}")
-def revert_logo(run_id: str, prompt_num: int):
+@router.post("/revert-logo/{run_id}/{prompt_slug}")
+def revert_logo(run_id: str, prompt_slug: str):
     import shutil
+    if not re.fullmatch(r'\d+|r\d+', prompt_slug):
+        raise HTTPException(status_code=422, detail=f"Invalid prompt_slug: {prompt_slug!r}")
     run = cs.require_complete(run_id)
     images = Path(run["review_folder"]) / "images"
-    target = images / f"image_{prompt_num}.png"
-    backup = images / ".logo_backup" / f"image_{prompt_num}.png"
+    target = images / f"image_{prompt_slug}.png"
+    backup = images / ".logo_backup" / f"image_{prompt_slug}.png"
     if not backup.exists():
         raise HTTPException(status_code=404, detail="No logo backup found for this image.")
     shutil.copy2(backup, target)
@@ -549,16 +551,24 @@ def revert_logo(run_id: str, prompt_num: int):
     return {"ok": True}
 
 
-@router.post("/inpaint/{run_id}/{prompt_num}")
-async def inpaint_image(run_id: str, prompt_num: int, request: Request):
+@router.post("/inpaint/{run_id}/{prompt_slug}")
+async def inpaint_image(run_id: str, prompt_slug: str, request: Request):
     """Inpaint a masked region of an existing generated image.
 
+    prompt_slug accepts:
+      - A plain integer string (e.g. "1") for standard image slots → image_1.png
+      - An "r{k}" string (e.g. "r1") for reference variant slots → image_r1.png
+
     Accepts multipart/form-data with:
-      - mask_png  : PNG file (white = regenerate, black = keep)
-      - edit_prompt : plain text describing the change
-      - source_file : optional filename of the image to edit (defaults to latest variant)
+      - mask_png   : PNG file (white = regenerate, black = keep)
+      - edit_prompt: plain text describing the change
+      - source_file: optional filename of the image to edit (defaults to latest variant)
     Returns the new variant filename.
     """
+    # Validate slug: integer or r<integer>
+    if not re.fullmatch(r'\d+|r\d+', prompt_slug):
+        raise HTTPException(status_code=422, detail=f"Invalid prompt_slug: {prompt_slug!r}")
+
     ideogram_key = os.getenv("IDEOGRAM_API_KEY", "")
     if not ideogram_key:
         raise HTTPException(status_code=400, detail="IDEOGRAM_API_KEY not configured.")
@@ -573,16 +583,16 @@ async def inpaint_image(run_id: str, prompt_num: int, request: Request):
     # Resolve source image
     source_file = (form.get("source_file") or "").strip()
     if source_file:
-        if not re.fullmatch(r'image_\d+(?:_v\d+)?\.png', source_file):
+        if not re.fullmatch(r'image_(?:\d+|r\d+)(?:_v\d+)?\.png', source_file):
             raise HTTPException(status_code=400, detail="Invalid source_file.")
         src_path = images_dir / source_file
     else:
         # Use latest variant: prefer highest _vN, fall back to base image
         variants = sorted(
-            [f for f in images_dir.glob(f"image_{prompt_num}_v*.png")],
+            [f for f in images_dir.glob(f"image_{prompt_slug}_v*.png")],
             key=lambda p: int(re.search(r"_v(\d+)", p.name).group(1))
         )
-        src_path = variants[-1] if variants else images_dir / f"image_{prompt_num}.png"
+        src_path = variants[-1] if variants else images_dir / f"image_{prompt_slug}.png"
     if not src_path.exists():
         raise HTTPException(status_code=404, detail="Source image not found.")
 
@@ -598,7 +608,7 @@ async def inpaint_image(run_id: str, prompt_num: int, request: Request):
     # INPAINT_MOCK=1 skips the Ideogram API call for UI/flow testing without credits.
     # Returns the edit prompt so you can review what would have been sent to Ideogram.
     if os.getenv("INPAINT_MOCK") == "1":
-        return {"mock": True, "prompt_sent": edit_prompt, "prompt_num": prompt_num}
+        return {"mock": True, "prompt_sent": edit_prompt, "prompt_slug": prompt_slug}
 
     result_bytes = imgs.call_ideogram_inpaint(
         image_bytes=image_bytes,
@@ -610,11 +620,11 @@ async def inpaint_image(run_id: str, prompt_num: int, request: Request):
 
     # Save as next available variant slot
     k = 2
-    while (images_dir / f"image_{prompt_num}_v{k}.png").exists():
+    while (images_dir / f"image_{prompt_slug}_v{k}.png").exists():
         k += 1
-    out_path = images_dir / f"image_{prompt_num}_v{k}.png"
+    out_path = images_dir / f"image_{prompt_slug}_v{k}.png"
     out_path.write_bytes(result_bytes)
-    return {"file": out_path.name, "prompt_num": prompt_num}
+    return {"file": out_path.name, "prompt_slug": prompt_slug}
 
 
 @router.post("/assign-image/{run_id}/{variant_num}")
@@ -631,3 +641,379 @@ def assign_image(run_id: str, variant_num: int, payload: AssignImagePayload):
     m[str(variant_num)] = cur
     cs.save_edits(rf, edits)
     return {"ok": True}
+
+
+@router.post("/generate-reference-variant/{run_id}")
+def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
+    """Generate an image from a reference creative using one of two modes:
+
+    mode="remix" (default):
+      Ideogram remix endpoint — preserves the reference image's composition and visual
+      style while adapting all text elements to the current campaign brief.
+      image_weight controls how much of the reference is preserved (0.0-1.0).
+
+    mode="new_scene":
+      Extracts the reference image's ad element layout (where location name, price,
+      badge, footer sit) via vision LLM and uses it as composition_notes.
+      Generates a fresh lifestyle scene using scene_variant from our standard pipeline.
+      The photography is brand new; the text element positions mirror the reference.
+
+    Set REMIX_MOCK=1 to return prompts without calling Ideogram (for testing).
+    Set custom_prompt to override the auto-assembled prompt.
+    """
+    import datetime
+    import shutil
+
+    ideogram_key = os.getenv("IDEOGRAM_API_KEY", "")
+    run = cs.require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    images_dir = review_folder / "images"
+    images_dir.mkdir(exist_ok=True)
+
+    # Validate mode
+    if payload.mode not in ("remix", "new_scene"):
+        raise HTTPException(status_code=400, detail="mode must be 'remix' or 'new_scene'.")
+
+    # Validate the reference image exists
+    safe_name = re.sub(r"[^\w.\-]", "_", payload.reference_filename)
+    ref_path = REFERENCE_IMAGES_DIR / safe_name
+    if not ref_path.exists():
+        raise HTTPException(status_code=404, detail=f"Reference image '{safe_name}' not found.")
+
+    brief = run.get("brief", {})
+    eff = cs.effective_meta(review_folder)
+    first_headline = next((c["headline"] for c in eff.values() if c.get("headline")), "")
+
+    # Find next available image_r{k}.png slot
+    k = 1
+    while (images_dir / f"image_r{k}.png").exists():
+        k += 1
+    out_path = images_dir / f"image_r{k}.png"
+
+    # ── Mode: remix ────────────────────────────────────────────────────────────
+    if payload.mode == "remix":
+        if payload.custom_prompt:
+            prompt = payload.custom_prompt.strip()
+        else:
+            prompt = imgs.assemble_reference_variant_prompt(brief, headline=first_headline)
+
+        if os.getenv("REMIX_MOCK") == "1":
+            return {
+                "mock": True, "mode": "remix",
+                "prompt_sent": prompt, "filename": out_path.name,
+                "reference": safe_name, "image_weight": payload.image_weight,
+            }
+
+        if not ideogram_key:
+            raise HTTPException(status_code=400, detail="IDEOGRAM_API_KEY not configured.")
+
+        try:
+            result_bytes = imgs.call_ideogram_remix(
+                image_bytes=ref_path.read_bytes(),
+                prompt=prompt,
+                key=ideogram_key,
+                speed=payload.speed,
+                aspect=payload.aspect,
+                image_weight=payload.image_weight,
+            )
+        except Exception as exc:
+            from pikorua_adflow.tools.errors import explain_and_log
+            friendly = explain_and_log("Reference variant — Ideogram remix", exc)
+            raise HTTPException(status_code=502, detail=friendly["message"])
+
+        provenance = {
+            "reference_filename": safe_name,
+            "mode": "remix",
+            "image_weight": payload.image_weight,
+        }
+
+    # ── Mode: new_scene ────────────────────────────────────────────────────────
+    else:
+        from ...crews.content_crew.task_composer import get_variant_meta as _get_vm
+
+        # Validate scene_variant
+        try:
+            vm = _get_vm(payload.scene_variant)
+        except (KeyError, Exception):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown scene_variant: {payload.scene_variant!r}",
+            )
+
+        # Extract the reference image's ad element layout (cached after first call)
+        ref_layout = imgs.extract_reference_ad_layout(ref_path)
+        if not ref_layout:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not extract ad layout from reference image. Check VISION_MODEL.",
+            )
+
+        # Generate scene_prose for the chosen variant via a small LLM call
+        creative_brief = vm.get("creative_brief", "")
+        scene_pool_str = ", ".join(vm.get("scene_pool", [])[:3])
+        allowed_palettes = vm.get("allowed_palettes", ["charcoal_gold"])
+        palette_tag = allowed_palettes[0]
+        tone_tag = vm.get("default_tone_bias", "dark_luxury")
+
+        scene_system = (
+            "You are a luxury real estate photographer writing a shot brief for an AI image "
+            "generator. Write exactly two tight paragraphs (120-140 words total). "
+            "Paragraph 1: camera body, lens, angle, focal distance, light quality, time of day, "
+            "one natural photographic imperfection. "
+            "Paragraph 2: materials, surfaces, architectural detail visible in the shot — "
+            "concrete and specific, no generic adjectives. "
+            "DO NOT mention text, typography, or ad layout. Output only the two paragraphs."
+        )
+        scene_user = (
+            f"Brief: {creative_brief.strip()}\n"
+            f"Scene options (pick one): {scene_pool_str}\n"
+            f"Property type: {brief.get('property_type', 'premium apartment')}"
+        )
+
+        if payload.custom_prompt:
+            scene_prose = payload.custom_prompt.strip()
+            prompt = payload.custom_prompt.strip()
+        else:
+            model = os.getenv("CREATIVE_MODEL", "gemini/gemini-2.5-flash")
+            try:
+                resp = litellm.completion(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": scene_system},
+                        {"role": "user", "content": scene_user},
+                    ],
+                    temperature=0.85, max_tokens=250,
+                )
+                scene_prose = resp.choices[0].message.content.strip()
+            except Exception as exc:
+                raise HTTPException(status_code=502, detail=f"Scene LLM call failed: {exc}")
+
+            # Build the full Ideogram prompt via build_ad_prompt using reference layout
+            entry = {
+                "scene_prose": scene_prose,
+                "headline": first_headline,
+                "eyebrow": "",
+                "palette_tag": palette_tag,
+                "tone_tag": tone_tag,
+                "recipe_tag": "",
+                "logo_corner": "bottom-right",
+                "composition_notes": ref_layout,
+            }
+            sanitizer_brief = {
+                "locality": brief.get("locality", ""),
+                "city": brief.get("city", ""),
+                "property_type": brief.get("property_type", ""),
+                "price_cr": str(brief.get("price_cr", "")),
+                "sample_ready": bool(brief.get("sample_ready", False)),
+                "rera_verified": bool(brief.get("rera_verified", False)),
+                "verified_awards": bool(brief.get("verified_awards", False)),
+                "verified_certifications": bool(brief.get("verified_certifications", False)),
+                "verified_landmarks": bool(brief.get("verified_landmarks", False)),
+                "config": brief.get("config", ""),
+                "usps": brief.get("usps", []),
+                "property_name": brief.get("property_name", ""),
+            }
+            raw_prompt = imgs.build_ad_prompt(entry, sanitizer_brief, payload.scene_variant)
+            prompt = imgs.sanitize_image_prompt(raw_prompt, sanitizer_brief, assembled=True)
+
+        if os.getenv("REMIX_MOCK") == "1":
+            return {
+                "mock": True, "mode": "new_scene",
+                "prompt_sent": prompt,
+                "scene_prose": scene_prose if not payload.custom_prompt else prompt,
+                "composition_notes": ref_layout,
+                "filename": out_path.name, "reference": safe_name,
+            }
+
+        if not ideogram_key:
+            raise HTTPException(status_code=400, detail="IDEOGRAM_API_KEY not configured.")
+
+        try:
+            result_bytes = imgs.call_ideogram(
+                prompt, ideogram_key,
+                speed=payload.speed.upper() if payload.speed else "DEFAULT",
+                aspect=payload.aspect,
+            )
+        except Exception as exc:
+            from pikorua_adflow.tools.errors import explain_and_log
+            friendly = explain_and_log("Reference variant — new scene", exc)
+            raise HTTPException(status_code=502, detail=friendly["message"])
+
+        provenance = {
+            "reference_filename": safe_name,
+            "mode": "new_scene",
+            "scene_variant": payload.scene_variant,
+        }
+
+    # ── Common: save, logo composite, record provenance ───────────────────────
+    out_path.write_bytes(result_bytes)
+
+    logo_corner = "bottom-right"
+    if BRAND_LOGO_PATH.exists():
+        try:
+            logo_backup_dir = out_path.parent / ".logo_backup"
+            logo_backup_dir.mkdir(exist_ok=True)
+            shutil.copy2(out_path, logo_backup_dir / out_path.name)
+            imgs.composite_logo(out_path, BRAND_LOGO_PATH, corner=logo_corner)
+        except Exception:
+            pass
+
+    edits = cs.load_edits(review_folder)
+    rv = edits.setdefault("reference_variants", {})
+    rv[str(k)] = {
+        **provenance,
+        "generated_at": datetime.datetime.utcnow().isoformat(),
+        "prompt_sent": prompt,
+    }
+    cs.save_edits(review_folder, edits)
+
+    return {
+        "filename": out_path.name, "status": "generated",
+        "reference": safe_name, "mode": payload.mode, "prompt_num": k,
+    }
+
+
+_LAZY_VARIANT_ORDER = [
+    "lifestyle_private_retreat",
+    "lifestyle_social_home",
+    "lifestyle_dynamic_a",
+    "lifestyle_dynamic_b",
+    "interior_signature_moment",
+    "exterior_establishing_shot",
+]
+
+
+@router.post("/generate-prompt/{run_id}/{prompt_num}")
+def generate_prompt_on_demand(run_id: str, prompt_num: int):
+    """Write a visual_prompts.json entry for one slot on demand (lazy prompt generation).
+
+    Call this before /generate-images when running in LAZY_IMAGE_PROMPTS mode.
+    If the entry already has scene_prose it is returned as-is (idempotent).
+    Returns the assembled Ideogram prompt text so the UI can show it before generating.
+    """
+    from ...crews.content_crew.task_composer import (
+        VisualPromptOutput, compose_description, list_variants,
+    )
+
+    run = RUNS.get(run_id)
+    if not run or run.get("status") != "complete" or not run.get("review_folder"):
+        raise HTTPException(status_code=400, detail="Run not complete or not found.")
+
+    review_folder = Path(run["review_folder"])
+    vp_path = review_folder / "visual_prompts.json"
+
+    # Load or create placeholder list
+    if vp_path.exists():
+        try:
+            entries = json.loads(vp_path.read_text(encoding="utf-8"))
+        except Exception:
+            entries = []
+    else:
+        entries = []
+
+    # Check if the entry already has scene_prose (idempotent)
+    entry = next((e for e in entries if e.get("prompt_num") == prompt_num), None)
+    if entry and entry.get("scene_prose"):
+        brief = run.get("brief", {})
+        sanitizer_brief = _brief_for_sanitizer(brief)
+        existing_prompt = imgs.build_ad_prompt(entry, sanitizer_brief, entry.get("variant_key", ""))
+        return {"prompt_num": prompt_num, "prompt": existing_prompt, "already_existed": True}
+
+    # Determine the variant_key for this slot
+    if 1 <= prompt_num <= len(_LAZY_VARIANT_ORDER):
+        variant_key = _LAZY_VARIANT_ORDER[prompt_num - 1]
+    elif entry:
+        variant_key = entry.get("variant_key", f"variant_{prompt_num}")
+    else:
+        raise HTTPException(status_code=400, detail=f"prompt_num {prompt_num} out of range.")
+
+    brief = run.get("brief", {})
+    locality = brief.get("locality", "")
+    city = brief.get("city", "")
+    price_cr = brief.get("price_cr", "")
+    prop_type = brief.get("property_type", "")
+    sample_ready = str(bool(brief.get("sample_ready", False))).lower()
+
+    # Load copy context for visual_prompter
+    eff = cs.effective_meta(review_folder)
+    copy_lines = []
+    for num in sorted(eff)[:5]:
+        c = eff[num]
+        copy_lines.append(f'  Variant {num}: headline="{c["headline"]}" / body="{c["body"]}"')
+    copy_block = "\n".join(copy_lines) if copy_lines else "  (no copy variants yet)"
+
+    # Get the variant's task description (same logic as content_crew._visual_task)
+    task_desc = compose_description(variant_key)
+    # Substitute crew kickoff placeholders
+    for k, v in {
+        "{product}": brief.get("property_name", ""),
+        "{city}": city,
+        "{locality}": locality,
+        "{price_cr}": price_cr,
+        "{sample_ready}": sample_ready,
+        "{property_type}": prop_type,
+        "{reference_images}": "",
+    }.items():
+        task_desc = task_desc.replace(k, v)
+
+    system_prompt = (
+        "You are a luxury real-estate ad art director writing structured visual briefs for PIKORUA. "
+        "You output ONLY valid JSON with no preamble or markdown fences.\n\n"
+        f"Ad copy context (pick a headline from these):\n{copy_block}"
+    )
+    user_msg = task_desc + (
+        f"\n\nOutput valid JSON with exactly these keys: "
+        '{"scene_prose": "...", "headline": "...", "eyebrow": "...", '
+        '"palette_tag": "...", "scene_tag": "...", "tone_tag": "...", '
+        '"recipe_tag": "...", "logo_corner": "...", "composition_notes": "..."}'
+    )
+
+    model = os.getenv("CREATIVE_MODEL", "gemini/gemini-2.5-flash")
+    try:
+        resp = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.85,
+            max_tokens=1200,
+        )
+        raw = resp.choices[0].message.content.strip()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}")
+
+    # Parse the JSON
+    raw_clean = re.sub(r"```(?:json)?\s*", "", raw).strip("`").strip()
+    m = re.search(r"\{[\s\S]*\}", raw_clean)
+    if not m:
+        raise HTTPException(status_code=502, detail="LLM returned no parseable JSON.")
+    try:
+        parsed = json.loads(m.group(0))
+    except Exception:
+        raise HTTPException(status_code=502, detail="LLM JSON parse error.")
+
+    # Validate with the pydantic model
+    try:
+        vpo = VisualPromptOutput(**parsed)
+        entry_data = vpo.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Visual prompt schema error: {exc}")
+
+    # Upsert into visual_prompts.json
+    new_entry = {"variant_key": variant_key, "prompt_num": prompt_num}
+    new_entry.update(entry_data)
+
+    existing_idx = next((i for i, e in enumerate(entries) if e.get("prompt_num") == prompt_num), None)
+    if existing_idx is not None:
+        entries[existing_idx] = new_entry
+    else:
+        entries.append(new_entry)
+        entries.sort(key=lambda e: e.get("prompt_num", 99))
+
+    vp_path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # Return the assembled prompt so the UI can preview it
+    sanitizer_brief = _brief_for_sanitizer(brief)
+    assembled = imgs.build_ad_prompt(new_entry, sanitizer_brief, variant_key)
+    return {"prompt_num": prompt_num, "prompt": assembled, "already_existed": False}

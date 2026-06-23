@@ -176,9 +176,15 @@ class ContentCrew:
 
     @crew
     def crew(self) -> Crew:
+        tasks = self.tasks
+        if os.getenv("LAZY_IMAGE_PROMPTS", "1") == "1":
+            # Skip visual_prompter tasks when lazy mode is on — prompts are generated
+            # on demand from the portal via POST /generate-prompt/{run_id}/{prompt_num}.
+            visual_names = set(VISUAL_TASK_NAMES)
+            tasks = [t for t in tasks if getattr(t, "name", "") not in visual_names]
         return Crew(
             agents=self.agents,
-            tasks=self.tasks,
+            tasks=tasks,
             process=Process.sequential,
             verbose=True,
         )

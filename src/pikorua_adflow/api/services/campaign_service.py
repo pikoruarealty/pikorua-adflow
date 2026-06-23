@@ -558,11 +558,13 @@ def get_run_detail(run_id: str) -> dict:
             vk = entry.get("variant_key", "")
             title = _VP_LABELS.get(vk, f"Prompt {i}")
             ptext = entry.get("ideogram_prompt", "")
+            has_prompt = bool(entry.get("scene_prose") or ptext)
             image_prompts.append({
                 "num": i, "title": title,
                 "prompt_text": prompt_overrides.get(str(i), ptext),
                 "edited": str(i) in prompt_overrides,
                 "opt_in": vk in _VP_OPT_IN,
+                "has_prompt": has_prompt,
             })
     elif visual_text:
         for i, block in enumerate(re.split(r"\n---\n", visual_text), 1):
@@ -582,7 +584,7 @@ def get_run_detail(run_id: str) -> dict:
     if images_dir.exists():
         existing_images = sorted(
             f.name for f in images_dir.iterdir()
-            if f.name.startswith("image_") and f.name.endswith(".png")
+            if re.match(r"image_(?:\d+(?:_v\d+)?|r\d+(?:_v\d+)?)\.png$", f.name)
         )
 
     audience = effective_audience(review_folder, brief)
@@ -590,6 +592,8 @@ def get_run_detail(run_id: str) -> dict:
     meta_ads = run.get("meta_ads", [])
     dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
     has_live_ads = bool([a for a in meta_ads if not a.get("dry_run") and a.get("ad_id")]) and not dry_run
+
+    reference_variants = edits.get("reference_variants", {})
 
     return {
         "run_id": run_id,
@@ -605,6 +609,7 @@ def get_run_detail(run_id: str) -> dict:
         "email": {"text": email_text, "edited": email_edited},
         "image_prompts": image_prompts,
         "existing_images": existing_images,
+        "reference_variants": reference_variants,
         "persona_html": md_to_html(persona_text) if persona_text else "",
         "targeting_html": md_to_html(targeting_text) if targeting_text else "",
         "audience": audience,

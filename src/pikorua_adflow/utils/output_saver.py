@@ -3,6 +3,7 @@ Saves crew outputs to a timestamped folder under outputs/pending_review/.
 Each run gets its own folder so nothing is overwritten.
 """
 import json
+import os
 import re
 import pathlib
 from datetime import datetime
@@ -126,6 +127,19 @@ def save_for_review(content_result, audience_result=None) -> pathlib.Path:
         except Exception:
             pass
 
+        json_str = json.dumps(entries, indent=2, ensure_ascii=False)
+        (folder / "visual_prompts.json").write_text(json_str, encoding="utf-8")
+        (outputs_root / "visual_prompts.json").write_text(json_str, encoding="utf-8")
+    elif os.getenv("LAZY_IMAGE_PROMPTS", "1") == "1":
+        # Lazy mode: visual_prompter tasks were skipped. Write placeholder entries so
+        # the portal knows how many slots exist and can show "Write prompt & Generate".
+        # Each entry has variant_key + prompt_num but no scene_prose — the UI detects
+        # has_prompt=False and shows the lazy-generate button.
+        _main_variants = [vk for vk in _VARIANT_ORDER if vk != "exterior_establishing_shot"]
+        entries = [
+            {"variant_key": vk, "prompt_num": i}
+            for i, vk in enumerate(_main_variants, 1)
+        ]
         json_str = json.dumps(entries, indent=2, ensure_ascii=False)
         (folder / "visual_prompts.json").write_text(json_str, encoding="utf-8")
         (outputs_root / "visual_prompts.json").write_text(json_str, encoding="utf-8")

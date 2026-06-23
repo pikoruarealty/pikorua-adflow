@@ -376,11 +376,17 @@ function renderVisuals() {
           'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
           (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span> Working…' : (has ? 'REPLACE EXTERIOR' : 'GENERATE EXTERIOR')) +
           '</button>'
-        : '<button id="gen-btn-' + p.num + '" onclick="genImages([' + p.num + '])" ' + (isGen ? 'disabled ' : '') +
-          'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
-          (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>' : '') +
-          (isGen ? ' Working…' : (has ? 'REPLACE' : 'GENERATE')) +
-          '</button>'
+        : (p.has_prompt === false && !has
+          ? '<button id="gen-btn-' + p.num + '" onclick="writeAndGenImage(' + p.num + ', this)" ' + (isGen ? 'disabled ' : '') +
+            'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
+            (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span> Writing prompt…' : 'WRITE PROMPT &amp; GENERATE') +
+            '</button>'
+          : '<button id="gen-btn-' + p.num + '" onclick="genImages([' + p.num + '])" ' + (isGen ? 'disabled ' : '') +
+            'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
+            (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>' : '') +
+            (isGen ? ' Working…' : (has ? 'REPLACE' : 'GENERATE')) +
+            '</button>'
+        )
       ) +
       '<div class="flex gap-1">' +
         (has ? '<button onclick="addVariantImage(' + p.num + ')" ' + (isGen ? 'disabled ' : '') + 'class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center" title="Generate a new variant"><span class="material-symbols-outlined text-[16px]">add_photo_alternate</span></button>' : '') +
@@ -402,6 +408,38 @@ function renderVisuals() {
     '</div></div>';
   });
   html += '</div>';
+
+  /* ── Reference Variants section ── */
+  const refVarMeta = d.reference_variants || {};
+  const refVarImages = (d.existing_images || []).filter(f => /^image_r\d+(?:_v\d+)?\.png$/.test(f));
+  if (refVarImages.length) {
+    html += '<div class="mt-10 border-t border-outline-variant pt-8">' +
+      '<h3 class="font-display text-xl mb-4">Reference Variants</h3>' +
+      '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">';
+    refVarImages.forEach(fname => {
+      const m = fname.match(/^image_r(\d+)/);
+      const k = m ? m[1] : '?';
+      const meta = refVarMeta[k] || {};
+      const modeTag = meta.mode === 'new_scene' ? ' · new scene' : meta.mode === 'remix' ? ' · remix' : '';
+      const refLabel = meta.reference_filename ? 'Based on: ' + esc(meta.reference_filename) + modeTag : 'Ref variant';
+      html += '<div class="border border-outline-variant flex flex-col bg-surface-container-lowest">' +
+        '<div class="aspect-[3/4] bg-surface-container-low overflow-hidden">' +
+          '<img src="/image/' + RUN_ID + '/' + fname + '?t=' + Date.now() + '" onclick="openLightbox(this.src)" class="w-full h-full object-cover cursor-zoom-in"/>' +
+        '</div>' +
+        '<div class="p-3 flex flex-col gap-1.5">' +
+          '<p class="label-caps text-outline text-[10px] truncate" title="' + refLabel + '">' + refLabel + '</p>' +
+          '<div class="flex gap-1">' +
+            '<input type="file" id="upl-r' + k + '" class="hidden" accept="image/png,image/jpeg,image/webp" onchange="uploadRefVariant(\'' + fname + '\',this)"/>' +
+            '<button onclick="document.getElementById(\'upl-r' + k + '\').click()" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Upload replacement"><span class="material-symbols-outlined text-[16px]">upload</span></button>' +
+            '<button onclick="revertRefVariantLogo(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Remove logo"><span class="material-symbols-outlined text-[16px]">hide_image</span></button>' +
+            '<button onclick="openInpaintFile(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Brush edit"><span class="material-symbols-outlined text-[16px]">brush</span></button>' +
+            '<button onclick="deleteRefVariantImage(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-error hover:bg-error hover:text-on-error hover:border-error transition-colors flex items-center justify-center" title="Delete"><span class="material-symbols-outlined text-[16px]">delete</span></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div></div>';
+  }
 
   /* ── Assignment overview ── */
   html += '<div class="mt-10 border-t border-outline-variant pt-8" id="ad-assignment-section">' + buildAssignmentInner() + '</div>';
@@ -433,7 +471,7 @@ function renderRefImages(images) {
     return;
   }
   grid.innerHTML = images.map(img =>
-    '<div class="border border-outline-variant bg-surface-container-lowest flex flex-col">' +
+    '<div class="border border-outline-variant bg-surface-container-lowest flex flex-col" id="refcard-' + esc(img.filename) + '">' +
       '<div class="aspect-[3/4] overflow-hidden relative group">' +
         '<img src="/reference-images/' + encodeURIComponent(img.filename) + '" class="w-full h-full object-cover cursor-zoom-in" onclick="openLightbox(this.src)"/>' +
         '<button onclick="deleteRefImage(\'' + esc(img.filename) + '\')" title="Remove" ' +
@@ -442,10 +480,121 @@ function renderRefImages(images) {
       '</div>' +
       '<div class="p-2">' +
         '<p class="label-caps text-[10px] text-outline truncate mb-1" title="' + esc(img.filename) + '">' + esc(img.filename) + '</p>' +
-        (img.description ? '<p class="text-[10px] text-on-surface-variant line-clamp-3">' + esc(img.description) + '</p>' : '<p class="text-[10px] text-outline italic">Analyzing…</p>') +
+        (img.description ? '<p class="text-[10px] text-on-surface-variant line-clamp-3 mb-2">' + esc(img.description) + '</p>' : '<p class="text-[10px] text-outline italic mb-2">Analyzing…</p>') +
+        '<button onclick="toggleRefVariantPanel(\'' + esc(img.filename) + '\')" ' +
+          'class="w-full border border-primary text-primary label-caps text-[10px] py-1.5 rounded hover:bg-primary hover:text-on-primary transition-colors inline-flex items-center justify-center gap-1">' +
+          '<span class="material-symbols-outlined text-[13px]">style</span> Generate variant' +
+        '</button>' +
+        '<div id="refpanel-' + esc(img.filename) + '" class="hidden mt-2 flex flex-col gap-2">' +
+          // Mode selector
+          '<div class="flex gap-1">' +
+            '<button id="refmode-remix-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'remix\')" ' +
+              'class="flex-1 label-caps text-[9px] py-1 border rounded border-primary bg-primary text-on-primary transition-colors">Remix reference</button>' +
+            '<button id="refmode-new-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'new_scene\')" ' +
+              'class="flex-1 label-caps text-[9px] py-1 border rounded border-outline text-on-surface-variant hover:border-primary hover:text-primary transition-colors">New scene, ref layout</button>' +
+          '</div>' +
+          // Remix controls (visible by default)
+          '<div id="refcontrols-remix-' + esc(img.filename) + '">' +
+            '<label class="label-caps text-[9px] text-on-surface-variant">Preserve layout ←→ Adapt freely</label>' +
+            '<input type="range" id="refweight-' + esc(img.filename) + '" min="0" max="100" value="50" class="w-full accent-primary h-1"/>' +
+          '</div>' +
+          // New-scene controls (hidden by default)
+          '<div id="refcontrols-new-' + esc(img.filename) + '" class="hidden">' +
+            '<label class="label-caps text-[9px] text-on-surface-variant">Lifestyle scene</label>' +
+            '<select id="refscene-' + esc(img.filename) + '" class="w-full text-xs border border-outline rounded bg-surface px-2 py-1 text-on-surface mt-0.5">' +
+              '<option value="lifestyle_private_retreat">Private Retreat</option>' +
+              '<option value="lifestyle_social_home">The Social Home</option>' +
+              '<option value="lifestyle_dynamic_a">Scene A</option>' +
+              '<option value="lifestyle_dynamic_b">Scene B</option>' +
+              '<option value="interior_signature_moment">Interior Signature</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="flex items-center gap-1.5">' +
+            '<label class="label-caps text-[9px] text-on-surface-variant whitespace-nowrap">Speed</label>' +
+            '<select id="refspeed-' + esc(img.filename) + '" class="text-xs border border-outline rounded bg-surface px-2 py-0.5 text-on-surface flex-1">' +
+              '<option value="DEFAULT">Standard</option>' +
+              '<option value="QUALITY">Quality (slow)</option>' +
+              '<option value="TURBO">Turbo (fast)</option>' +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<label class="label-caps text-[9px] text-on-surface-variant">Custom prompt (optional — for testing)</label>' +
+            '<textarea id="refprompt-' + esc(img.filename) + '" rows="2" placeholder="Leave blank to use auto-assembled brief…" ' +
+              'class="w-full text-xs border border-outline-variant rounded bg-surface p-1.5 font-body resize-none mt-0.5"></textarea>' +
+          '</div>' +
+          '<button onclick="genRefVariant(\'' + esc(img.filename) + '\', this)" ' +
+            'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5">' +
+            '<span class="material-symbols-outlined text-[13px]">auto_awesome</span> Generate' +
+          '</button>' +
+          '<p id="refpanel-status-' + esc(img.filename) + '" class="text-[10px] text-on-surface-variant hidden"></p>' +
+        '</div>' +
       '</div>' +
     '</div>'
   ).join('');
+}
+function toggleRefVariantPanel(filename) {
+  const panel = document.getElementById('refpanel-' + filename);
+  if (panel) panel.classList.toggle('hidden');
+}
+function setRefMode(filename, mode) {
+  const remixBtn = document.getElementById('refmode-remix-' + filename);
+  const newBtn = document.getElementById('refmode-new-' + filename);
+  const remixCtrl = document.getElementById('refcontrols-remix-' + filename);
+  const newCtrl = document.getElementById('refcontrols-new-' + filename);
+  if (!remixBtn || !newBtn) return;
+  if (mode === 'remix') {
+    remixBtn.className = remixBtn.className.replace('border-outline text-on-surface-variant hover:border-primary hover:text-primary', 'bg-primary text-on-primary border-primary');
+    newBtn.className = newBtn.className.replace('bg-primary text-on-primary border-primary', 'border-outline text-on-surface-variant hover:border-primary hover:text-primary');
+    if (remixCtrl) remixCtrl.classList.remove('hidden');
+    if (newCtrl) newCtrl.classList.add('hidden');
+  } else {
+    newBtn.className = newBtn.className.replace('border-outline text-on-surface-variant hover:border-primary hover:text-primary', 'bg-primary text-on-primary border-primary');
+    remixBtn.className = remixBtn.className.replace('bg-primary text-on-primary border-primary', 'border-outline text-on-surface-variant hover:border-primary hover:text-primary');
+    if (newCtrl) newCtrl.classList.remove('hidden');
+    if (remixCtrl) remixCtrl.classList.add('hidden');
+  }
+}
+function _getRefMode(filename) {
+  const remixBtn = document.getElementById('refmode-remix-' + filename);
+  if (!remixBtn) return 'remix';
+  return remixBtn.className.includes('bg-primary') ? 'remix' : 'new_scene';
+}
+function genRefVariant(filename, btn) {
+  const mode = _getRefMode(filename);
+  const weightEl = document.getElementById('refweight-' + filename);
+  const speedEl = document.getElementById('refspeed-' + filename);
+  const sceneEl = document.getElementById('refscene-' + filename);
+  const promptEl = document.getElementById('refprompt-' + filename);
+  const statusEl = document.getElementById('refpanel-status-' + filename);
+  const imageWeight = (mode === 'remix' && weightEl) ? (100 - parseInt(weightEl.value, 10)) / 100 : 0.5;
+  const speed = speedEl ? speedEl.value : 'DEFAULT';
+  const sceneVariant = (sceneEl && mode === 'new_scene') ? sceneEl.value : 'lifestyle_private_retreat';
+  const customPrompt = promptEl ? promptEl.value.trim() : '';
+  const origHtml = btn ? btn.innerHTML : '';
+  const spin = '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Generating…'; }
+  const statusMsg = mode === 'new_scene' ? 'Extracting layout + generating scene…' : 'Sending to Ideogram…';
+  if (statusEl) { statusEl.textContent = statusMsg; statusEl.classList.remove('hidden'); }
+  const body = { reference_filename: filename, mode: mode, image_weight: imageWeight, speed: speed, scene_variant: sceneVariant };
+  if (customPrompt) body.custom_prompt = customPrompt;
+  api('/generate-reference-variant/' + RUN_ID, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(d => {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+    if (d.mock) {
+      const modeLabel = d.mode === 'new_scene' ? 'New-scene prompt' : 'Remix prompt';
+      if (statusEl) statusEl.textContent = modeLabel + ': ' + (d.prompt_sent || '');
+      return;
+    }
+    if (statusEl) { statusEl.textContent = 'Generated: ' + (d.filename || ''); statusEl.classList.remove('hidden'); }
+    loadDetail().then(() => { renderVisuals(); document.getElementById('gen-status').textContent = 'Reference variant generated: ' + (d.filename || ''); });
+  }).catch(e => {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+    if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.classList.remove('hidden'); }
+    showError(e.message);
+  });
 }
 function uploadRefImages(input) {
   const files = Array.from(input.files || []);
@@ -463,6 +612,71 @@ function deleteRefImage(filename) {
   fetch('/reference-images/' + encodeURIComponent(filename), { method: 'DELETE' })
     .then(() => { toast('Removed'); loadRefImages(); })
     .catch(e => showError(e.message));
+}
+function uploadRefVariant(fname, input) {
+  const file = input.files[0];
+  if (!file) return;
+  toast('Uploading…');
+  const form = new FormData();
+  form.append('file', file);
+  fetch('/upload-image/' + RUN_ID + '/r' + fname.replace(/^image_r(\d+).*/, '$1'), { method: 'POST', body: form })
+    .then(r => { if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Upload failed'); }); return r.json(); })
+    .then(() => { input.value = ''; toast('Uploaded'); loadDetail().then(renderVisuals); })
+    .catch(e => { input.value = ''; showError(e.message); });
+}
+function revertRefVariantLogo(fname) {
+  // fname is e.g. "image_r1.png" → slug is "r1"
+  const m = fname.match(/^image_(r\d+)\.png$/);
+  if (!m) { showError('Cannot identify slug for: ' + fname); return; }
+  api('/revert-logo/' + RUN_ID + '/' + m[1], { method: 'POST' })
+    .then(() => { toast('Logo removed'); loadDetail().then(renderVisuals); })
+    .catch(e => showError(e.message));
+}
+function deleteRefVariantImage(fname) {
+  if (!confirm('Delete this reference variant image?')) return;
+  api('/image/' + RUN_ID + '/' + fname, { method: 'DELETE' })
+    .then(() => loadDetail().then(renderVisuals))
+    .catch(e => showError(e.message));
+}
+function openInpaintFile(fname) {
+  // Open the inpaint modal directly for a known filename (used for reference variants)
+  const m = fname.match(/^image_(r\d+)/);
+  if (!m) { showError('Cannot open brush edit for this file.'); return; }
+  _inpaintPromptNum = m[1];
+  _inpaintSourceFile = fname;
+  const srcUrl = '/image/' + RUN_ID + '/' + fname + '?t=' + Date.now();
+  document.getElementById('inpaint-src-img').src = srcUrl;
+  clearInpaintMask();
+  document.getElementById('inpaint-prompt').value = '';
+  document.getElementById('inpaint-status').classList.add('hidden');
+  document.getElementById('inpaint-modal').classList.remove('hidden');
+}
+function writeAndGenImage(n, btn) {
+  const origHtml = btn ? btn.innerHTML : '';
+  const spin = '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Writing prompt…'; }
+  document.getElementById('gen-status').textContent = 'Writing image prompt for slot ' + n + '…';
+  api('/generate-prompt/' + RUN_ID + '/' + n, { method: 'POST' })
+    .then(d => {
+      document.getElementById('gen-status').textContent = 'Prompt written. Generating image…';
+      if (btn) btn.innerHTML = spin + ' Generating image…';
+      return api('/generate-images/' + RUN_ID, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompts: [n] }),
+      });
+    })
+    .then(d => {
+      if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
+      const statusMsg = (d.generated || []).length + ' image(s) generated.' + (errs ? ' ' + errs : '');
+      loadDetail().then(() => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg; });
+    })
+    .catch(e => {
+      if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      document.getElementById('gen-status').textContent = 'Error: ' + e.message;
+      showError(e.message);
+    });
 }
 function addVariantImage(n) {
   generating.add(n);

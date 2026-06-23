@@ -139,3 +139,28 @@ class RetargetCampaignReq(BaseModel):
     campaign_id: str
     clientele_type: str
     dry_run: bool = False
+
+
+class GenerateRefVariantPayload(BaseModel):
+    reference_filename: str
+    mode: str = Field(
+        "remix",
+        description=(
+            '"remix" — Ideogram remix: preserve reference composition, adapt text. '
+            '"new_scene" — extract reference ad layout, apply to a fresh lifestyle scene.'
+        ),
+    )
+    image_weight: float = Field(
+        0.5, ge=0.0, le=1.0,
+        description="remix mode only: 0.0 = ignore reference; 1.0 = maximally preserve layout",
+    )
+    scene_variant: str = Field(
+        "lifestyle_private_retreat",
+        description="new_scene mode only: which lifestyle variant to use for the fresh scene.",
+    )
+    speed: str = "DEFAULT"
+    aspect: str = "4x5"
+    custom_prompt: str | None = Field(
+        None,
+        description="Override the auto-assembled prompt with a manual one (for testing).",
+    )

@@ -154,6 +154,72 @@ def analyze_reference_image(img_path: Path) -> str:
     return desc
 
 
+def ref_layout_path(img_path: Path) -> Path:
+    return img_path.with_suffix(".layout.txt")
+
+
+def extract_reference_ad_layout(img_path: Path) -> str:
+    """Extract the ad element layout rules from a reference image using vision LLM.
+
+    Returns 150-200 words of composition_notes — where location name, price, badge,
+    footer and other text elements sit in the frame, and how they are styled.
+    This is cached to .layout.txt so the vision call happens once per image.
+    """
+    layout_path = ref_layout_path(img_path)
+    if layout_path.exists():
+        return layout_path.read_text(encoding="utf-8").strip()
+
+    vision_model = os.getenv(
+        "VISION_MODEL", os.getenv("CREATIVE_MODEL", "openrouter/openai/gpt-4o-mini")
+    )
+    try:
+        import base64 as _b64
+        img_bytes = img_path.read_bytes()
+        b64 = _b64.b64encode(img_bytes).decode()
+        ext = img_path.suffix.lstrip(".").lower()
+        mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}.get(ext, "png")
+        resp = litellm.completion(
+            model=vision_model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": (
+                        "You are a luxury ad art director extracting layout rules from a "
+                        "real estate advertisement image so the same layout can be recreated "
+                        "in a different photograph.\n\n"
+                        "Describe ONLY the positions and styling of text elements. "
+                        "Be concrete and spatial — give approximate frame positions "
+                        "(top/middle/bottom third, left/centre/right, % height). "
+                        "Cover:\n"
+                        "• Location/city name — size, weight, position in frame, colour, "
+                        "any backing or container\n"
+                        "• Price — where it sits, container style (pill, card, strip, floating), "
+                        "size relative to location name\n"
+                        "• Headline/tagline — position, size, relationship to other elements\n"
+                        "• Configuration (BHK) — if visible, where and how it sits\n"
+                        "• Footer/spec row — if present: how many items, treatment, position\n"
+                        "• Badge or CTA — if present: shape, position, size\n"
+                        "• Clean corner — which corner has no text (for logo)\n\n"
+                        "Write as concrete imperative instructions (150-200 words), as if "
+                        "briefing a designer who will recreate this layout in a new photo. "
+                        "Do NOT describe the scene, photography, or colours of the image. "
+                        "No preamble."
+                    )},
+                    {"type": "image_url", "image_url": {"url": f"data:image/{mime};base64,{b64}"}},
+                ],
+            }],
+            temperature=0.2,
+            max_tokens=400,
+        )
+        layout = resp.choices[0].message.content.strip()
+    except Exception:
+        layout = ""
+
+    if layout:
+        layout_path.write_text(layout, encoding="utf-8")
+    return layout
+
+
 def build_reference_images_context() -> str:
     """Text block describing uploaded reference images, injected into crew input."""
     if not REFERENCE_IMAGES_DIR.exists():
@@ -1506,6 +1572,142 @@ def call_ideogram_inpaint(
         raise RuntimeError(
             f"Ideogram inpaint download failed [{e.code}]: {detail}"
         ) from e
+
+
+def call_ideogram_remix(
+    image_bytes: bytes,
+    prompt: str,
+    key: str,
+    speed: str = "DEFAULT",
+    aspect: str = "4x5",
+    image_weight: float = 0.5,
+) -> bytes:
+    """Ideogram v2 remix — generate a variant of a reference image guided by a text prompt.
+
+    image_weight: 0.0 (ignore reference, follow prompt) → 1.0 (preserve reference maximally).
+    Returns PNG bytes of the generated image.
+    """
+    import json as _json
+    import time
+    import urllib.error
+    import urllib.request
+
+    speed = speed.upper() if speed else "DEFAULT"
+    _ASPECT_MAP = {
+        "1x1": "ASPECT_1_1",
+        "4x5": "ASPECT_4_5",
+        "16x9": "ASPECT_16_9",
+        "9x16": "ASPECT_9_16",
+        "2x3": "ASPECT_2_3",
+        "3x2": "ASPECT_3_2",
+    }
+    clean_aspect = aspect.lower().replace(":", "x") if aspect else "4x5"
+    aspect_ratio = _ASPECT_MAP.get(clean_aspect, "ASPECT_4_5")
+    # Ideogram remix uses integer image_weight 1-100
+    weight_int = max(1, min(100, int(round(image_weight * 100))))
+
+    image_request_json = _json.dumps({
+        "prompt": prompt,
+        "aspect_ratio": aspect_ratio,
+        "rendering_speed": speed,
+        "image_weight": weight_int,
+        "model": "V_2",
+    })
+
+    boundary = "----PikoruaRemixBoundary3Qn7vRxK"
+
+    def _field(name: str, value: str) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n"
+        ).encode("utf-8")
+
+    def _file_field(name: str, filename: str, content: bytes, mime: str = "image/png") -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
+            f"Content-Type: {mime}\r\n\r\n"
+        ).encode("utf-8") + content + b"\r\n"
+
+    body = (
+        _file_field("image_file", "reference.png", image_bytes)
+        + _field("image_request", image_request_json)
+        + f"--{boundary}--\r\n".encode("utf-8")
+    )
+
+    req = urllib.request.Request(
+        "https://api.ideogram.ai/v2/remix",
+        data=body,
+        headers={
+            "Api-Key": key,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST",
+    )
+
+    data = None
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = _json.loads(resp.read())
+            break
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")
+            is_rate_limit = e.code == 429 or (e.code == 403 and "1010" in detail)
+            if is_rate_limit and attempt < 3:
+                time.sleep(5 * (attempt + 1))
+                continue
+            raise RuntimeError(
+                f"Ideogram remix request failed [{e.code}]: {detail}"
+            ) from e
+
+    img_url = data["data"][0]["url"]
+    img_req = urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(img_req, timeout=60) as img_resp:
+            return img_resp.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")
+        raise RuntimeError(
+            f"Ideogram remix image download failed [{e.code}]: {detail}"
+        ) from e
+
+
+def assemble_reference_variant_prompt(brief: dict, headline: str = "") -> str:
+    """Build an Ideogram remix prompt from campaign brief fields — no LLM required.
+
+    Preserves the reference image's compositional structure and visual style while
+    explicitly instructing Ideogram on the exact text strings to render from the brief.
+    Without explicit text strings, Ideogram either renders no text or hallucinates text
+    from the original reference image.
+    """
+    locality = (brief.get("locality", "") or brief.get("city", "")).upper()
+    city = (brief.get("city", "") or "").upper()
+    prop_type = brief.get("property_type", "")
+
+    # Scene framing — what kind of image to produce
+    scene_parts = [
+        "Luxury real estate advertisement for an Indian premium residential development.",
+        f"{prop_type}." if prop_type else "",
+        "Preserve the photographic composition, lighting mood, and structural layout of the "
+        "reference image exactly.",
+        "Adapt the colour palette only where needed to complement the scene.",
+        "Replace every piece of text in the reference with the exact strings listed below — "
+        "no other text, no invented words, no retained text from the reference.",
+    ]
+    scene = " ".join(p for p in scene_parts if p)
+
+    # Typography block — explicit text strings Ideogram must render
+    # Re-use the composition_driven path of _build_typography_block which emits
+    # the same flat list that build_ad_prompt uses when composition_notes are present.
+    typo_entry = {"headline": headline, "eyebrow": ""}
+    typo_block = _build_typography_block(typo_entry, brief, composition_driven=True)
+
+    raw = scene + "\n\n" + typo_block + "\n\n" + _ANTI_LOGO_GUARD
+    # Skip sanitizer stages that strip "assembled" prompts — the text block is already
+    # drawn from brief fields and needs no further claims-stripping.
+    return sanitize_image_prompt(raw, brief, assembled=True)
 
 
 def image_backend(
