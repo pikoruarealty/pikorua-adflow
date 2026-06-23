@@ -70,3 +70,7 @@ Ideogram image request failed [402]: {"error": "You do not have sufficient balan
 [2026-06-19T19:12:13] CRM strategic insights
 HTTP Error 402: Payment Required
 ------------------------------------------------------------
+
+[2026-06-23T11:34:50] Autopilot — broaden_radius
+UPDATE 6966136946697 failed: {"message": "Invalid parameter", "type": "OAuthException", "code": 100, "error_subcode": 1487122, "is_transient": false, "error_user_title": "Invalid Broad Categories", "error_user_msg": "You have chosen invalid broad categories.", "fbtrace_id": "Ae3hkQIfYHAqZoyx9ZZBSwZ"}
+------------------------------------------------------------

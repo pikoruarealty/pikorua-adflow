@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -132,7 +133,10 @@ def upload_crm_audience(req: CRMAudienceRequest):
         name = result.get(_NAME_KEYS.get(key, ""), default_name)
         # Refresh the entry if the id already exists (id is stable on reuse now), else add.
         match = next((e for e in existing if e.get("id") == str(aid)), None)
-        entry = {"id": str(aid), "name": str(name), "subtype": subtype, "role": role}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        seed_size = result.get("total_leads") or result.get("leads_uploaded") or 0
+        entry = {"id": str(aid), "name": str(name), "subtype": subtype, "role": role,
+                 "built_at": now_iso, "seed_size": int(seed_size)}
         if match:
             match.update(entry)
         else:

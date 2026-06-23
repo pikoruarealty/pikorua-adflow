@@ -1160,6 +1160,14 @@ function applyInpaint() {
         throw new Error(err.detail || resp.statusText);
       }
       const data = await resp.json();
+      if (data.mock) {
+        // Mock mode — show the prompt that would have been sent to Ideogram
+        status.innerHTML =
+          '<strong>MOCK — prompt that would be sent to Ideogram:</strong><br>' +
+          '<pre style="white-space:pre-wrap;font-size:10px;margin-top:4px;max-height:200px;overflow-y:auto;background:var(--md-sys-color-surface-container-low);padding:8px;border-radius:4px">' +
+          data.prompt_sent.replace(/</g,'&lt;') + '</pre>';
+        return; // keep modal open so user can read the prompt
+      }
       status.textContent = 'Done — new variant saved.';
       closeInpaint();
       // Reload visuals so the new variant thumbnail appears

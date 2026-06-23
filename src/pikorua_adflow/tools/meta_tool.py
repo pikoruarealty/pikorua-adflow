@@ -256,11 +256,14 @@ def deploy_ad(
     instagram_actor_id: str = "",
     end_time: str = "",
     campaign_id: str = "",
+    adset_id: str = "",
 ) -> dict[str, Any]:
     """
     Create ad objects for one variant under a Meta OUTCOME_LEADS campaign.
-    Steps: upload image → (campaign if no campaign_id) → ad set → creative → ad (all PAUSED).
+    Steps: upload image → (campaign if no campaign_id) → (adset if no adset_id)
+           → creative → ad (all PAUSED).
     Pass campaign_id to reuse an existing campaign (multi-variant single-campaign flow).
+    Pass adset_id to inject into an existing ad set — skips both campaign and adset creation.
 
     DRY_RUN=true: returns a preview dict without calling the API.
     On failure: raises RuntimeError with API error details.
@@ -284,8 +287,8 @@ def deploy_ad(
             "variant": variant,
             "would_create": {
                 "image": str(image_path) if image_path else None,
-                "campaign": campaign_id or f"(would create) {campaign_name}",
-                "adset": {
+                "campaign": campaign_id or (f"(existing) {campaign_name}" if adset_id else f"(would create) {campaign_name}"),
+                "adset": adset_id or {
                     "optimization_goal": "LEAD_GENERATION",
                     "billing_event": "IMPRESSIONS",
                     "daily_budget_inr": daily_budget_inr,
@@ -296,7 +299,7 @@ def deploy_ad(
                     "targeting": targeting_spec,
                     "instagram_actor_id": instagram_actor_id or "(none)",
                     "end_time": end_time or "(no end date)",
-                },
+                } if not adset_id else adset_id,
                 "creative": {
                     "headline": headline,
                     "body": body,
@@ -326,14 +329,18 @@ def deploy_ad(
     # Steps 2–5 create real objects. If any step fails partway, roll back what was
     # created so the ad account isn't left with half-built campaigns. Cleanup is
     # best-effort; the original error is always re-raised.
-    # campaign_id passed in → shared campaign owned by caller; don't roll it back here.
-    _shared_campaign = bool(campaign_id)
+    # campaign_id / adset_id passed in → caller-owned; don't roll back here.
+    _shared_campaign = bool(campaign_id) or bool(adset_id)
     created: dict[str, str | None] = {"campaign": None, "adset": None,
                                       "creative": None, "ad": None}
     dropped_locations: list[str] = []
     try:
-        # Step 2 — create campaign (skipped when caller already created a shared one)
-        if campaign_id:
+        # Step 2 — create campaign (skipped when adset_id or campaign_id provided)
+        if adset_id:
+            # Inject into an existing ad set — we own nothing at campaign/adset level.
+            created["campaign"] = campaign_id or "(existing)"
+            created["adset"] = adset_id
+        elif campaign_id:
             created["campaign"] = campaign_id
         else:
             campaign = _post(
@@ -350,96 +357,82 @@ def deploy_ad(
             )
             created["campaign"] = campaign["id"]
 
-        # Step 3 — create ad set
-        # Targeting: a resolved spec (city geo + interests/behaviours from the audience
-        # panel) is used when provided. Without one we fall back to country-level India.
-        if targeting_spec:
-            adset_targeting = dict(targeting_spec)
-            adset_targeting.setdefault("targeting_automation", {"advantage_audience": 0})
-        else:
-            adset_targeting = {
-                "geo_locations": {"countries": ["IN"]},
-                "age_min": age_min,
-                "age_max": age_max,
-                "targeting_automation": {"advantage_audience": 0},
-            }
-
-        # Proactively add compliance declarations required by the targeted locations.
-        # Singapore requires SINGAPORE_UNIVERSAL for ALL ad types — not a special-category
-        # declaration, just a mandatory compliance checkbox. Safe to auto-add.
-        _geo = adset_targeting.get("geo_locations", {})
-        _sg_via_country = "SG" in _geo.get("countries", [])
-        _sg_via_city = any(c.get("country") == "SG" for c in _geo.get("cities", []))
-        _regional_cats: list[str] = []
-        if _sg_via_country or _sg_via_city:
-            _regional_cats.append("SINGAPORE_UNIVERSAL")
-
-        adset_payload: dict[str, Any] = {
-            "name": f"{campaign_name} — V{variant} — Ad Set",
-            "campaign_id": created["campaign"],
-            "optimization_goal": "LEAD_GENERATION",
-            "billing_event": "IMPRESSIONS",
-            # Lead-form creatives need ON_AD (form opens in the ad) — subcode 1892040.
-            "destination_type": "ON_AD",
-            # Explicit auto-bid; without it Meta defaults to a capped strategy needing bid_amount.
-            "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
-            "daily_budget": daily_budget_inr * 100,  # Meta expects paise (1 INR = 100 paise)
-            # LEAD_GENERATION ad sets must declare what's promoted — subcode 1885154.
-            "promoted_object": {"page_id": page_id},
-            "targeting": adset_targeting,
-            "status": "PAUSED",
-        }
-        if _regional_cats:
-            adset_payload["regional_regulated_categories"] = _regional_cats
-        # Optional campaign end date (ISO 8601, e.g. "2026-07-31T23:59:00+0530").
-        if end_time:
-            adset_payload["end_time"] = end_time
-
-        # Create the ad set. On first attempt the compliance list is already populated
-        # for known locations (Singapore above). If Meta still returns a compliance
-        # error (e.g. an unknown city triggered it), add SINGAPORE_UNIVERSAL and retry
-        # once. For any other regional issue, drop the offending country and retry.
-        _compliance_retried = False
-        while True:
-            ok, adset = _do_post(f"act_{ad_account_id}/adsets", adset_payload, token)
-            if ok:
-                break
-            err = adset.get("error", adset)
-            err_msg = (
-                f"{err.get('error_user_title', '')} "
-                f"{err.get('error_user_msg', '')} "
-                f"{err.get('message', '')}".lower()
-            )
-            subcode = err.get("error_subcode")
-            # Singapore universal ads declaration — add it and retry once
-            if (subcode == 3858550 or "singapore_universal" in err_msg) and not _compliance_retried:
-                cats = adset_payload.get("regional_regulated_categories", [])
-                if "SINGAPORE_UNIVERSAL" not in cats:
-                    adset_payload["regional_regulated_categories"] = cats + ["SINGAPORE_UNIVERSAL"]
-                _compliance_retried = True
-                continue
-            # Other regional compliance issues — drop the offending country and retry
-            countries = adset_targeting.get("geo_locations", {}).get("countries", [])
-            iso = _regulated_country_to_drop(adset, countries)
-            if not iso:
-                err_detail = json.dumps(err)
-                raise RuntimeError(
-                    f"POST act_{ad_account_id}/adsets failed: {err_detail}"
-                )
-            countries.remove(iso)
-            dropped_locations.append(iso)
-            if countries:
-                adset_targeting["geo_locations"]["countries"] = countries
+        # Step 3 — create ad set (skipped when adset_id was passed in)
+        if not adset_id:
+            # Targeting: a resolved spec (city geo + interests/behaviours from the audience
+            # panel) is used when provided. Without one we fall back to country-level India.
+            if targeting_spec:
+                adset_targeting = dict(targeting_spec)
+                adset_targeting.setdefault("targeting_automation", {"advantage_audience": 0})
             else:
-                adset_targeting["geo_locations"].pop("countries", None)
-            # If stripping the country left no geo at all, we can't deploy this variant.
-            if not adset_targeting["geo_locations"]:
-                raise RuntimeError(
-                    "All targeted locations require regulatory declarations that must be "
-                    "made in Meta Ads Manager. Nothing left to target after removing: "
-                    + ", ".join(_ISO_NAMES.get(c, c) for c in dropped_locations)
+                adset_targeting = {
+                    "geo_locations": {"countries": ["IN"]},
+                    "age_min": age_min,
+                    "age_max": age_max,
+                    "targeting_automation": {"advantage_audience": 0},
+                }
+
+            # Proactively add compliance declarations required by the targeted locations.
+            _geo = adset_targeting.get("geo_locations", {})
+            _sg_via_country = "SG" in _geo.get("countries", [])
+            _sg_via_city = any(c.get("country") == "SG" for c in _geo.get("cities", []))
+            _regional_cats: list[str] = []
+            if _sg_via_country or _sg_via_city:
+                _regional_cats.append("SINGAPORE_UNIVERSAL")
+
+            adset_payload: dict[str, Any] = {
+                "name": f"{campaign_name} — V{variant} — Ad Set",
+                "campaign_id": created["campaign"],
+                "optimization_goal": "LEAD_GENERATION",
+                "billing_event": "IMPRESSIONS",
+                "destination_type": "ON_AD",
+                "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+                "daily_budget": daily_budget_inr * 100,
+                "promoted_object": {"page_id": page_id},
+                "targeting": adset_targeting,
+                "status": "PAUSED",
+            }
+            if _regional_cats:
+                adset_payload["regional_regulated_categories"] = _regional_cats
+            if end_time:
+                adset_payload["end_time"] = end_time
+
+            _compliance_retried = False
+            while True:
+                ok, adset = _do_post(f"act_{ad_account_id}/adsets", adset_payload, token)
+                if ok:
+                    break
+                err = adset.get("error", adset)
+                err_msg = (
+                    f"{err.get('error_user_title', '')} "
+                    f"{err.get('error_user_msg', '')} "
+                    f"{err.get('message', '')}".lower()
                 )
-        created["adset"] = adset["id"]
+                subcode = err.get("error_subcode")
+                if (subcode == 3858550 or "singapore_universal" in err_msg) and not _compliance_retried:
+                    cats = adset_payload.get("regional_regulated_categories", [])
+                    if "SINGAPORE_UNIVERSAL" not in cats:
+                        adset_payload["regional_regulated_categories"] = cats + ["SINGAPORE_UNIVERSAL"]
+                    _compliance_retried = True
+                    continue
+                countries = adset_targeting.get("geo_locations", {}).get("countries", [])
+                iso = _regulated_country_to_drop(adset, countries)
+                if not iso:
+                    err_detail = json.dumps(err)
+                    raise RuntimeError(f"POST act_{ad_account_id}/adsets failed: {err_detail}")
+                countries.remove(iso)
+                dropped_locations.append(iso)
+                if countries:
+                    adset_targeting["geo_locations"]["countries"] = countries
+                else:
+                    adset_targeting["geo_locations"].pop("countries", None)
+                if not adset_targeting["geo_locations"]:
+                    raise RuntimeError(
+                        "All targeted locations require regulatory declarations that must be "
+                        "made in Meta Ads Manager. Nothing left to target after removing: "
+                        + ", ".join(_ISO_NAMES.get(c, c) for c in dropped_locations)
+                    )
+            created["adset"] = adset["id"]
 
         # Step 4 — create ad creative
         # `link` is required by Meta even for Lead Gen creatives; the form opens on
@@ -652,8 +645,59 @@ def update_adset_budget(adset_id: str, daily_budget_inr: int, token: str) -> boo
     return True
 
 
+def _sanitize_targeting_for_write(spec: dict) -> dict:
+    """Strip fields Meta returns in GET responses but rejects in PATCH requests.
+
+    Sending these back causes errors like 'invalid broad categories' or generic
+    validation failures even when the targeting itself is valid.
+    """
+    if not spec:
+        return spec
+    out = dict(spec)
+
+    # age_range is a computed field (min–max pair). Meta returns it for display but
+    # does not accept it as an input — use age_min / age_max instead.
+    out.pop("age_range", None)
+
+    # brand_safety_content_filter_levels is readable at the adset level but the
+    # writable path is the campaign object. Sending it on a targeting PATCH is rejected.
+    out.pop("brand_safety_content_filter_levels", None)
+
+    # targeting_automation.individual_setting is a read-only decomposition Meta
+    # returns to show which dimensions Advantage+ has taken over. Writing it back
+    # causes a validation error; only advantage_audience is writable.
+    ta = out.get("targeting_automation")
+    if isinstance(ta, dict):
+        out["targeting_automation"] = {"advantage_audience": ta.get("advantage_audience", 0)}
+
+    # Geo location entries include server-side metadata keys (primary_city_id,
+    # region_id, country, latitude, longitude) that Meta returns for display but
+    # rejects when sent back in a write call.
+    geo = out.get("geo_locations")
+    if isinstance(geo, dict):
+        geo = dict(geo)
+        for geo_type in ("cities", "zips", "regions"):
+            entries = geo.get(geo_type)
+            if entries:
+                geo[geo_type] = [{k: v for k, v in e.items()
+                                  if k not in ("primary_city_id", "region_id",
+                                               "country", "latitude", "longitude")}
+                                 for e in entries]
+        # places entries keep radius + distance_unit but drop the metadata
+        places = geo.get("places")
+        if places:
+            geo["places"] = [{k: v for k, v in p.items()
+                              if k not in ("primary_city_id", "region_id",
+                                           "country", "latitude", "longitude")}
+                             for p in places]
+        out["geo_locations"] = geo
+
+    return out
+
+
 def update_adset_targeting(adset_id: str, targeting_spec: dict, token: str) -> bool:
     """PATCH the ad set's targeting. Retries once with SINGAPORE_UNIVERSAL if compliance error."""
+    targeting_spec = _sanitize_targeting_for_write(targeting_spec)
     payload: dict = {"targeting": targeting_spec}
     ok, data = _do_patch(adset_id, payload, token)
     if ok:
@@ -918,4 +962,28 @@ def toggle_cbo(campaign_id: str, enable: bool, token: str) -> bool:
         {"is_adset_budget_sharing_enabled": enable},
         token,
     )
+    return ok
+
+
+def update_adset_schedule(adset_id: str, peak_days: list[int], token: str) -> bool:
+    """
+    Enable Meta day-parting on this ad set, running full-weight only on peak_days.
+    peak_days: Meta day numbers (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat).
+    Meta will only spend the daily budget on the selected days; it prorates automatically.
+    """
+    ok, _ = _do_patch(adset_id, {
+        "pacing_type": ["day_parting"],
+        "adset_schedule": [{
+            "start_minute": 0,
+            "end_minute": 1440,
+            "days": sorted(peak_days),
+            "timezone_type": "ADVERTISER",
+        }],
+    }, token)
+    return ok
+
+
+def remove_adset_schedule(adset_id: str, token: str) -> bool:
+    """Remove day-parting and restore standard even-pacing."""
+    ok, _ = _do_patch(adset_id, {"pacing_type": ["standard"], "adset_schedule": []}, token)
     return ok

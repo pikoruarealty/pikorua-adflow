@@ -140,10 +140,19 @@ Ranked roughly by value-to-effort.
 3. **#4 safety rails + #1 daily digest** — the gate to running `DRY_RUN=false` safely. ~1 day.
 4. **B2 (A/B safe-swap)** then **B3 (creative learning)** — both build on B1's helper.
 
-## E. Things to wire when going live (from the handoff)
-- Set `DRY_RUN=false` only after safety rails (#4).
-- Confirm the lead webhook stamps `campaign_name`/`ad_id` so CRM↔campaign attribution (and the
-  geo engine + quality-CPL) actually have data.
-- Tune AutoOptimiser thresholds (BENCHMARK_CPL, FREQ_*, CPL_CEILING) + geo_intelligence
-  thresholds (GEO_MIN_LEADS_TO_JUDGE, GEO_ADD_MIN_QUALITY) against real data.
-- Schedule `/autopilot-run` (cron) once autonomous mode is trusted.
+## E. Things to wire when going live (deployment checklist)
+
+**Before DRY_RUN=false:**
+- [ ] Remove `if: false` guard from `.github/workflows/deploy.yml` deploy job
+- [ ] Add GitHub secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`
+- [ ] Confirm lead webhook stamps `campaign_name` + `ad_id` in Supabase `meta_leads`
+      (query: `SELECT campaign_name, count(*) FROM meta_leads GROUP BY campaign_name`)
+- [ ] Tag 20+ recent leads per active campaign in Lead Insights (buying_status)
+- [ ] Run Phase 1 manual actions via AutoOptimiser UI, verify in Meta Ads Manager
+
+**After 3-4 days of stable Phase 2:**
+- [ ] Set `DRY_RUN=false` in `.env` on the server
+- [ ] Schedule daily autopilot cron: `0 2 * * * curl -X POST http://localhost:8000/autopilot-run`
+      (7:30 AM IST = 02:00 UTC — add to server crontab or APScheduler inside app)
+- [ ] Tune thresholds against real data: `BENCHMARK_CPL`, `FREQ_*`, `CPL_CEILING` in `autopilot.py`;
+      `GEO_MIN_LEADS_TO_JUDGE`, `GEO_ADD_MIN_QUALITY` in `geo_intelligence.py`

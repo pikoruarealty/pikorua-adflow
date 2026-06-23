@@ -89,12 +89,27 @@ def _normalize(leads: list[dict]) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Lead quality
 # --------------------------------------------------------------------------- #
-_QUALITY_STATUSES = {"exploring", "hot", "warm"}
+_QUALITY_BUYING_STATUSES = {"exploring", "hot", "warm", "interested", "postponed", "still searching"}
+# Keep old name as alias so existing callers (autopilot) don't break.
+_QUALITY_STATUSES = _QUALITY_BUYING_STATUSES
+
+# client_status values (meta_leads.status) that confirm a quality lead.
+# Takes priority over buying_status — it represents an explicit human call.
+_QUALITY_CLIENT_STATUSES = {"warm", "interested", "construction biz owner"}
 
 
 def _is_quality(norm_row: dict) -> bool:
-    """A lead is 'quality' when its Buying Status is exploring / warm / hot."""
-    return norm_row.get("buyingstatus", "").lower() in _QUALITY_STATUSES
+    """
+    A lead is 'quality' when either:
+    - client_status (meta_leads.status) is warm/interested/construction biz owner, OR
+    - buying_status is exploring/warm/hot/interested/postponed/still searching.
+    client_status is checked first (explicit human judgement > CRM buying field).
+    """
+    cs = norm_row.get("status", "").strip().lower()
+    if cs and any(q in cs for q in _QUALITY_CLIENT_STATUSES):
+        return True
+    bs = norm_row.get("buyingstatus", "").strip().lower()
+    return any(q in bs for q in _QUALITY_BUYING_STATUSES)
 
 
 def _quality_rate(norm_rows: list[dict]) -> float:
@@ -579,24 +594,64 @@ def top_converting_profiles(leads: list[dict], top_n: int = 5, min_count: int = 
 # --------------------------------------------------------------------------- #
 # 8b. Campaign lead matching + profile-match quality (autopilot north-star)
 # --------------------------------------------------------------------------- #
+_CONFIG_KEYWORDS: dict[str, list[str]] = {
+    "bungalow": ["bungalow", "villa", "independent house", "row house"],
+    "5 bhk":    ["5 bhk", "5bhk", "5-bhk", "5 bedroom"],
+    "4 bhk":    ["4 bhk", "4bhk", "4-bhk", "4 bedroom"],
+    "3 bhk":    ["3 bhk", "3bhk", "3-bhk", "3 bedroom"],
+    "2 bhk":    ["2 bhk", "2bhk", "2-bhk", "2 bedroom"],
+    "penthouse": ["penthouse"],
+    "plot":      ["plot", "land"],
+}
+
+
+def _config_matches_campaign(config_raw: str, campaign_key: str) -> bool:
+    """True when a lead's configuration preference aligns with a campaign name keyword."""
+    ck = _key(config_raw)
+    for label, terms in _CONFIG_KEYWORDS.items():
+        if any(_key(t) in ck or ck in _key(t) for t in terms if t):
+            # label matched — does the campaign name also reference this type?
+            if _key(label) in campaign_key:
+                return True
+    return False
+
+
 def match_meta_leads(leads: list[dict], campaign_name: str) -> list[dict]:
     """
     Return the CRM rows attributed to a given Meta campaign.
 
-    The lead webhook stamps every inbound lead with its `campaign_name`, so we
-    match on that (fuzzy, punctuation-insensitive) rather than re-hashing contacts.
-    Falls back to an empty list when nothing matches — the caller then knows CRM
-    coverage for this campaign is still sparse.
+    Primary match: lead webhook stamps every inbound lead with campaign_name (preferred).
+    Secondary match: leads with a blank campaign field are attributed to a campaign
+      when their `configuration` preference (e.g. "Bungalow") matches keywords in
+      the campaign name. Partial fix for the attribution gap while the webhook
+      problem persists — a bungalow-preference lead correctly scores on a bungalow
+      campaign even when campaign_name was not stamped.
+    Falls back to an empty list when nothing matches.
     """
     needle = _key(campaign_name)
     if not needle:
         return []
     out = []
+    already_ids: set[int] = set()
+
     for row in leads or []:
         norm = _normalize([row])[0]
         hay = _key(norm.get("campaign", ""))
         if hay and (needle in hay or hay in needle):
             out.append(row)
+            already_ids.add(id(row))
+
+    # Secondary: unattributed leads matched by configuration preference.
+    for row in leads or []:
+        if id(row) in already_ids:
+            continue
+        norm = _normalize([row])[0]
+        if norm.get("campaign"):   # has a campaign stamp → don't re-attribute
+            continue
+        config = norm.get("configuration", "")
+        if config and _config_matches_campaign(config, needle):
+            out.append(row)
+
     return out
 
 

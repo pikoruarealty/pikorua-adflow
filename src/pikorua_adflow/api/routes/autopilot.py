@@ -67,7 +67,9 @@ def autopilot_apply(req: ApplyFixReq):
     if not token:
         raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
     data = _CACHE.get("data") or autopilot.run_autopilot(apply_safe=False)
-    fix = next((f for f in data.get("all_decisions", [])
+    # Search per-campaign decisions AND account-level actions
+    all_fixes = list(data.get("all_decisions", [])) + list(data.get("account_actions", []))
+    fix = next((f for f in all_fixes
                 if f["campaign_id"] == req.campaign_id and f["fix_type"] == req.fix_type), None)
     if not fix:
         raise HTTPException(status_code=404, detail="That recommendation is no longer current.")

@@ -28,10 +28,12 @@ _CSV_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "project_contex
 
 # PostgREST embed: meta_leads holds the contact/campaign columns; lead_crm_details
 # (FK lead_id -> meta_leads.id) holds budget/profession/company. One joined query.
+# client_status is fetched from lead_crm_details if the column exists there;
+# meta_leads.status already carries the same disposition value in the live DB.
 _SELECT = (
     "full_name,phone,email,city,campaign_name,source,status,received_at,assigned_to,"
     "lead_crm_details(budget_range,profession,company_name,current_city,current_area,"
-    "configuration,call_status,buying_status,hwc,remarks)"
+    "configuration,call_status,buying_status,client_status,hwc,remarks,site_visit_status)"
 )
 
 
@@ -71,6 +73,13 @@ def _fetch_supabase(base_url: str, key: str) -> list[dict]:
             crm = r.get("lead_crm_details") or {}
             if isinstance(crm, list):  # PostgREST may return a list for the embed
                 crm = crm[0] if crm else {}
+            # client_status: prefer lead_crm_details.client_status if present,
+            # fall back to meta_leads.status (same disposition value in live DB).
+            client_status = (
+                crm.get("client_status")
+                or r.get("status")
+                or ""
+            )
             rows.append({
                 "Name": r.get("full_name") or "",
                 "Phone": r.get("phone") or "",
@@ -78,15 +87,17 @@ def _fetch_supabase(base_url: str, key: str) -> list[dict]:
                 "City": r.get("city") or crm.get("current_city") or "",
                 "Campaign": r.get("campaign_name") or "",
                 "Source": r.get("source") or "",
-                "Status": r.get("status") or "",
+                "Status": client_status,
                 "Received": r.get("received_at") or "",
                 "Budget": crm.get("budget_range") or "",
                 "Profession": crm.get("profession") or "",
                 "Company": crm.get("company_name") or "",
+                "CurrentCity": crm.get("current_city") or "",
                 "CurrentArea": crm.get("current_area") or "",
                 "Configuration": crm.get("configuration") or "",
                 "CallStatus": crm.get("call_status") or "",
                 "BuyingStatus": crm.get("buying_status") or "",
+                "SiteVisitStatus": crm.get("site_visit_status") or "",
                 "HWC": crm.get("hwc") or "",
                 "AssignedTo": r.get("assigned_to") or "",
                 "Remarks": crm.get("remarks") or "",
@@ -115,7 +126,7 @@ def fetch_rows(csv_path: pathlib.Path = _CSV_PATH) -> tuple[list[dict], str]:
         try:
             rows = _fetch_supabase(*creds)
             if rows:
-                return rows, f"Supabase (meta_leads + lead_crm_details, {len(rows)} leads)"
+                return _normalise(rows), f"Supabase (meta_leads + lead_crm_details, {len(rows)} leads)"
             # Empty result is suspicious — fall through to CSV rather than report 0.
         except Exception as exc:
             print(f"[crm_source] Supabase fetch failed ({exc}) — falling back to CSV.")
@@ -123,8 +134,18 @@ def fetch_rows(csv_path: pathlib.Path = _CSV_PATH) -> tuple[list[dict], str]:
     if csv_path.exists():
         try:
             rows = _fetch_csv(csv_path)
-            return rows, f"CSV ({csv_path.name}, {len(rows)} leads)"
+            return _normalise(rows), f"CSV ({csv_path.name}, {len(rows)} leads)"
         except Exception as exc:
             print(f"[crm_source] CSV read failed ({exc}).")
 
     return [], "no CRM source available"
+
+
+def _normalise(rows: list[dict]) -> list[dict]:
+    """Apply city + profession normalisation. Imported lazily to avoid circular deps."""
+    try:
+        from pikorua_adflow.analytics.crm_normalise import normalise_rows
+        return normalise_rows(rows)
+    except Exception as exc:
+        print(f"[crm_source] normalisation skipped ({exc}).")
+        return rows

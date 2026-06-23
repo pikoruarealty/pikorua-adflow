@@ -595,6 +595,11 @@ async def inpaint_image(run_id: str, prompt_num: int, request: Request):
     # Determine aspect from the run's visual brief (default 4:5)
     aspect = "4x5"
 
+    # INPAINT_MOCK=1 skips the Ideogram API call for UI/flow testing without credits.
+    # Returns the edit prompt so you can review what would have been sent to Ideogram.
+    if os.getenv("INPAINT_MOCK") == "1":
+        return {"mock": True, "prompt_sent": edit_prompt, "prompt_num": prompt_num}
+
     result_bytes = imgs.call_ideogram_inpaint(
         image_bytes=image_bytes,
         mask_bytes=mask_bytes,

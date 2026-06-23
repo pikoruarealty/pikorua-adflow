@@ -93,49 +93,334 @@ DEFAULT_BEHAVIOURS: list[str] = [
     "Frequent international travellers",  # Meta uses British spelling
 ]
 
+# ── Shared targeting building blocks ─────────────────────────────────────────
+# IDs extracted directly from live Pikorua campaigns (verified 2026-06-23).
+# Performance-validated — CPL benchmarks are annotated where available.
+# Hardcoded so they don't need an API lookup on every deploy.
+
+# Income cluster — present in ALL 4 active Pikorua campaigns.  The single
+# highest-leverage filter for luxury real estate: India's top-10% earners.
+_INCOME_TOP_10 = [{"id": "6661019705983", "name": "Household income (India): Top 10%"}]
+
+# Owner / founder work positions — from the BEST bungalow campaign (₹220/lead).
+# IDs 138434539530345 and 149598488387016 were verified in the ₹220 CPL ad set.
+# These two positions outperform longer C-suite lists because they match the actual
+# Ahmedabad luxury buyer: a self-employed business owner, not a corporate executive.
+_WORK_POSITIONS_OWNERS = [
+    {"id": "138434539530345", "name": "Owner/Managing Director"},   # ₹220 CPL bungalow
+    {"id": "149598488387016", "name": "Owner and CEO"},              # ₹220 CPL bungalow
+    {"id": "143727678985148", "name": "Founder and Managing Director"},
+    {"id": "133337610036491", "name": "Founder, Director, CEO"},
+    {"id": "149657818421934", "name": "Director (business)"},
+]
+
+# C-suite positions — only for apartment/corporate profiles (NN campaign, ₹609 CPL).
+# NOTE: using too many of these narrows audience too aggressively; prefer 3-4 max.
+_WORK_POSITIONS_CSUITE = [
+    {"id": "112451425436956",  "name": "Vice President"},
+    {"id": "112558655421889",  "name": "Chief financial officer"},
+    {"id": "133337610036491",  "name": "Founder, Director, CEO"},
+    {"id": "1379551615695666", "name": "Executive Vice President (EVP)"},
+]
+# IT-specific C-suite — AVOID for luxury real estate (used in ₹967 CPL GODREJ campaign).
+# Listed here for reference; not added to any clientele profile.
+_WORK_POSITIONS_IT_CSUITE_AVOID = [
+    {"id": "103111706395693",  "name": "Chief Administrative Officer"},  # IT campaign ₹967 CPL
+    {"id": "104016006301659",  "name": "Chief marketing officer"},
+    {"id": "621959927947441",  "name": "Chief Information Officer (CIO)"},
+    {"id": "1597325863845095", "name": "Information Technology Director"},
+]
+_WORK_POSITION_PROPERTY  = [{"id": "108900439134105", "name": "Property"}]
+_WORK_POSITION_CA        = [{"id": "105525432814378", "name": "Chartered accountant"}]
+
+# B2B industry overlay — large enterprise employees.  Present in ₹220 CPL bungalow campaign.
+_INDUSTRIES_ENTERPRISE = [{"id": "6075565069783", "name": "Large business-to-business enterprise employees (500+ employees)"}]
+
+
 # ── Clientele → targeting profile ────────────────────────────────────────────
-# Each property's buyer clientele (chosen on the campaign form) tunes the starting
-# audience: which interests lead, what age band, and whether NRI geo is implied.
-# This is the "different clientele for different projects" rule — a bungalow HNI is
-# NOT a flat buyer, so we never share one type's audience with another's.
-# `interests` here REPLACE DEFAULT_INTERESTS for that clientele (names resolved live;
-# unmatched names are skipped). `age_min/age_max` override the defaults below.
+# Schema per entry:
+#   interests      — plain-text names, resolved live via Meta Targeting Search API.
+#                    Any name Meta doesn't recognise is silently skipped.
+#   behaviours     — plain-text names, resolved live.
+#   work_positions — pre-resolved {id, name} dicts (no API call needed at deploy).
+#   income_clusters— pre-resolved {id, name} dicts for user_adclusters.
+#   age_min/max    — override defaults.
+#
+# Learnings from live campaign analysis (2026-06-23):
+#   - Every active campaign uses Household income Top 10% — always include it.
+#   - Every active campaign uses Engaged Shoppers behaviour.
+#   - Bungalow campaign (₹232/lead) outperforms apartment (₹484/lead) because it
+#     uses work_positions MD/Owner/Director + specific "Bungalow" interest.
+#   - Apartment/engagement campaigns use Chartered Accountant education + C-suite
+#     work_positions for the highest-quality professional buyer.
+#   - Trader/industrialist campaigns use Textile, Manufacturing, Export interests.
 CLIENTELE_TARGETING_MAP: dict[str, dict] = {
+
     "luxury_bungalow": {
-        "label": "Luxury Bungalow / Villa",
+        # Owner-occupier HNI — Ahmedabad business owner or MD buying a ₹5 Cr+ residence.
+        # Benchmark: ₹220 CPL (best campaign in account — "bungalow ahmd general").
+        # Mirror of that campaign's exact flexible_spec: 12 interests + 2 behaviours +
+        # 2 owner work positions + income Top 10% + B2B enterprise industries.
+        # Lesson: simple owner positions (Owner/MD + Owner/CEO) outperform long C-suite lists.
+        "label": "Luxury Bungalow / Villa — HNI owner-occupier (₹5 Cr+)",
         "interests": [
-            "Luxury goods", "Luxury vehicles", "Private banking", "Wealth management",
-            "Fine dining", "Golf", "Interior design", "Art",
+            "Small business (business and finance)",           # verified in ₹220 CPL campaign
+            "Bungalow",                                        # ID 6003011972081
+            "First-class travel (travel and tourism business)",# ID 6003076027139
+            "Apartment (property)",                            # ID 6003103732434 (in-market signal)
+            "Investment management (investing)",               # ID 6003293787730
+            "Business class (air travel)",                     # ID 6003352779232
+            "Luxury resorts (lodging)",                        # ID 6003383552337
+            "Luxury Lifestyle (website)",                      # ID 6003392552125
+            "Property investing (investing)",                  # ID 6003446239080
+            "Investor (investing)",                            # ID 6003587074473
+            "Personal luxury car",                             # ID 6003755914953
+            "Luxury vehicle (vehicles)",                       # ID 6004048615096
         ],
-        "behaviours": ["Frequent international travellers"],
+        "behaviours": [
+            "Frequent international travelers",  # ID 6022788483583
+            "Engaged Shoppers",                  # ID 6071631541183
+        ],
+        "work_positions": [
+            {"id": "138434539530345", "name": "Owner/Managing Director"},  # ₹220 CPL verified
+            {"id": "149598488387016", "name": "Owner and CEO"},             # ₹220 CPL verified
+        ],
+        "industries": _INDUSTRIES_ENTERPRISE,
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 36, "age_max": 65,
+    },
+
+    "premium_apartment": {
+        # Corporate professional / senior employee — first or second premium flat, 1.5–4 Cr.
+        # Benchmark: LAARGE Apts ₹376 CPL beats NN ₹609 CPL — key insight is MORE interests
+        # (11) + fewer work positions outperforms FEWER interests (3) + MANY C-suite positions.
+        # Strategy: broad aspirational interests + married filter + Lived in India (expat signal)
+        # + Engaged Shoppers. Do NOT stack 11 specific C-suite titles — it over-narrows the pool.
+        "label": "Premium Apartment — corporate professional (₹1.5–4 Cr)",
+        "interests": [
+            "Property investment trust (investing)",    # verified in LAARGE ₹376 CPL
+            "First-class travel (travel and tourism business)",
+            "Apartment (property)",                    # exact signal for apartment buyer
+            "luxury (lifestyle content)",              # verified in LAARGE + GODREJ
+            "creative property investing (property)",  # verified in LAARGE
+            "Property investment club (club)",
+            "Investment (business and finance)",
+            "Luxury Lifestyle (website)",
+            "Luxury vehicle (vehicles)",
+            "Luxury goods (retail)",
+        ],
+        "behaviours": [
+            "Frequent Travelers",                             # verified in LAARGE ₹376 CPL
+            "Lived in India (Formerly Expats - India)",       # verified in LAARGE ₹376 CPL
+            "Frequent international travelers",
+            "Engaged Shoppers",
+        ],
+        "work_positions": _WORK_POSITION_PROPERTY,           # only "Property" — LAARGE style
+        "relationship_statuses": [3],                         # married — verified in LAARGE + NN
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 35, "age_max": 55,
+    },
+
+    "trader_industrialist": {
+        # Ahmedabad's dominant buyer: diamond / textile / FMCG / pharma / manufacturing trader.
+        # Self-made wealth, upgrading from an older property to a premium bungalow.
+        # Based on PIKORUA Engagement campaign (best trader interest stack seen in account).
+        # Key signals: Textile, Manufacturing, Export + Owner/MD work positions + married.
+        "label": "Trader / Industrialist — Gujarati business community upgrade (₹5 Cr+)",
+        "interests": [
+            "Textile (craft supplies)",           # verified in engagement campaign
+            "Manufacturing (industry)",           # verified in engagement campaign
+            "Export",                             # verified in engagement campaign
+            "International business",             # verified in engagement campaign
+            "Small and medium enterprises (business and finance)",
+            "Property investing (investing)",
+            "Luxury vehicle (vehicles)",
+            "Luxury goods (retail)",
+            "Investment (business and finance)",
+        ],
+        "behaviours": [
+            "Frequent international travelers",
+            "Frequent Travelers",
+            "Small business owners",
+            "Engaged Shoppers",
+            "Returned from travels 2 weeks ago",  # verified in engagement campaign — post-travel = planning mindset
+        ],
+        "work_positions": [
+            {"id": "874842615892965",  "name": "Managing Director"},
+            {"id": "143727678985148",  "name": "Founder and Managing Director"},
+            {"id": "133337610036491",  "name": "Founder, Director, CEO"},
+            {"id": "110722838955052",  "name": "Owner"},
+            {"id": "149657818421934",  "name": "Director (business)"},
+        ],
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 42, "age_max": 68,
+    },
+
+    "nri_investment": {
+        # Diaspora buyer — yield/portfolio purchase, not primary use.
+        # Uses Lived in India (Formerly Expats) behaviour verified in LAARGE campaign.
+        "label": "NRI Investor — diaspora yield / portfolio buyer (₹2–6 Cr)",
+        "interests": [
+            "Property investing (investing)",
+            "Investment (business and finance)",
+            "Luxury Lifestyle (website)",
+            "luxury (lifestyle content)",
+            "Luxury goods (retail)",
+            "First-class travel (travel and tourism business)",
+        ],
+        "behaviours": [
+            "Frequent international travelers",
+            "Expats (All)",
+            "Lived in India (Formerly Expats - India)",  # verified in LAARGE + Engagement campaigns
+            "Engaged Shoppers",
+        ],
+        "work_positions": _WORK_POSITIONS_OWNERS,
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 30, "age_max": 60,
+    },
+
+    "commercial_office": {
+        # Business buying office / commercial space as asset or for own use.
+        "label": "Commercial / Office — business asset buyer (₹2 Cr+)",
+        "interests": [
+            "Property investing (investing)",
+            "Investment (business and finance)",
+            "Small and medium enterprises (business and finance)",
+            "International business",
+            "Entrepreneurship",
+            "Luxury goods (retail)",
+        ],
+        "behaviours": [
+            "Small business owners",
+            "Frequent international travelers",
+            "Engaged Shoppers",
+        ],
+        "work_positions": _WORK_POSITIONS_OWNERS,
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 30, "age_max": 60,
+    },
+
+    "it_professional": {
+        # GIFT City, Infosys, TCS, Wipro or startup employee — first/second home, 1–3.5 Cr.
+        # IT Director / CIO work positions from GODREJ campaign are the key differentiator.
+        "label": "IT / Tech Professional — GIFT City / tech park buyer (₹1–3.5 Cr)",
+        "interests": [
+            "Apartment (property)",
+            "Investment (business and finance)",
+            "Property investing (investing)",
+            "Personal finance",
+            "Interior design",
+            "Luxury Lifestyle (website)",
+        ],
+        "behaviours": [
+            "Frequent Travelers",
+            "Engaged Shoppers",
+        ],
+        "work_positions": [
+            {"id": "1597325863845095", "name": "Information Technology Director"},
+            {"id": "621959927947441",  "name": "Chief Information Officer (CIO)"},
+            {"id": "106236979408167",  "name": "Chief information officer"},
+            {"id": "133337610036491",  "name": "Founder, Director, CEO"},
+            {"id": "112451425436956",  "name": "Vice President"},
+        ],
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 26, "age_max": 44,
+    },
+
+    "doctor_professional": {
+        # Medical professionals — independent home buyers, typically bungalows or premium floors.
+        # High income, trust word-of-mouth, respond to exclusivity and privacy messaging.
+        "label": "Doctor / Healthcare Professional — independent home buyer (₹3–8 Cr)",
+        "interests": [
+            "Bungalow",
+            "Property investing (investing)",
+            "Luxury goods (retail)",
+            "First-class travel (travel and tourism business)",
+            "Luxury vehicle (vehicles)",
+            "Interior design",
+            "Investment (business and finance)",
+        ],
+        "behaviours": [
+            "Frequent international travelers",
+            "Engaged Shoppers",
+        ],
+        "work_positions": [
+            {"id": "105563979478424", "name": "Executive director"},   # proxies for senior doctors
+            {"id": "112558655421889", "name": "Chief financial officer"},
+        ],
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 32, "age_max": 58,
+    },
+
+    "hni_portfolio_investor": {
+        # Pure investor — yield/hold/flip.  Responds to CAGR, appreciation, rental yield data.
+        # Overlaps with luxury_bungalow on demographics but different decision triggers.
+        "label": "HNI Portfolio Investor — multi-property / yield-seeker (₹4 Cr+)",
+        "interests": [
+            "Property investing (investing)",
+            "Property investment trust (investing)",  # verified in LAARGE + Engagement campaigns
+            "creative property investing (property)",  # verified in LAARGE
+            "Investment (business and finance)",
+            "Stock (investing)",                        # verified in Engagement campaign
+            "Investor (investing)",
+            "Luxury goods (retail)",
+            "First-class travel (travel and tourism business)",
+        ],
+        "behaviours": [
+            "Frequent international travelers",
+            "Frequent Travelers",
+            "Engaged Shoppers",
+        ],
+        "work_positions": _WORK_POSITIONS_OWNERS,
+        "income_clusters": _INCOME_TOP_10,
         "age_min": 38, "age_max": 65,
     },
-    "premium_apartment": {
-        "label": "Premium Apartment",
+
+    "affordable_luxury": {
+        # Young professional buying their first premium home — stepping up to a branded dev.
+        # More price-sensitive; EMI, possession timeline, and location matter most.
+        "label": "Affordable Luxury — first premium home, young professional (₹1–2.5 Cr)",
         "interests": [
-            "Real estate investing", "Investment", "Interior design",
-            "Entrepreneurship", "Technology", "Personal finance", "Luxury goods",
+            "Apartment (property)",
+            "Property investing (investing)",
+            "Luxury Lifestyle (website)",
+            "Interior design",
+            "Personal finance",
+            "Investment (business and finance)",
         ],
-        "behaviours": [],
-        "age_min": 28, "age_max": 50,
+        "behaviours": [
+            "Frequent Travelers",
+            "Small business owners",
+            "Engaged Shoppers",
+        ],
+        "work_positions": _WORK_POSITION_CA + [
+            {"id": "112451425436956", "name": "Vice President"},
+        ],
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 26, "age_max": 42,
     },
-    "nri_investment": {
-        "label": "NRI Investment",
+
+    "nri_end_user": {
+        # NRI buying for own / family use — parents' home, children's school base.
+        # Emotional driver, not yield.  Lived in India behaviour is the clearest signal.
+        "label": "NRI End User — homeland / family home buyer (₹2–5 Cr)",
         "interests": [
-            "Real estate investing", "Investment", "Wealth management",
-            "Property", "Non-resident Indian", "Expatriate",
+            "Apartment (property)",
+            "Property investing (investing)",
+            "luxury (lifestyle content)",
+            "First-class travel (travel and tourism business)",
+            "Interior design",
+            "Investment (business and finance)",
         ],
-        "behaviours": ["Frequent international travellers", "Expats (All)"],
-        "age_min": 30, "age_max": 60,
-    },
-    "commercial_office": {
-        "label": "Commercial / Office",
-        "interests": [
-            "Real estate investing", "Investment", "Entrepreneurship",
-            "Small business", "Commercial property", "Business",
+        "behaviours": [
+            "Frequent international travelers",
+            "Expats (All)",
+            "Lived in India (Formerly Expats - India)",
+            "Engaged Shoppers",
         ],
-        "behaviours": ["Small business owners"],
-        "age_min": 30, "age_max": 60,
+        "work_positions": _WORK_POSITIONS_OWNERS,
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 32, "age_max": 58,
     },
 }
 DEFAULT_CLIENTELE = "premium_apartment"
@@ -302,13 +587,20 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
 
     if clientele_type:
         profile = clientele_profile(clientele_type)
-        interest_names = profile["interests"]
+        interest_names  = profile["interests"]
         behaviour_names = profile["behaviours"]
         age_min, age_max = profile["age_min"], profile["age_max"]
+        # Pre-resolved fields — passed straight through, no API lookup needed.
+        work_positions      = profile.get("work_positions", [])
+        income_clusters     = profile.get("income_clusters", [])
+        industries          = profile.get("industries", [])
+        relationship_statuses = profile.get("relationship_statuses", [])
     else:
-        interest_names = DEFAULT_INTERESTS
+        interest_names  = DEFAULT_INTERESTS
         behaviour_names = DEFAULT_BEHAVIOURS
         age_min, age_max = DEFAULT_AGE_MIN, DEFAULT_AGE_MAX
+        work_positions = income_clusters = industries = []
+        relationship_statuses = []
 
     interests = []
     for nm in interest_names:
@@ -339,6 +631,10 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
         "age_max": age_max,
         "interests": interests,
         "behaviours": behaviours,
+        "work_positions": work_positions,
+        "income_clusters": income_clusters,
+        "industries": industries,
+        "relationship_statuses": relationship_statuses,
         "nri_countries": nri_countries,
         "clientele_type": (clientele_type or "").strip().lower() or DEFAULT_CLIENTELE,
     }
@@ -389,8 +685,34 @@ def build_targeting_spec(audience: dict) -> dict:
         group["interests"] = interests
     if behaviours:
         group["behaviors"] = behaviours
+
+    # work_positions — Facebook job titles from profile data; pre-resolved {id, name} dicts.
+    work_positions = [{"id": str(w["id"]), "name": w.get("name", "")}
+                      for w in audience.get("work_positions", []) if w.get("id")]
+    if work_positions:
+        group["work_positions"] = work_positions
+
+    # user_adclusters — Meta income / lifestyle clusters; pre-resolved {id, name} dicts.
+    income_clusters = [{"id": str(u["id"]), "name": u.get("name", "")}
+                       for u in audience.get("income_clusters", []) if u.get("id")]
+    if income_clusters:
+        group["user_adclusters"] = income_clusters
+
+    # industries — Facebook industry segments; pre-resolved {id, name} dicts.
+    industries = [{"id": str(ind["id"]), "name": ind.get("name", "")}
+                  for ind in audience.get("industries", []) if ind.get("id")]
+    if industries:
+        group["industries"] = industries
+
     if group:
         spec["flexible_spec"] = [group]
+
+    # relationship_statuses — top-level (not inside flexible_spec).
+    # 3 = married.  See Meta marketing API docs for full enum.
+    rel_statuses = [int(r) for r in (audience.get("relationship_statuses") or [])
+                    if str(r).isdigit()]
+    if rel_statuses:
+        spec["relationship_statuses"] = rel_statuses
 
     inc = [{"id": str(a["id"])} for a in audience.get("included_custom_audiences", []) if a.get("id")]
     exc = [{"id": str(a["id"])} for a in audience.get("excluded_custom_audiences", []) if a.get("id")]
@@ -407,14 +729,14 @@ def build_targeting_spec(audience: dict) -> dict:
 # interest names. Used to lean targeting toward whatever profile actually converts
 # for THIS campaign's clientele — never across clienteles.
 _INDUSTRY_TO_INTERESTS: dict[str, list[str]] = {
-    "IT/Tech": ["Technology", "Software", "Information technology"],
-    "Finance/Banking": ["Investment", "Personal finance", "Private banking"],
-    "Business/Entrepreneur": ["Entrepreneurship", "Small business", "Business"],
-    "Medical/Healthcare": ["Medicine", "Health care"],
-    "Real Estate": ["Real estate investing", "Property"],
-    "Government/PSU": ["Investment", "Wealth management"],
-    "NRI": ["Non-resident Indian", "Real estate investing", "Investment"],
-    "Retired": ["Wealth management", "Investment"],
+    "IT/Tech":             ["Technology", "Software", "Information technology", "Startup"],
+    "Finance/Banking":     ["Investment", "Personal finance", "Private banking", "Wealth management"],
+    "Business/Entrepreneur": ["Entrepreneurship", "Small business", "Business", "Luxury goods"],
+    "Medical/Healthcare":  ["Medicine", "Health care", "Luxury goods"],
+    "Real Estate":         ["Real estate investing", "Property", "Commercial property"],
+    "Government/PSU":      ["Investment", "Wealth management"],
+    "NRI":                 ["Non-resident Indian", "Real estate investing", "Investment", "Expatriate"],
+    "Retired":             ["Wealth management", "Investment", "Luxury goods"],
 }
 
 

@@ -83,6 +83,7 @@ def deploy_to_meta(run_id: str):
                 campaign_name=campaign_name, city=city, landing_page_url=landing_page_url,
                 daily_budget_inr=daily_budget_inr, cta=cta, targeting_spec=targeting_spec,
                 audience_label=audience_label, end_time=end_time, campaign_id=shared_campaign_id,
+                adset_id=brief.get("target_adset_id", ""),
             )
             results.append(result)
             if not dry_run and image_path and image_path.exists():

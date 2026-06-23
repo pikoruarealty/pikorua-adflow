@@ -123,25 +123,67 @@ function render(d) {
     crm.classList.remove('hidden');
   } else { crm.classList.add('hidden'); }
 
-  // ── What needs doing (ranked) ──
+  // ── What needs doing (ranked) — per-campaign decisions + account-level actions ──
   const acts = $('#ap-actions'); acts.innerHTML = '';
-  const decisions = d.all_decisions || [];
+  const decisions = (d.all_decisions || []).concat(d.account_actions || []);
   if (!decisions.length) { $('#ap-actions-empty').classList.remove('hidden'); }
   else { $('#ap-actions-empty').classList.add('hidden'); }
   decisions.forEach(f => {
     const last = f.rung === 10;
-    const dot = DOT[f.verdict] || '🟡';
+    const isAccount = f.campaign_id === '__account__';
+    const dot = isAccount ? '🔵' : (DOT[f.verdict] || '🟡');
     const card = document.createElement('div');
     card.className = 'border p-5 ' + (last ? 'border-error/50 bg-error/5' : 'border-outline-variant');
-    const freshHref = (f.params && f.params.run_id) ? ('/results/' + f.params.run_id) : '/portal';
-    const freshLabel = (f.params && f.params.run_id) ? 'Open campaign' : 'Rebuild in PIKORUA';
-    const act = f.action === 'fresh_creative'
-      ? `<a href="${esc(freshHref)}" class="bg-primary text-on-primary label-caps px-5 py-2 inline-block hover:bg-surface-tint">${esc(freshLabel)}</a>`
-      : `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Do it</button>`;
-    card.innerHTML = `<p class="label-caps text-outline mb-1">${dot} ${esc(f.campaign_name)}</p>
+
+    let actHtml;
+    if (f.action === 'fresh_creative') {
+      let freshHref, freshLabel;
+      if (f.params && f.params.run_id) {
+        freshHref = '/results/' + f.params.run_id;
+        freshLabel = 'Open campaign';
+      } else {
+        const adsetParam = (f.params && f.params.adset_id) ? '&adset_id=' + encodeURIComponent(f.params.adset_id) : '';
+        const nameParam = (f.params && f.params.campaign_name) ? '&campaign_name=' + encodeURIComponent(f.params.campaign_name) : '';
+        freshHref = '/portal?mode=rebuild' + adsetParam + nameParam;
+        freshLabel = 'Rebuild in AdFlow';
+      }
+      actHtml = `<a href="${esc(freshHref)}" class="bg-primary text-on-primary label-caps px-5 py-2 inline-block hover:bg-surface-tint">${esc(freshLabel)}</a>`;
+    } else if (f.action === 'dayparting') {
+      // Dayparting card: show the day breakdown inline before the button
+      const topDays = (f.params && f.params.top_day_names || []).join(', ');
+      const quietDays = (f.params && f.params.quiet_day_names || []).join(', ');
+      const pct = f.params && f.params.concentration_pct;
+      const sample = f.params && f.params.sample_size;
+      const breakdown = `<div class="mb-4 text-sm border border-outline-variant/50 bg-surface-container-low p-3 grid gap-1">
+        <div class="flex justify-between"><span class="text-on-surface-variant">Peak days</span><span class="font-medium">${esc(topDays)}</span></div>
+        <div class="flex justify-between"><span class="text-on-surface-variant">Quiet days</span><span class="text-outline">${esc(quietDays || '—')}</span></div>
+        <div class="flex justify-between"><span class="text-on-surface-variant">Lead concentration on peak days</span><span class="font-medium">${pct ? pct + '%' : '—'}</span></div>
+        <div class="flex justify-between"><span class="text-on-surface-variant">Based on</span><span class="text-outline">${sample ? sample + ' leads' : '—'}</span></div>
+      </div>`;
+      card.dataset.breakdown = '1';
+      actHtml = breakdown + `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Apply schedule</button>`;
+    } else if (f.action === 'lookalike_refresh') {
+      // Show seed age/growth context
+      const p = f.params || {};
+      const meta = `<div class="mb-4 text-sm border border-outline-variant/50 bg-surface-container-low p-3 grid gap-1">
+        ${p.age_days ? `<div class="flex justify-between"><span class="text-on-surface-variant">Last built</span><span class="text-outline">${p.age_days} days ago</span></div>` : ''}
+        ${p.seed_size ? `<div class="flex justify-between"><span class="text-on-surface-variant">Seed size at last build</span><span class="text-outline">${p.seed_size.toLocaleString('en-IN')} contacts</span></div>` : ''}
+        ${p.current_crm_count ? `<div class="flex justify-between"><span class="text-on-surface-variant">CRM today</span><span class="font-medium">${p.current_crm_count.toLocaleString('en-IN')} contacts</span></div>` : ''}
+        ${p.growth_pct ? `<div class="flex justify-between"><span class="text-on-surface-variant">Growth</span><span class="font-medium text-ok">+${p.growth_pct}%</span></div>` : ''}
+      </div>`;
+      actHtml = meta + `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Refresh now</button>`;
+    } else {
+      actHtml = `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Do it</button>`;
+    }
+
+    const tagLine = isAccount
+      ? `<p class="label-caps text-primary mb-1">🔵 Account — applies to all campaigns</p>`
+      : `<p class="label-caps text-outline mb-1">${dot} ${esc(f.campaign_name)}</p>`;
+
+    card.innerHTML = `${tagLine}
       <p class="font-headline text-xl mb-2">${esc(f.title)}</p>
       <p class="text-sm text-on-surface-variant mb-4">${esc(f.detail)}</p>
-      <div class="flex gap-3 items-center">${act}
+      <div class="flex flex-wrap gap-3 items-center">${actHtml}
         <button class="label-caps text-outline hover:text-on-surface" data-dismiss="1">Not now</button></div>`;
     acts.appendChild(card);
   });
@@ -151,14 +193,36 @@ function render(d) {
   const log = d.applied_log || [];
   if (!log.length) { $('#ap-did-empty').classList.remove('hidden'); }
   else { $('#ap-did-empty').classList.add('hidden'); }
+
+  // Human-readable undo descriptions keyed by fix_type
+  const UNDO_LABEL = {
+    remove_geo: 'Undo (restores previous targeting)',
+    add_exclusion: 'Undo (removes the exclusion)',
+    add_lookalike: 'Undo (removes the lookalike)',
+    enable_advantage: 'Undo (turns off Advantage+)',
+    add_geo_city: 'Undo (removes added city)',
+    add_nri: 'Undo (removes NRI countries)',
+    broaden_radius: 'Undo (restores previous radius)',
+    add_interests: 'Undo (restores previous interests)',
+    reduce_budget: 'Undo (restores original budget)',
+    dayparting: 'Undo (removes schedule, back to even-pacing)',
+    winner_loser: 'Undo (resumes paused ad, restores budget)',
+    pause: 'Undo (resumes campaign)',
+  };
+
   log.forEach(e => {
     const card = document.createElement('div');
     card.className = 'border border-ok/40 bg-ok/5 p-4 flex justify-between items-start gap-4';
-    card.innerHTML = `<div>
+    const undoBtn = e.undoable
+      ? `<button class="label-caps text-outline hover:text-error shrink-0 text-right" title="${esc(UNDO_LABEL[e.fix_type] || 'Undo')}" data-undo="${esc(e.campaign_id)}|${esc(e.fix_type)}">Undo</button>`
+      : `<span class="label-caps text-outline/40 shrink-0 cursor-default" title="This action can't be reversed automatically">Can't undo</span>`;
+    const campaignTag = e.campaign_id === '__account__' ? 'Account-wide' : esc(e.campaign_name || e.campaign_id);
+    card.innerHTML = `<div class="min-w-0">
+        <p class="label-caps text-outline mb-0.5">${campaignTag}</p>
         <p class="font-medium">✓ ${esc(e.title)}</p>
         <p class="text-sm text-on-surface-variant mt-1">${esc(e.detail)}</p>
       </div>
-      <button class="label-caps text-outline hover:text-error shrink-0" data-undo="${esc(e.campaign_id)}|${esc(e.fix_type)}">Undo</button>`;
+      ${undoBtn}`;
     did.appendChild(card);
   });
 

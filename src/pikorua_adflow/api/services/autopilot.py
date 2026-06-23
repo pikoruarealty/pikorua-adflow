@@ -245,15 +245,48 @@ def _campaign_metrics(campaign_id: str, token: str) -> dict:
 
 
 # ── Adaptive north-star ─────────────────────────────────────────────────────
+# ── Warm-lead reference profile ──────────────────────────────────────────────
+# Derived from actual CRM data (2026-06-22): 39 warm leads cluster tightly on
+# Ahmedabad (31/39) + Business/Entrepreneur + 5-7 Cr.  Used as a fallback seed
+# for profile_match_score when `top_profiles` from crm_report is empty or sparse
+# (i.e., before enough quality leads have been tagged in the live CRM).
+#
+# Format matches top_converting_profiles() output:
+#   {"profile": {"industry": ..., "budget": ..., "city": ...}, "quality_rate": ...}
+_WARM_LEAD_REFERENCE_PROFILES: list[dict] = [
+    {"profile": {"industry": "Business/Entrepreneur", "budget": "5–7Cr",  "city": "Ahmedabad"}, "quality_rate": 100.0},
+    {"profile": {"industry": "Business/Entrepreneur", "budget": "7–10Cr", "city": "Ahmedabad"}, "quality_rate": 100.0},
+    {"profile": {"industry": "Business/Entrepreneur", "budget": "10Cr+",  "city": "Ahmedabad"}, "quality_rate": 100.0},
+    {"profile": {"industry": "Business/Entrepreneur", "budget": "5–7Cr",  "city": "Rajkot"},    "quality_rate": 80.0},
+    {"profile": {"industry": "Business/Entrepreneur", "budget": "5–7Cr",  "city": "Surat"},     "quality_rate": 80.0},
+]
+# Only inject the reference for these clientele types (bungalow/premium buyers
+# match this profile — NRI and commercial have different buyer personas).
+_REFERENCE_PROFILE_CLIENTELE = {"luxury_bungalow", "premium_apartment", ""}
+
+
+def _should_inject_reference(campaign_name: str, profiles: list[dict]) -> bool:
+    """True when the reference profile should supplement a sparse top_profiles list."""
+    if len(profiles) >= 3:
+        return False  # enough real data — don't override with a static heuristic
+    # Apply only to bungalow/premium-style campaigns (inferred from name keywords).
+    cn = campaign_name.strip().lower()
+    return any(kw in cn for kw in ("bungalow", "villa", "premium", "luxury", "pikorua", ""))
+
+
 def adaptive_quality(campaign_name: str, spend_7d: float, leads_7d: int,
                      crm_leads: list[dict], crm_report: dict) -> dict:
     """
     Pick the quality metric for a campaign.
 
-    Real quality-CPL (₹ per exploring/warm/hot CRM lead) once >= QUALITY_LEAD_MIN
-    matched quality leads exist; otherwise the profile-match score (how much the
-    campaign's leads resemble the best historical converters). Returns a dict the
-    UI renders verbatim.
+    Real quality-CPL (₹ per quality CRM lead matched to this campaign) once
+    >= QUALITY_LEAD_MIN matched quality leads exist; otherwise the profile-match
+    score (how much the campaign's leads resemble the best historical converters).
+
+    When `top_profiles` is sparse (data still building), the known warm-lead
+    reference profile (Ahmedabad + Business + 5-7 Cr) is used as a fallback seed
+    so profile_match_score produces a meaningful signal from day one.
+    Returns a dict the UI renders verbatim.
     """
     from pikorua_adflow.analytics import crm_analytics as ca
 
@@ -271,8 +304,12 @@ def adaptive_quality(campaign_name: str, spend_7d: float, leads_7d: int,
         }
 
     profiles = crm_report.get("top_profiles", []) if crm_report else []
+    # Inject reference profiles when real data is sparse — prevents a zero score
+    # while the CRM builds up tagged quality leads.
+    if _should_inject_reference(campaign_name, profiles):
+        profiles = _WARM_LEAD_REFERENCE_PROFILES + profiles
+
     pm = ca.profile_match_score(matched, profiles)
-    # Plain CPL still shown as the headline number while quality scoring builds.
     plain_cpl = round(spend_7d / leads_7d) if leads_7d else None
     return {
         "metric_used": "profile_match",
@@ -281,6 +318,7 @@ def adaptive_quality(campaign_name: str, spend_7d: float, leads_7d: int,
         "profile_match_pct": pm["score"], "n_quality": n_quality,
         "n_matched": len(matched),
         "building": True,
+        "reference_profile_active": _should_inject_reference(campaign_name, crm_report.get("top_profiles", []) if crm_report else []),
     }
 
 
@@ -518,20 +556,21 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
 
     # Rung 8 (APPROVE) — fresh creative (human makes it).
     # Fires on weak click-through ALONE — a low CTR means the ad isn't landing,
-    # whether the cost is climbing or has simply been poor from day one. (Previously
-    # this also required cost to be rising, so a consistently weak ad never surfaced.)
+    # whether the cost is climbing or has simply been poor from day one.
     stale = ctr and ctr < 0.8
     if stale:
-        only_few = "barely anyone who sees it clicks"
-        why = (f"Only {ctr}% of people who see this ad click it — {only_few}. "
+        why = (f"Only {ctr}% of people who see this ad click it — barely anyone who sees it acts. "
                + ("Cost is climbing too. " if rising else ""))
         how = ("Open this campaign to regenerate and push fresh images & copy onto the live ads."
                if run_id else
-               "This campaign wasn't built in PIKORUA, so rebuild it here to give it fresh images & copy.")
+               "Rebuild it in AdFlow — the new ads will be added directly to this campaign, "
+               "keeping your budget, targeting, and delivery history intact.")
         add("fresh_creative", 8, "approve",
             "The ad isn't landing — refresh it",
             why + how,
-            "fresh_creative", {"campaign_id": cid, "run_id": run_id})
+            "fresh_creative", {"campaign_id": cid, "run_id": run_id,
+                               "adset_id": adset_id,
+                               "campaign_name": campaign.get("name", "")})
 
     # Rung 9 (APPROVE) — reduce budget to sustainable level.
     if freq > 3.5 and cpl and cpl > CPL_CEILING:
@@ -546,6 +585,40 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
                 "the targeting fixes take effect.",
                 "reduce_budget", {"campaign_id": cid, "daily_budget_inr": new_budget,
                                   "base_budget": cur_budget})
+
+    # Rung 9.5 (APPROVE) — dayparting from lead-arrival timing.
+    # Only surfaces when CRM has enough timing signal and no schedule is already set.
+    # Fires only once (cooldown); audience fatigue is not required — this is pure efficiency.
+    if not _in_cooldown(camp_state, "dayparting"):
+        try:
+            from pikorua_adflow.analytics import lead_timing as _lt
+            timing = _lt.analyse(crm_leads)
+            already_scheduled = bool(targeting.get("ad_schedule_config") or
+                                     adset.get("pacing_type") == ["day_parting"])
+            if timing["has_signal"] and not already_scheduled:
+                top_names = timing["top_day_names"]
+                quiet_names = timing["quiet_day_names"]
+                pct = timing["concentration_pct"]
+                top_str = (", ".join(top_names[:-1]) + f" and {top_names[-1]}"
+                           if len(top_names) > 1 else top_names[0])
+                quiet_str = (", ".join(quiet_names) if quiet_names else "")
+                detail = (
+                    f"{pct}% of your leads arrive on {top_str}. "
+                    + (f"{quiet_str} {'are' if len(quiet_names) > 1 else 'is'} quiet. " if quiet_str else "")
+                    + "Applying a focus schedule means Meta runs your full daily budget on "
+                    "your peak days and skips the quiet ones — same results, less waste."
+                )
+                add("dayparting", 9, "approve",
+                    f"Focus ads on your {len(top_names)} peak days",
+                    detail, "dayparting",
+                    {"adset_id": adset_id,
+                     "meta_schedule_days": timing["meta_schedule_days"],
+                     "top_day_names": timing["top_day_names"],
+                     "quiet_day_names": timing["quiet_day_names"],
+                     "concentration_pct": timing["concentration_pct"],
+                     "sample_size": timing["sample_size"]})
+        except Exception:
+            pass
 
     # Rung 10 (APPROVE, LAST RESORT) — pause.
     tried_levers = any(
@@ -717,6 +790,38 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
                                 expected=tracker.predict("budget_linear",
                                                          new_b / max(params.get("base_budget", new_b), 1), None))
             impact = {"metric": "budget", "after": new_b}
+        elif action == "dayparting":
+            peak_days = params.get("meta_schedule_days", [])
+            if not peak_days:
+                return {"ok": False, "error": "No schedule days provided."}
+            mt.update_adset_schedule(adset_id, peak_days, token)
+            undo = {"action": "remove_schedule", "adset_id": adset_id}
+            top_str = ", ".join(params.get("top_day_names", []))
+            impact = {"summary": f"Ads now focused on {top_str}",
+                      "peak_days": params.get("top_day_names", []),
+                      "quiet_days": params.get("quiet_day_names", [])}
+        elif action == "lookalike_refresh":
+            # Account-level: re-upload CRM to refresh the Meta lookalike seed.
+            account_id = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+            from pikorua_adflow.tools.meta_audience_tool import upload_crm_split_audiences
+            result = upload_crm_split_audiences(ad_account_id=account_id)
+            if "error" in result:
+                return {"ok": False, "error": result["error"]}
+            # Stamp built_at + seed_size in the registry.
+            try:
+                rows = json.loads(AUDIENCES_REGISTRY_PATH.read_text()) if AUDIENCES_REGISTRY_PATH.exists() else []
+                now_iso = _now().isoformat()
+                seed_size = result.get("total_leads") or result.get("leads_uploaded") or 0
+                for row in rows:
+                    if row.get("role") == "lookalike":
+                        row["built_at"] = now_iso
+                        row["seed_size"] = int(seed_size)
+                AUDIENCES_REGISTRY_PATH.write_text(json.dumps(rows, indent=2, ensure_ascii=False))
+            except Exception:
+                pass
+            undo = {}  # upload cannot be meaningfully undone
+            impact = {"summary": f"Lookalike seed refreshed with {result.get('total_leads', '?')} contacts",
+                      "total_leads": result.get("total_leads")}
         elif action == "pause":
             mt.toggle_campaign_status(params["campaign_id"], False, token) \
                 if hasattr(mt, "toggle_campaign_status") else mt._patch(
@@ -771,6 +876,8 @@ def undo_fix(campaign_id: str, fix_type: str) -> dict:
             mt.toggle_advantage_audience(undo["adset_id"], undo["enable"], token)
         elif ua == "set_budget":
             mt.update_adset_budget(undo["target"], undo["daily_budget_inr"], token)
+        elif ua == "remove_schedule":
+            mt.remove_adset_schedule(undo["adset_id"], token)
         elif ua == "resume_campaign":
             mt._patch(undo["campaign_id"], {"status": "ACTIVE"}, token)
         else:
@@ -873,6 +980,31 @@ def run_autopilot(apply_safe: bool = True) -> dict:
         "scoring_on": total_quality >= QUALITY_LEAD_MIN,
     }
 
+    # Account-level actions — things that apply across all campaigns.
+    account_actions: list[dict] = []
+    try:
+        from pikorua_adflow.analytics import lookalike_health as _lh
+        registry_rows = json.loads(AUDIENCES_REGISTRY_PATH.read_text(encoding="utf-8")) \
+            if AUDIENCES_REGISTRY_PATH.exists() else []
+        staleness = _lh.check_staleness(registry_rows, len(crm_leads))
+        if staleness["stale"]:
+            account_actions.append({
+                "fix_type": "lookalike_refresh",
+                "action": "lookalike_refresh",
+                "campaign_id": "__account__",
+                "campaign_name": "Audience — account-wide",
+                "rung": 3,
+                "mode": "approve",
+                "title": "Refresh your buyer audience seed",
+                "detail": staleness["reason"] + " " + staleness["action_detail"],
+                "params": {"age_days": staleness["age_days"],
+                           "seed_size": staleness["seed_size"],
+                           "current_crm_count": staleness["current_crm_count"],
+                           "growth_pct": staleness["growth_pct"]},
+            })
+    except Exception:
+        pass
+
     state["last_run"] = _now().isoformat()
 
     # B2: resolve any A/B groups whose window has elapsed.
@@ -892,6 +1024,7 @@ def run_autopilot(apply_safe: bool = True) -> dict:
         "auto_applied": auto_applied,
         "decisions": decisions[:2],
         "all_decisions": decisions,
+        "account_actions": account_actions,
         "crm_coverage": crm_coverage,
         "star": star,
         "best_cpl": best_cpl,
@@ -922,7 +1055,8 @@ def get_applied_log() -> list[dict]:
     for cid, cs in state["campaigns"].items():
         for e in cs.get("applied", []):
             if not e.get("undone"):
-                out.append({**e, "campaign_id": cid})
+                undoable = bool((e.get("undo") or {}).get("action"))
+                out.append({**e, "campaign_id": cid, "undoable": undoable})
     out.sort(key=lambda e: e.get("applied_at", ""), reverse=True)
     return out
 

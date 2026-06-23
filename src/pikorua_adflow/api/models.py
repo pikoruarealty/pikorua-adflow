@@ -34,6 +34,7 @@ class CampaignBrief(BaseModel):
         "luxury_bungalow | premium_apartment | nri_investment | commercial_office.",
     )
     cheque_only: bool = Field(False, description="If true, a '100% Cheque Payment' selling point is surfaced in images + copy.")
+    target_adset_id: str = Field("", description="When set, deploy injects ads into this existing Meta adset instead of creating a new campaign.")
     sample_ready: bool = Field(False, description="If true, a 'Sample apartment ready to view' line is included in images.")
     rera_verified: bool = Field(False, description="If true, RERA claims in image prompts are allowed.")
     verified_awards: bool = Field(False, description="If true, award claims in image prompts are allowed.")
