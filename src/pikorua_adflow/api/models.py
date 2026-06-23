@@ -133,3 +133,9 @@ class AdvantageToggleReq(BaseModel):
 class CboToggleReq(BaseModel):
     campaign_id: str
     enable: bool
+
+
+class RetargetCampaignReq(BaseModel):
+    campaign_id: str
+    clientele_type: str
+    dry_run: bool = False

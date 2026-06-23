@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, Response
 
 from ..config import REFERENCE_IMAGES_DIR
 from ..models import (AdvantageToggleReq, ApplyRecommendationReq, CboToggleReq,
-                      MetaOptimizeReq)
+                      MetaOptimizeReq, RetargetCampaignReq)
 from ..services import campaign_service as cs
 from ..services import crm_service
 from ..services import deploy_service as ds
@@ -798,3 +798,40 @@ async def meta_lead_webhook_receive(request: Request):
                 errors.append(str(exc))
     print(f"[webhook] inserted={inserted} errors={errors}")
     return JSONResponse({"status": "ok", "inserted": len(inserted), "errors": errors})
+
+
+@router.post("/retarget-campaign")
+def retarget_campaign(req: RetargetCampaignReq):
+    """
+    Refresh the audience targeting on all ACTIVE/PAUSED ad sets for a live campaign.
+
+    Updates flexible_spec (interests, behaviours, work_positions, income clusters)
+    to match the current clientele profile. Safe to run on any live campaign:
+
+      - geo_locations are NEVER touched
+      - custom_audiences (CRM seed, lookalike) are NEVER removed
+      - excluded_custom_audiences (bad leads, brokers) are NEVER removed
+      - age range is kept unless the profile deviates by more than 5 years
+      - Advantage+ is enabled on every updated ad set
+
+    Use dry_run=true to preview changes without writing to Meta.
+    """
+    from pikorua_adflow.tools.meta_tool import retarget_campaign_adsets
+
+    dry_run = req.dry_run or os.getenv("DRY_RUN", "true").lower() == "true"
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=500, detail="META_ACCESS_TOKEN not configured.")
+
+    result = retarget_campaign_adsets(
+        req.campaign_id,
+        req.clientele_type,
+        token,
+        dry_run=dry_run,
+    )
+
+    if result["errors"] and not result["updated"]:
+        raise HTTPException(status_code=502,
+                            detail=f"All ad sets failed: {result['errors']}")
+
+    return JSONResponse(content=result)

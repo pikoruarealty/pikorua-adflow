@@ -799,6 +799,138 @@ def fetch_campaign_adsets(campaign_id: str, token: str) -> list[dict]:
         return []
 
 
+def retarget_campaign_adsets(
+    campaign_id: str,
+    clientele_type: str,
+    token: str,
+    *,
+    dry_run: bool = False,
+) -> dict:
+    """
+    Refresh the flexible_spec (interests, behaviours, work_positions, income clusters)
+    on all ACTIVE ad sets in a campaign to match the current clientele profile.
+
+    Safety rules — these are NEVER touched:
+      - geo_locations  : geo was manually tuned per campaign; code never changes it
+      - custom_audiences         : CRM seed + lookalike CAs are preserved as-is
+      - excluded_custom_audiences: bad-lead / broker exclusions are preserved as-is
+      - age_min / age_max        : existing ad-set age range is kept unless profile
+                                   diverges by more than 5 years (avoids accidental reset)
+
+    Advantage+ (advantage_audience=1) is enabled on every updated ad set — it lets
+    Meta expand beyond the interest list to find converters, which is what the best
+    live campaign (₹220 CPL) uses.
+
+    Returns {campaign_id, clientele_type, updated:[...], errors:[...], dry_run}.
+    """
+    from pikorua_adflow.tools.meta_targeting import (
+        build_default_audience, clientele_profile,
+    )
+
+    # Resolve interests + behaviours for the target profile.
+    # city="" skips geo resolution; we inherit geo from each ad set.
+    resolved = build_default_audience("", token, clientele_type=clientele_type)
+    profile  = clientele_profile(clientele_type)
+
+    interests = [{"id": str(i["id"]), "name": i.get("name", "")}
+                 for i in resolved.get("interests", []) if i.get("id")]
+    behaviours = [{"id": str(b["id"]), "name": b.get("name", "")}
+                  for b in resolved.get("behaviours", []) if b.get("id")]
+    work_positions = [{"id": str(w["id"]), "name": w.get("name", "")}
+                      for w in resolved.get("work_positions", []) if w.get("id")]
+    income_clusters = [{"id": str(u["id"]), "name": u.get("name", "")}
+                       for u in resolved.get("income_clusters", []) if u.get("id")]
+    industries = [{"id": str(ind["id"]), "name": ind.get("name", "")}
+                  for ind in resolved.get("industries", []) if ind.get("id")]
+    rel_statuses = [int(r) for r in (resolved.get("relationship_statuses") or [])
+                    if str(r).isdigit()]
+
+    group: dict = {}
+    if interests:       group["interests"]       = interests
+    if behaviours:      group["behaviors"]       = behaviours
+    if work_positions:  group["work_positions"]  = work_positions
+    if income_clusters: group["user_adclusters"] = income_clusters
+    if industries:      group["industries"]      = industries
+
+    adsets = fetch_campaign_adsets(campaign_id, token)
+    updated: list[dict] = []
+    errors:  list[dict] = []
+
+    for adset in adsets:
+        if adset.get("effective_status") not in ("ACTIVE", "PAUSED", "CAMPAIGN_PAUSED"):
+            continue
+
+        current = adset.get("targeting") or {}
+
+        new_targeting: dict = {}
+
+        # Preserve geo — never overwrite
+        if current.get("geo_locations"):
+            new_targeting["geo_locations"] = current["geo_locations"]
+
+        # Preserve age unless profile deviates by > 5 years (manual override respected)
+        cur_min = int(current.get("age_min") or resolved["age_min"])
+        cur_max = int(current.get("age_max") or resolved["age_max"])
+        pro_min = profile["age_min"]
+        pro_max = profile["age_max"]
+        new_targeting["age_min"] = cur_min if abs(cur_min - pro_min) <= 5 else pro_min
+        new_targeting["age_max"] = cur_max if abs(cur_max - pro_max) <= 5 else pro_max
+
+        # Preserve ALL custom audiences (CRM seed, lookalike)
+        if current.get("custom_audiences"):
+            new_targeting["custom_audiences"] = current["custom_audiences"]
+
+        # Preserve ALL exclusions (bad leads, brokers)
+        if current.get("excluded_custom_audiences"):
+            new_targeting["excluded_custom_audiences"] = current["excluded_custom_audiences"]
+
+        # Apply new flexible_spec
+        if group:
+            new_targeting["flexible_spec"] = [group]
+
+        # Add relationship_statuses from new profile if present
+        if rel_statuses:
+            new_targeting["relationship_statuses"] = rel_statuses
+
+        # Enable Advantage+ unless the clientele profile explicitly disables it.
+        # affordable_luxury sets advantage_plus=False to prevent cheap form-fillers.
+        adv = resolved.get("advantage_plus", True)
+        new_targeting["targeting_automation"] = {"advantage_audience": 1 if adv else 0}
+
+        record = {
+            "adset_id":   adset["id"],
+            "adset_name": adset["name"],
+            "changes": {
+                "flexible_spec":    bool(group),
+                "advantage_plus":   adv,
+                "relationship":     rel_statuses or None,
+                "age_min":          new_targeting["age_min"],
+                "age_max":          new_targeting["age_max"],
+            },
+        }
+
+        if dry_run:
+            record["dry_run"] = True
+            record["new_flexible_spec"] = group
+            updated.append(record)
+        else:
+            try:
+                update_adset_targeting(adset["id"], new_targeting, token)
+                record["ok"] = True
+                updated.append(record)
+            except Exception as exc:
+                errors.append({"adset_id": adset["id"], "adset_name": adset["name"],
+                                "error": str(exc)})
+
+    return {
+        "campaign_id":    campaign_id,
+        "clientele_type": clientele_type,
+        "updated":        updated,
+        "errors":         errors,
+        "dry_run":        dry_run,
+    }
+
+
 def fetch_ads_with_age(campaign_id: str, token: str) -> list[dict]:
     """Ads under a campaign with creation time (for creative-staleness checks).
     Returns [{id, name, status, created_time}]. [] on failure."""

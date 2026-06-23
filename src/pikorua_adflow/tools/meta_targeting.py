@@ -397,6 +397,7 @@ CLIENTELE_TARGETING_MAP: dict[str, dict] = {
             {"id": "112451425436956", "name": "Vice President"},
         ],
         "income_clusters": _INCOME_TOP_10,
+        "advantage_plus": False,  # disabled: broader/younger audience = higher cheap-form-fill risk
         "age_min": 26, "age_max": 42,
     },
 
@@ -591,16 +592,18 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
         behaviour_names = profile["behaviours"]
         age_min, age_max = profile["age_min"], profile["age_max"]
         # Pre-resolved fields — passed straight through, no API lookup needed.
-        work_positions      = profile.get("work_positions", [])
-        income_clusters     = profile.get("income_clusters", [])
-        industries          = profile.get("industries", [])
+        work_positions        = profile.get("work_positions", [])
+        income_clusters       = profile.get("income_clusters", [])
+        industries            = profile.get("industries", [])
         relationship_statuses = profile.get("relationship_statuses", [])
+        advantage_plus        = profile.get("advantage_plus", True)  # default on; profiles can opt out
     else:
         interest_names  = DEFAULT_INTERESTS
         behaviour_names = DEFAULT_BEHAVIOURS
         age_min, age_max = DEFAULT_AGE_MIN, DEFAULT_AGE_MAX
         work_positions = income_clusters = industries = []
         relationship_statuses = []
+        advantage_plus = True
 
     interests = []
     for nm in interest_names:
@@ -635,6 +638,7 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
         "income_clusters": income_clusters,
         "industries": industries,
         "relationship_statuses": relationship_statuses,
+        "advantage_plus": advantage_plus,
         "nri_countries": nri_countries,
         "clientele_type": (clientele_type or "").strip().lower() or DEFAULT_CLIENTELE,
     }
@@ -656,8 +660,11 @@ def build_targeting_spec(audience: dict) -> dict:
     spec: dict[str, Any] = {
         "age_min": age_min,
         "age_max": age_max,
-        # Honour the exact audience below rather than letting Meta expand it.
-        "targeting_automation": {"advantage_audience": 0},
+        # Advantage+ on by default — Meta expands on interests to find converters.
+        # Verified safe: ₹220 CPL bungalow uses advantage_audience=1 without locks.
+        # affordable_luxury profile explicitly sets advantage_plus=False to prevent
+        # cheap form-fillers in that younger/broader audience segment.
+        "targeting_automation": {"advantage_audience": 1 if audience.get("advantage_plus", True) else 0},
     }
 
     city_key = audience.get("city_key")
@@ -729,14 +736,61 @@ def build_targeting_spec(audience: dict) -> dict:
 # interest names. Used to lean targeting toward whatever profile actually converts
 # for THIS campaign's clientele — never across clienteles.
 _INDUSTRY_TO_INTERESTS: dict[str, list[str]] = {
-    "IT/Tech":             ["Technology", "Software", "Information technology", "Startup"],
-    "Finance/Banking":     ["Investment", "Personal finance", "Private banking", "Wealth management"],
-    "Business/Entrepreneur": ["Entrepreneurship", "Small business", "Business", "Luxury goods"],
-    "Medical/Healthcare":  ["Medicine", "Health care", "Luxury goods"],
-    "Real Estate":         ["Real estate investing", "Property", "Commercial property"],
-    "Government/PSU":      ["Investment", "Wealth management"],
-    "NRI":                 ["Non-resident Indian", "Real estate investing", "Investment", "Expatriate"],
-    "Retired":             ["Wealth management", "Investment", "Luxury goods"],
+    # Names verified to resolve against live Meta campaigns (2026-06-23).
+    # Ordered by relevance; the resolver stops at `limit` (default 4) resolved hits.
+    "IT/Tech":             [
+        "Property investing (investing)",     # primary intent signal
+        "Luxury Lifestyle (website)",
+        "Apartment (property)",
+        "Investment (business and finance)",
+    ],
+    "Finance/Banking":     [
+        "Property investing (investing)",
+        "Investor (investing)",
+        "Property investment trust (investing)",
+        "First-class travel (travel and tourism business)",
+    ],
+    "Business/Entrepreneur": [
+        "Bungalow",
+        "Property investing (investing)",
+        "Luxury vehicle (vehicles)",
+        "First-class travel (travel and tourism business)",
+    ],
+    "Medical/Healthcare":  [
+        "Bungalow",
+        "Property investing (investing)",
+        "Luxury goods (retail)",
+        "Luxury vehicle (vehicles)",
+    ],
+    "Real Estate":         [
+        "Property investing (investing)",
+        "Property investment trust (investing)",
+        "creative property investing (property)",
+        "Investor (investing)",
+    ],
+    "Trader/Industrialist": [
+        "Textile (craft supplies)",
+        "Manufacturing (industry)",
+        "Property investing (investing)",
+        "Luxury vehicle (vehicles)",
+    ],
+    "Government/PSU":      [
+        "Investment (business and finance)",
+        "Property investing (investing)",
+        "Luxury Lifestyle (website)",
+    ],
+    "NRI":                 [
+        "Property investing (investing)",
+        "First-class travel (travel and tourism business)",
+        "Luxury Lifestyle (website)",
+        "luxury (lifestyle content)",
+    ],
+    "Retired":             [
+        "Property investment trust (investing)",
+        "Investor (investing)",
+        "Luxury goods (retail)",
+        "Luxury vehicle (vehicles)",
+    ],
 }
 
 

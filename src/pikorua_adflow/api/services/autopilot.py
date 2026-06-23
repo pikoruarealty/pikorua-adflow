@@ -17,6 +17,31 @@ the buyers are different people.
 State (applied log, cooldowns, last digest) persists in outputs/autopilot_state.json.
 All Meta writes go through pikorua_adflow.tools.meta_tool; predictions are tracked by
 analytics.optimization_tracker so estimates self-calibrate over time.
+
+──────────────────────────────────────────────────────────────────────────────────────
+FUTURE RUNGS — planned but not yet implemented
+──────────────────────────────────────────────────────────────────────────────────────
+
+RUNG 11 — CAPI Qualified-Lead Feedback  [HIGH PRIORITY]
+  What:    When a CRM lead status changes to Warm/Interested/Hot, fire a server-side
+           conversion event back to Meta via the Conversions API (CAPI) tagged as a
+           QualifiedLead. This teaches Meta's Advantage+ algorithm who the real buyers
+           are, not just who fills forms cheaply. Expected: CPL stable or lower, but
+           lead quality improves — fewer bad-number / not-interested leads over time.
+  Blocked: Requires (a) Meta webhook configured in Business Manager so leadgen_id
+           reaches the CRM reliably (currently using 5-min polling), and (b) leadgen_id
+           stored per CRM row so Meta can match the event back to the right person.
+  Files:   new analytics/meta_capi.py, crm_source.py (store leadgen_id), status-change
+           hook in crm_service.py or a Supabase trigger.
+
+RUNG 12 — Periodic Targeting Refresh  [READY — needs cron trigger]
+  What:    Every 30 days call retarget_campaign_adsets() on all active campaigns to
+           refresh flexible_spec against the current CLIENTELE_TARGETING_MAP.
+           POST /retarget-campaign already exists, is tested, and is dry-run safe.
+  Why:     Meta's interest taxonomy weights shift over time; monthly re-resolution
+           keeps targeting aligned with what Meta currently amplifies.
+  Files:   autopilot.py rung logic + cron entry in the autopilot route.
+──────────────────────────────────────────────────────────────────────────────────────
 """
 
 from __future__ import annotations
