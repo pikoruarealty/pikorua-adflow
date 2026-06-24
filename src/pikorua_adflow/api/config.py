@@ -12,6 +12,7 @@ repo root in `campaign_service._run_pipeline`, because the crews write their
 
 from __future__ import annotations
 
+import os
 from datetime import timedelta, timezone
 from pathlib import Path
 
@@ -57,3 +58,16 @@ IST = timezone(timedelta(hours=5, minutes=30), name="IST")
 CRM_CACHE_TTL_SECS = 4 * 60 * 60        # CRM report cache
 INSIGHTS_TTL_SECS = 4 * 60 * 60         # strategic insights cache
 TREND_TTL_SECONDS = 8 * 60 * 60         # trend-hook reuse window in the pipeline
+
+# ── AutoOptimiser — Tunables ──────────────────────────────────────────────────
+# Seeded from hand-tuned values (2026-06-22 account snapshot).
+# Override via environment variables at deploy time.
+# The Tier-2 learning loop (optimization_tracker) will self-calibrate these
+# as settled outcomes accumulate — do NOT change them manually once live data flows.
+AO_BENCHMARK_CPL     = int(os.getenv("AO_BENCHMARK_CPL",    "85"))    # best-ever CPL anchor (₹)
+AO_FREQ_SATURATED    = float(os.getenv("AO_FREQ_SATURATED",  "3.0"))  # audience fatigue threshold
+AO_FREQ_EXHAUSTED    = float(os.getenv("AO_FREQ_EXHAUSTED",  "5.0"))  # pause-consideration threshold
+AO_CPL_CEILING       = int(os.getenv("AO_CPL_CEILING",       "500"))  # bleeding CPL (₹)
+AO_CPL_RISING_RATIO  = float(os.getenv("AO_CPL_RISING_RATIO","1.3"))  # 7d/30d ratio flagging deterioration
+AO_QUALITY_LEAD_MIN  = int(os.getenv("AO_QUALITY_LEAD_MIN",  "5"))    # min quality leads to trust quality-CPL
+AO_COOLDOWN_DAYS     = int(os.getenv("AO_COOLDOWN_DAYS",     "5"))    # days between stacking fixes

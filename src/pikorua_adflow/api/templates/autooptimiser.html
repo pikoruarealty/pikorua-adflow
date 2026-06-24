@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}PIKORUA — AutoOptimiser{% endblock %}
+{% block title %}PIKORUA â€” AutoOptimiser{% endblock %}
 
 {% block content %}
 <header class="mb-8 border-b border-outline-variant pb-6">
@@ -10,7 +10,7 @@
 
 <div id="ap-loading" class="text-on-surface-variant py-16 text-center">
   <span class="material-symbols-outlined animate-spin align-middle">progress_activity</span>
-  <span class="align-middle ml-2">Reading your campaigns…</span>
+  <span class="align-middle ml-2">Reading your campaignsâ€¦</span>
 </div>
 
 <div id="ap-error" class="hidden border border-error/40 bg-error/5 text-error p-5 mb-8"></div>
@@ -20,7 +20,7 @@
   <!-- The one number -->
   <section id="ap-hero" class="bg-surface-container-low border border-outline-variant p-8 text-center">
     <p id="ap-hero-label" class="label-caps text-outline mb-2">Cost per enquiry</p>
-    <p id="ap-hero-value" class="font-display text-6xl text-primary">—</p>
+    <p id="ap-hero-value" class="font-display text-6xl text-primary">â€”</p>
     <p id="ap-hero-sub" class="text-on-surface-variant mt-3"></p>
     <p id="ap-star" class="hidden text-sm text-ok mt-2"></p>
   </section>
@@ -31,27 +31,58 @@
     <div>
       <p class="font-medium" id="ap-crm-title"></p>
       <p class="text-sm text-on-surface-variant mt-1" id="ap-crm-body"></p>
-      <a href="/crm-dashboard" class="label-caps text-primary inline-block mt-2 hover:underline">Tag leads in Lead Insights →</a>
+      <a href="/crm-dashboard" class="label-caps text-primary inline-block mt-2 hover:underline">Tag leads in Lead Insights â†’</a>
     </div>
   </div>
 
-  <!-- Zone — what needs doing (ranked, worst first) -->
-  <section>
-    <h2 class="font-headline text-2xl mb-1">What needs doing</h2>
-    <p class="text-sm text-on-surface-variant mb-4">Ranked by how much it's costing you — the worst problem is first.</p>
-    <div id="ap-actions" class="space-y-4"></div>
-    <p id="ap-actions-empty" class="hidden text-on-surface-variant text-sm">Nothing needs a decision right now — your live campaigns look healthy.</p>
+  <!-- Zone â€” AI Insights (LLM strategist explanations) -->
+  <section id="ap-strategist" class="hidden space-y-4">
+    <div class="flex items-center gap-3 mb-1">
+      <span class="material-symbols-outlined text-primary">psychology</span>
+      <h2 class="font-headline text-2xl">AI Insights</h2>
+      <span id="ap-strategist-badge" class="label-caps text-xs bg-primary/10 text-primary px-2 py-0.5">daily</span>
+    </div>
+    <p class="text-sm text-on-surface-variant mb-4">Plain-English reasoning behind each campaignâ€™s current state, from the AI strategist.</p>
+    <div id="ap-explanations" class="space-y-3"></div>
   </section>
 
-  <!-- Zone — what I did automatically -->
+  <!-- Zone â€” Anomalies (things no rung covers) -->
+  <section id="ap-anomalies-section" class="hidden space-y-4">
+    <div class="flex items-center gap-3 mb-1">
+      <span class="material-symbols-outlined text-warn">warning_amber</span>
+      <h2 class="font-headline text-2xl">Anomalies</h2>
+    </div>
+    <p class="text-sm text-on-surface-variant mb-4">Patterns the deterministic rules canâ€™t catch â€” flagged by the AI strategist.</p>
+    <div id="ap-anomalies" class="space-y-3"></div>
+  </section>
+
+  <!-- Zone â€” Risky AI Suggestions needing approval -->
+  <section id="ap-risky-section" class="hidden space-y-4">
+    <div class="flex items-center gap-3 mb-1">
+      <span class="material-symbols-outlined text-error">gpp_maybe</span>
+      <h2 class="font-headline text-2xl">AI Suggestions â€” Needs Your Call</h2>
+    </div>
+    <p class="text-sm text-on-surface-variant mb-4">The AI strategist flagged these as higher-risk. Review before applying.</p>
+    <div id="ap-risky" class="space-y-4"></div>
+  </section>
+
+  <!-- Zone â€” what needs doing (ranked, worst first) -->
+  <section>
+    <h2 class="font-headline text-2xl mb-1">What needs doing</h2>
+    <p class="text-sm text-on-surface-variant mb-4">Ranked by how much itâ€™s costing you â€” the worst problem is first.</p>
+    <div id="ap-actions" class="space-y-4"></div>
+    <p id="ap-actions-empty" class="hidden text-on-surface-variant text-sm">Nothing needs a decision right now â€” your live campaigns look healthy.</p>
+  </section>
+
+  <!-- Zone â€” what I did automatically -->
   <section>
     <h2 class="font-headline text-2xl mb-1">What I handled for you</h2>
     <p class="text-sm text-on-surface-variant mb-4">Safe fixes applied automatically. Undo any of them.</p>
     <div id="ap-did" class="space-y-3"></div>
-    <p id="ap-did-empty" class="hidden text-on-surface-variant text-sm">Nothing needed an automatic fix — your targeting basics look clean.</p>
+    <p id="ap-did-empty" class="hidden text-on-surface-variant text-sm">Nothing needed an automatic fix â€” your targeting basics look clean.</p>
   </section>
 
-  <!-- Zone — every campaign at a glance -->
+  <!-- Zone â€” every campaign at a glance -->
   <section>
     <h2 class="font-headline text-2xl mb-1">Every campaign at a glance</h2>
     <p class="text-sm text-on-surface-variant mb-4">Plain verdict for each. Open one for the raw numbers.</p>
@@ -65,15 +96,17 @@
 {% block scripts %}
 <script>
 const $ = s => document.querySelector(s);
-const money = v => (v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN'));
+const money = v => (v == null ? 'â€”' : 'â‚¹' + Number(v).toLocaleString('en-IN'));
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-const DOT = { bleeding: '🔴', okay: '🟡', winning: '🟢', idle: '⚪' };
+const DOT = { bleeding: 'ðŸ”´', okay: 'ðŸŸ¡', winning: 'ðŸŸ¢', idle: 'âšª' };
+const SEV_COLOR = { high: 'border-error/50 bg-error/5', medium: 'border-warn/40 bg-warn/5', low: 'border-outline-variant' };
 
 async function apLoad(force) {
   $('#ap-loading').classList.remove('hidden');
   $('#ap-error').classList.add('hidden');
   try {
-    const r = await fetch('/autopilot-data' + (force ? '?force=true' : ''));
+    const r = await fetch('/autooptimiser-data' + (force ? '?force=true' : ''));
     const d = await r.json();
     if (!r.ok) { return apErr(d.detail || d.error || `Server error ${r.status}`); }
     if (d.error) { return apErr(d.error); }
@@ -91,6 +124,13 @@ function apErr(msg) {
   el.classList.remove('hidden');
 }
 
+function fmtIST(iso) {
+  try {
+    return new Date(iso).toLocaleString('en-IN', {timeZone:'Asia/Kolkata', hour12:true,
+      day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+  } catch { return iso; }
+}
+
 function render(d) {
   $('#ap-loading').classList.add('hidden');
   $('#ap-body').classList.remove('hidden');
@@ -98,32 +138,108 @@ function render(d) {
   const camps = d.campaigns || [];
   const cov = d.crm_coverage || {};
 
-  // ── The one number ──
+  // â”€â”€ The one number â”€â”€
   const totalSpend = camps.reduce((a, c) => a + (c.spend_7d || 0), 0);
   const totalLeads = camps.reduce((a, c) => a + (c.leads_7d || 0), 0);
   const blendedCpl = totalLeads ? Math.round(totalSpend / totalLeads) : null;
   $('#ap-hero-label').textContent = cov.scoring_on ? 'Cost per quality enquiry' : 'Cost per enquiry';
   $('#ap-hero-value').textContent = money(blendedCpl);
-  let sub = `${camps.length} live campaign${camps.length === 1 ? '' : 's'} · ${money(Math.round(totalSpend))} spent in the last 7 days · ${totalLeads} enquir${totalLeads === 1 ? 'y' : 'ies'}`;
+  let sub = `${camps.length} live campaign${camps.length === 1 ? '' : 's'} Â· ${money(Math.round(totalSpend))} spent in the last 7 days Â· ${totalLeads} enquir${totalLeads === 1 ? 'y' : 'ies'}`;
   $('#ap-hero-sub').textContent = sub;
   if (d.star) {
-    $('#ap-star').textContent = `★ Best right now: “${d.star.campaign_name}” at ${d.star.cost_each}`;
+    $('#ap-star').textContent = `â˜… Best right now: "${d.star.campaign_name}" at ${d.star.cost_each}`;
     $('#ap-star').classList.remove('hidden');
   } else {
     $('#ap-star').classList.add('hidden');
   }
 
-  // ── Honest CRM banner ──
+  // â”€â”€ Honest CRM banner â”€â”€
   const crm = $('#ap-crm');
   if (!cov.scoring_on && (cov.untagged || 0) > 0) {
-    $('#ap-crm-title').textContent = 'Quality scoring is off — and it’s your biggest missing advantage';
+    $('#ap-crm-title').textContent = 'Quality scoring is off â€” and it's your biggest missing advantage';
     $('#ap-crm-body').textContent =
-      `${cov.untagged} enquiries linked to your campaigns aren’t marked with how serious the buyer is. `
-      + `Tag them and AutoOptimiser switches from “cost per enquiry” to “cost per genuine buyer” — the thing Meta can’t see.`;
+      `${cov.untagged} enquiries linked to your campaigns aren't marked with how serious the buyer is. `
+      + `Tag them and AutoOptimiser switches from "cost per enquiry" to "cost per genuine buyer" â€” the thing Meta can't see.`;
     crm.classList.remove('hidden');
   } else { crm.classList.add('hidden'); }
 
-  // ── What needs doing (ranked) — per-campaign decisions + account-level actions ──
+  // â”€â”€ LLM Strategist â€” AI Insights (explanations) â”€â”€
+  const strat = d.strategist || {};
+  const explanations = strat.explanations || [];
+  const stratSec = $('#ap-strategist');
+  const explEl = $('#ap-explanations');
+  explEl.innerHTML = '';
+  if (explanations.length) {
+    stratSec.classList.remove('hidden');
+    const badge = $('#ap-strategist-badge');
+    badge.textContent = strat.pass_type === 'weekly_deep' ? 'weekly deep' : 'daily';
+    explanations.forEach(ex => {
+      const dot = DOT[ex.state] || 'ðŸŸ¡';
+      const card = document.createElement('div');
+      card.className = 'border border-primary/20 bg-primary/5 p-4';
+      card.innerHTML = `
+        <p class="label-caps text-primary mb-1">${dot} ${esc(ex.campaign_name || '')}</p>
+        <p class="font-medium mb-1">${esc(ex.plain_why || '')}</p>
+        ${ex.recommended_focus ? `<p class="text-sm text-on-surface-variant">Next: ${esc(ex.recommended_focus)}</p>` : ''}`;
+      explEl.appendChild(card);
+    });
+  } else {
+    stratSec.classList.add('hidden');
+  }
+
+  // â”€â”€ LLM Strategist â€” Anomalies â”€â”€
+  const anomalies = strat.anomalies || [];
+  const anomSec = $('#ap-anomalies-section');
+  const anomEl = $('#ap-anomalies');
+  anomEl.innerHTML = '';
+  if (anomalies.length) {
+    anomSec.classList.remove('hidden');
+    anomalies.forEach(a => {
+      const colorClass = SEV_COLOR[a.severity] || 'border-outline-variant';
+      const card = document.createElement('div');
+      card.className = `border ${colorClass} p-4`;
+      const affectedCamps = (a.campaign_names || []).join(', ');
+      card.innerHTML = `
+        <div class="flex items-start gap-2">
+          <span class="material-symbols-outlined text-warn shrink-0 text-base mt-0.5">warning_amber</span>
+          <div>
+            <p class="font-medium">${esc(a.title || '')}</p>
+            <p class="text-sm text-on-surface-variant mt-1">${esc(a.detail || '')}</p>
+            ${affectedCamps ? `<p class="text-xs text-outline mt-2">ðŸ“Œ ${esc(affectedCamps)}</p>` : ''}
+          </div>
+        </div>`;
+      anomEl.appendChild(card);
+    });
+  } else {
+    anomSec.classList.add('hidden');
+  }
+
+  // â”€â”€ LLM Strategist â€” Risky suggestions (needs approval) â”€â”€
+  const suggestions = (strat.suggestions || []).filter(s => s.risk === 'risky');
+  const riskySec = $('#ap-risky-section');
+  const riskyEl = $('#ap-risky');
+  riskyEl.innerHTML = '';
+  if (suggestions.length) {
+    riskySec.classList.remove('hidden');
+    suggestions.forEach((s, idx) => {
+      const card = document.createElement('div');
+      card.className = 'border border-error/40 bg-error/5 p-5';
+      card.innerHTML = `
+        <p class="label-caps text-error mb-1">ðŸš¨ AI Suggestion â€” Higher risk</p>
+        <p class="font-headline text-xl mb-2">${esc(s.title || '')}</p>
+        <p class="text-sm text-on-surface-variant mb-4">${esc(s.detail || '')}</p>
+        <div class="flex flex-wrap gap-3 items-center">
+          <button class="bg-error text-on-error label-caps px-5 py-2 hover:opacity-90"
+                  data-strat-approve="${idx}">Approve &amp; Apply</button>
+          <button class="label-caps text-outline hover:text-on-surface" data-dismiss="1">Not now</button>
+        </div>`;
+      riskyEl.appendChild(card);
+    });
+  } else {
+    riskySec.classList.add('hidden');
+  }
+
+  // â”€â”€ What needs doing (ranked) â€” per-campaign decisions + account-level actions â”€â”€
   const acts = $('#ap-actions'); acts.innerHTML = '';
   const decisions = (d.all_decisions || []).concat(d.account_actions || []);
   if (!decisions.length) { $('#ap-actions-empty').classList.remove('hidden'); }
@@ -131,7 +247,7 @@ function render(d) {
   decisions.forEach(f => {
     const last = f.rung === 10;
     const isAccount = f.campaign_id === '__account__';
-    const dot = isAccount ? '🔵' : (DOT[f.verdict] || '🟡');
+    const dot = isAccount ? 'ðŸ”µ' : (DOT[f.verdict] || 'ðŸŸ¡');
     const card = document.createElement('div');
     card.className = 'border p-5 ' + (last ? 'border-error/50 bg-error/5' : 'border-outline-variant');
 
@@ -149,21 +265,19 @@ function render(d) {
       }
       actHtml = `<a href="${esc(freshHref)}" class="bg-primary text-on-primary label-caps px-5 py-2 inline-block hover:bg-surface-tint">${esc(freshLabel)}</a>`;
     } else if (f.action === 'dayparting') {
-      // Dayparting card: show the day breakdown inline before the button
       const topDays = (f.params && f.params.top_day_names || []).join(', ');
       const quietDays = (f.params && f.params.quiet_day_names || []).join(', ');
       const pct = f.params && f.params.concentration_pct;
       const sample = f.params && f.params.sample_size;
       const breakdown = `<div class="mb-4 text-sm border border-outline-variant/50 bg-surface-container-low p-3 grid gap-1">
         <div class="flex justify-between"><span class="text-on-surface-variant">Peak days</span><span class="font-medium">${esc(topDays)}</span></div>
-        <div class="flex justify-between"><span class="text-on-surface-variant">Quiet days</span><span class="text-outline">${esc(quietDays || '—')}</span></div>
-        <div class="flex justify-between"><span class="text-on-surface-variant">Lead concentration on peak days</span><span class="font-medium">${pct ? pct + '%' : '—'}</span></div>
-        <div class="flex justify-between"><span class="text-on-surface-variant">Based on</span><span class="text-outline">${sample ? sample + ' leads' : '—'}</span></div>
+        <div class="flex justify-between"><span class="text-on-surface-variant">Quiet days</span><span class="text-outline">${esc(quietDays || 'â€”')}</span></div>
+        <div class="flex justify-between"><span class="text-on-surface-variant">Lead concentration on peak days</span><span class="font-medium">${pct ? pct + '%' : 'â€”'}</span></div>
+        <div class="flex justify-between"><span class="text-on-surface-variant">Based on</span><span class="text-outline">${sample ? sample + ' leads' : 'â€”'}</span></div>
       </div>`;
       card.dataset.breakdown = '1';
       actHtml = breakdown + `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Apply schedule</button>`;
     } else if (f.action === 'lookalike_refresh') {
-      // Show seed age/growth context
       const p = f.params || {};
       const meta = `<div class="mb-4 text-sm border border-outline-variant/50 bg-surface-container-low p-3 grid gap-1">
         ${p.age_days ? `<div class="flex justify-between"><span class="text-on-surface-variant">Last built</span><span class="text-outline">${p.age_days} days ago</span></div>` : ''}
@@ -177,7 +291,7 @@ function render(d) {
     }
 
     const tagLine = isAccount
-      ? `<p class="label-caps text-primary mb-1">🔵 Account — applies to all campaigns</p>`
+      ? `<p class="label-caps text-primary mb-1">ðŸ”µ Account â€” applies to all campaigns</p>`
       : `<p class="label-caps text-outline mb-1">${dot} ${esc(f.campaign_name)}</p>`;
 
     card.innerHTML = `${tagLine}
@@ -188,13 +302,12 @@ function render(d) {
     acts.appendChild(card);
   });
 
-  // ── What I handled for you ──
+  // â”€â”€ What I handled for you â”€â”€
   const did = $('#ap-did'); did.innerHTML = '';
   const log = d.applied_log || [];
   if (!log.length) { $('#ap-did-empty').classList.remove('hidden'); }
   else { $('#ap-did-empty').classList.add('hidden'); }
 
-  // Human-readable undo descriptions keyed by fix_type
   const UNDO_LABEL = {
     remove_geo: 'Undo (restores previous targeting)',
     add_exclusion: 'Undo (removes the exclusion)',
@@ -217,18 +330,18 @@ function render(d) {
       ? `<button class="label-caps text-outline hover:text-error shrink-0 text-right" title="${esc(UNDO_LABEL[e.fix_type] || 'Undo')}" data-undo="${esc(e.campaign_id)}|${esc(e.fix_type)}">Undo</button>`
       : `<span class="label-caps text-outline/40 shrink-0 cursor-default" title="This action can't be reversed automatically">Can't undo</span>`;
     const campaignTag = e.campaign_id === '__account__' ? 'Account-wide' : esc(e.campaign_name || e.campaign_id);
+    const sourceTag = e.source === 'llm_strategist' ? ' <span class="label-caps text-primary/60 ml-1">AI</span>' : '';
     card.innerHTML = `<div class="min-w-0">
-        <p class="label-caps text-outline mb-0.5">${campaignTag}</p>
-        <p class="font-medium">✓ ${esc(e.title)}</p>
+        <p class="label-caps text-outline mb-0.5">${campaignTag}${sourceTag}</p>
+        <p class="font-medium">âœ“ ${esc(e.title)}</p>
         <p class="text-sm text-on-surface-variant mt-1">${esc(e.detail)}</p>
       </div>
       ${undoBtn}`;
     did.appendChild(card);
   });
 
-  // ── Every campaign at a glance (verdict + collapsible numbers) ──
+  // â”€â”€ Every campaign at a glance (verdict + collapsible numbers) â”€â”€
   const cards = $('#ap-cards'); cards.innerHTML = '';
-  // bleeding first, then okay, winning, idle
   const order = { bleeding: 0, okay: 1, winning: 2, idle: 3 };
   [...camps].sort((a, b) => (order[(a.verdict || {}).state] ?? 1) - (order[(b.verdict || {}).state] ?? 1))
     .forEach(c => {
@@ -238,7 +351,7 @@ function render(d) {
       det.innerHTML = `
         <summary class="p-4 cursor-pointer flex justify-between items-center gap-4">
           <span class="min-w-0">
-            <span class="font-medium">${esc(v.emoji || '🟡')} ${esc(c.campaign_name)}</span>
+            <span class="font-medium">${esc(v.emoji || 'ðŸŸ¡')} ${esc(c.campaign_name)}</span>
             <span class="block text-sm text-on-surface-variant mt-1">${esc(v.line || '')}</span>
           </span>
           <span class="label-caps shrink-0 ${v.state === 'bleeding' ? 'text-error' : v.state === 'winning' ? 'text-ok' : 'text-outline'}">${esc(v.label || '')}</span>
@@ -247,7 +360,7 @@ function render(d) {
           <div>${esc(p.cost_each || '')}</div>
           <div>${esc(p.clicks || '')}</div>
           <div>${esc(p.seen || '')}</div>
-          <div class="text-xs text-outline mt-1">${money(Math.round(c.spend_7d))} spent · ${c.leads_7d} enquiries · last 7 days</div>
+          <div class="text-xs text-outline mt-1">${money(Math.round(c.spend_7d))} spent Â· ${c.leads_7d} enquiries Â· last 7 days</div>
         </div>`;
       cards.appendChild(det);
     });
@@ -259,12 +372,13 @@ document.addEventListener('click', async (e) => {
   const ap = e.target.closest('[data-apply]');
   const un = e.target.closest('[data-undo]');
   const di = e.target.closest('[data-dismiss]');
+  const sa = e.target.closest('[data-strat-approve]');
   if (di) { di.closest('div.border').remove(); return; }
   if (ap) {
     const [cid, ft] = ap.dataset.apply.split('|');
-    ap.disabled = true; ap.textContent = 'Applying…';
+    ap.disabled = true; ap.textContent = 'Applyingâ€¦';
     try {
-      const r = await fetch('/autopilot-apply', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      const r = await fetch('/autooptimiser-apply', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({campaign_id: cid, fix_type: ft})});
       if (!r.ok) { const j = await r.json(); throw new Error(j.detail || 'Failed'); }
       apLoad(true);
@@ -272,16 +386,29 @@ document.addEventListener('click', async (e) => {
   }
   if (un) {
     const [cid, ft] = un.dataset.undo.split('|');
-    un.disabled = true; un.textContent = 'Undoing…';
+    un.disabled = true; un.textContent = 'Undoingâ€¦';
     try {
-      const r = await fetch('/autopilot-undo', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      const r = await fetch('/autooptimiser-undo', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({campaign_id: cid, fix_type: ft})});
       if (!r.ok) { const j = await r.json(); throw new Error(j.detail || 'Failed'); }
       apLoad(true);
     } catch (err) { un.disabled = false; un.textContent = 'Undo'; alert(err.message); }
+  }
+  if (sa) {
+    const idx = parseInt(sa.dataset.stratApprove, 10);
+    sa.disabled = true; sa.textContent = 'Applyingâ€¦';
+    try {
+      const r = await fetch('/autooptimiser-strategist-approve', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({suggestion_index: idx})
+      });
+      if (!r.ok) { const j = await r.json(); throw new Error(j.detail || 'Failed'); }
+      apLoad(true);
+    } catch (err) { sa.disabled = false; sa.textContent = 'Approve & Apply'; alert(err.message); }
   }
 });
 
 apLoad(false);
 </script>
 {% endblock %}
+

@@ -490,6 +490,66 @@ AD_STRUCTURES: dict[str, str] = {
         "• If the composition makes a specific element genuinely unreadable, omit it for this image\n"
         "  only — default to full developer ad density"
     ),
+    "zoned_triptych": (
+        "TOP BAND (upper 22-28% of canvas): solid dark backing — holds ALL identity text. "
+        "Photography does NOT enter this zone. Backing colour comes from the palette's primary dark "
+        "(charcoal, deep navy, rich bordeaux, forest black — never generic black). "
+        "Text: location name as the DOMINANT display event filling the band (heavy serif, cream or warm gold). "
+        "City name in tracked geometric all-caps below. BHK config in a framed inline pill or engraved "
+        "sub-header below city. A thin decorative eyebrow line above the location name (optional). "
+        "Vertical gold hairlines as separators between sub-elements (optional). "
+        "PHOTO ZONE (middle 50-58%): full-bleed interior/exterior photograph, completely edge-to-edge. "
+        "NO text floats here EXCEPT the sample badge module, which sits at the bottom third of the photo "
+        "zone on a dedicated opaque backing matched to the top band's dark tone. "
+        "FOOTER STRIP (lower 18-22%): solid light backing (warm cream, ivory, or light marble tone — NOT white). "
+        "Three equal columns: LEFT = key USP + icon, CENTRE = STARTING AT / ₹X Cr / ONWARDS stacked "
+        "(numerals dominant), RIGHT = second USP + icon. Vertical gold hairlines separate columns. "
+        "All footer text in deep charcoal or dark gold — NEVER light text on light ground. "
+        "ZONE SOVEREIGNTY: text never competes with photography because each zone has one job."
+    ),
+    "editorial_triptych": (
+        "TOP BAND (upper 32-36% of canvas): solid dark backing — holds ALL identity text "
+        "with generous vertical breathing room between every tier. Photography does NOT enter "
+        "this zone. Backing colour from the palette's primary dark (charcoal, deep navy, rich "
+        "bordeaux, forest black — never generic black). "
+        "Text hierarchy top to bottom, each tier breathing: "
+        "(1) A small symmetrical gold botanical ornament centred near the top — fine line-art, "
+        "bilateral symmetry, NOT text — a luxury divider motif. "
+        "(2) Eyebrow tagline in fine tracked bold geometric cream all-caps, centred, small scale. "
+        "(3) LOCATION NAME FIRST WORD in HEAVY display serif filling 82% of canvas width at "
+        "natural letterform proportions — never condensed, never crunched to fill the space. "
+        "Scale the point size so the word fills 82% naturally. "
+        "(4) A thin gold horizontal hairline rule spanning 60% of canvas width, centred, "
+        "immediately below the first word. "
+        "(5) LOCATION NAME REMAINING WORD(S) in the same HEAVY display serif at 55% of the "
+        "first word's cap height, centred below the hairline — a second, smaller typographic "
+        "line. Together the two lines read as one name split across two weights of importance. "
+        "(6) City name in tracked geometric all-caps with thin gold vertical hairlines flanking "
+        "both sides (| CITY | style), centred. "
+        "(7) BHK config in a DOUBLE-BORDERED FRAME BOX: outer thin gold hairline + 3px gap + "
+        "inner thin gold hairline, small gold corner accent at each inner corner, text in bold "
+        "geometric cream caps centred inside with generous internal padding. Box spans 56% of "
+        "canvas width, centred. "
+        "ZONE BOUNDARY: at the very base of the top band, a subtle soft gradient over 2-3% "
+        "canvas height where the dark zone fades into the photo below — the transition feels "
+        "architectural, not a hard cut. The photo's ceiling or upper architecture should be "
+        "dark enough that this fade reads seamlessly. "
+        "PHOTO ZONE (middle 42-46%): full-bleed photograph, completely edge-to-edge. "
+        "NO text floats here EXCEPT the sample badge. Badge = DECORATIVE PLAQUE: solid dark "
+        "backing matching the top band, outer gold hairline border, inner gold hairline border "
+        "(double-frame), thin decorative gold horizontal rules flanking the main CTA word "
+        "above and below it ('— READY —' style), sub-label in small tracked caps above the "
+        "main word, secondary label in small tracked caps below. Wide and prominent. "
+        "FOOTER STRIP (lower 20-24%): solid light backing (warm cream or ivory — NOT white). "
+        "Three equal columns separated by thin gold vertical hairlines: "
+        "LEFT = BHK or key USP with fine gold icon above; "
+        "CENTRE = STARTING AT (small tracked) / ₹X Cr (dominant numerals, Didot/Bodoni) / "
+        "ONWARDS (small tracked) stacked — numerals at 2.5× label cap height; "
+        "RIGHT = second USP with fine gold icon above. "
+        "All footer text in deep charcoal or dark gold — NEVER light text on light ground. "
+        "ELEMENT SPACING: every tier in the top band has at least 2% canvas height of "
+        "breathing room above and below — nothing crowded, nothing touching."
+    ),
 }
 
 
@@ -542,6 +602,9 @@ _STRUCTURE_ALIASES: dict[str, str] = {
     "structured_split": "structured_split",
     "bordered": "bordered_campaign",
     "framing_device": "bordered_campaign",
+    "zoned_triptych": "zoned_triptych",
+    "triptych": "zoned_triptych",
+    "editorial_triptych": "editorial_triptych",
 }
 
 # Recipe text_roles → which typography sections to emit. Anything not requested is
@@ -693,10 +756,17 @@ def _build_typography_block(
         # Apartment configuration (BHK) is a PRIMARY photo-zone element — it is kept
         # OUT of the footer spec list so the model never double-places or shrinks it.
         if config_combined:
-            lines.append(
-                f'Apartment configuration (render as a LARGE standalone element in the '
-                f'photo zone — never in the footer, never a corner label): "{config_combined}"'
-            )
+            if info_band_style in ("zoned_triptych", "editorial_triptych"):
+                lines.append(
+                    f'Apartment configuration (render in the TOP BAND — '
+                    f'alongside location name and city, as an inline framed pill or '
+                    f'engraved sub-header — NOT in the photo zone): "{config_combined}"'
+                )
+            else:
+                lines.append(
+                    f'Apartment configuration (render as a LARGE standalone element in the '
+                    f'photo zone — never in the footer, never a corner label): "{config_combined}"'
+                )
         # Footer / supporting specs: USPs only. BHK excluded above. Fill-to-3 applies
         # to THESE items so a strip/grid that IS rendered carries balanced content.
         spec_items = list(usp_parts)
@@ -1047,7 +1117,8 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
 
     recipe_block = (_format_recipe_block(recipe) + "\n\n") if recipe else ""
     layout_block = ""
-    if recipe and recipe.get("text_tier") == "full_detail" and _LAYOUT_DISCIPLINE:
+    if (recipe and recipe.get("text_tier") == "full_detail" and _LAYOUT_DISCIPLINE
+            and recipe.get("layout_type") not in ("zoned_triptych", "editorial_triptych")):
         layout_block = (
             "Layout discipline (keep the loaded ad uncluttered):\n"
             + "\n".join(f"• {r}" for r in _LAYOUT_DISCIPLINE)

@@ -163,6 +163,34 @@ recipes:
     negative_space_rule: "aerial surface (lawn, courtyard, water) = centered headline canvas; no footer"
     type_treatment: "multiple sizes, strict centered, bold serif, floating over aerial surface"
 
+  - name: the_editorial_triptych
+    scene_types: [lifestyle_single, lifestyle_social, interior]
+    tones: [dark_luxury, bright_aspirational]
+    text_tier: full_detail
+    text_roles: [headline, subhead, price, info_band, badge, cta]
+    info_band_style: editorial_triptych
+    layout_type: editorial_triptych
+    footer_backing: "#F5EDD8"
+    text_primary_hex: "#C9A84C"
+    lighting: "warm ambient interior — near-black tray ceiling with recessed amber cove lighting; ceiling darkness provides the top band backing naturally; the room below is richly lit; city view through glazing optional"
+    subject_rule: "no people OR solo candid — positioned in the photo zone clear of both zone boundaries; never cropped by top band or footer"
+    negative_space_rule: "top band: location first word dominant line + second line smaller + city + double-bordered BHK box; photo zone: only the scene + decorative plaque badge; footer: icon columns + price + USP"
+    type_treatment: "HEAVY display serif location first word fills 82% canvas width naturally (not condensed); second word smaller below a gold hairline; double-bordered BHK frame box; plaque-style badge with double-frame + decorative rules"
+
+  - name: the_zoned_triptych
+    scene_types: [lifestyle_single, lifestyle_social, interior]
+    tones: [dark_luxury, bright_aspirational]
+    text_tier: full_detail
+    text_roles: [headline, subhead, price, info_band, badge, cta]
+    info_band_style: zoned_triptych
+    layout_type: zoned_triptych
+    footer_backing: "#F5EDD8"
+    text_primary_hex: "#C9A84C"
+    lighting: "warm ambient interior — coved ceiling lighting, pendant clusters, floor-to-ceiling glazing with dusk or city-glow exterior; the room feels inhabited and rich at depth"
+    subject_rule: "candid group or solo — positioned in the photo zone clear of the top-band cut-line and above the footer strip; never cropped by either zone boundary"
+    negative_space_rule: "top band exclusively holds location + city + BHK; photo zone holds only scene + sample badge; footer strip holds price + specs + icon grid; zones never overlap"
+    type_treatment: "HEAVY display serif location name fills the dark top band — dominant scale, cream or warm gold; inline framed pill for BHK; stacked price hierarchy in footer (STARTING AT small / ₹X Cr large / ONWARDS small)"
+
 layout_discipline:
   - "COMPARTMENTALIZATION: Never float spec text over photo — use a solid opaque footer block."
   - "DEAD ZONES: Anchor secondary text into shadows and blank walls; keep focal point clear."

@@ -136,7 +136,7 @@ def refresh_creatives(run_id: str, ab: bool = False):
     Regenerate images / edit copy on the campaign page first; this pushes whatever is
     current. DRY_RUN returns a preview without touching Meta.
     """
-    from pikorua_adflow.api.services import autopilot as _autopilot_svc
+    from pikorua_adflow.api.services import autooptimiser as _autooptimiser_svc
 
     run = cs.require_complete(run_id)
     review_folder = Path(run["review_folder"])
@@ -209,7 +209,7 @@ def refresh_creatives(run_id: str, ab: bool = False):
                 result = create_ad_in_adset(adset_id, account, oss, ad_name, token)
                 challenger_ad_id = result["ad_id"]
                 # Register the A/B pair in autopilot state for nightly resolve pass.
-                _autopilot_svc._register_ab_group(
+                _autooptimiser_svc._register_ab_group(
                     run_id=run_id,
                     adset_id=adset_id,
                     control_ad_id=a["ad_id"],

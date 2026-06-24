@@ -4,8 +4,8 @@ creative_performance.py — shared variant comparison helper.
 Extracted from routes/deploy.py::meta_performance() so the same comparative
 logic can be used by:
   • routes/deploy.py  (the per-run performance tab — cosmetic, human-readable)
-  • services/autopilot.py Rung 0 (creative winner/loser auto-management)
-  • services/autopilot.py A/B resolve pass (B2)
+  • services/autooptimiser.py Rung 0 (creative winner/loser auto-management)
+  • services/autooptimiser.py A/B resolve pass (B2)
 
 Design constraints:
   - Never makes a winner/loser call without enough data (MIN_IMPR_TO_JUDGE

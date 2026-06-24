@@ -174,3 +174,71 @@ def history(run_id: str | None = None) -> dict:
         "settled_count": len(settled),
         "avg_prediction_error_pp": avg_err,
     }
+
+
+def settle_by_campaign(campaign_id: str, token: str) -> list[dict]:
+    """
+    Auto-settle all open prediction records for a campaign once the cooldown
+    has expired.  Called from run_autooptimiser() on every pass so the EMA
+    calibration accumulates real outcomes without manual intervention.
+
+    For each unsettled record whose run_id starts with ``autooptimiser:{campaign_id}`` or ``autopilot:{campaign_id}``:
+      • Re-fetches 7-day Meta insights for that campaign.
+      • Uses the metric named in the record (``leads`` or ``reach``) as
+        ``actual_after``.
+      • Calls settle() which updates the calibration factor for that basis.
+
+    Returns a list of settled record dicts (may be empty).
+    Safe to call even when META_ACCESS_TOKEN is absent — silently returns [].
+    """
+    if not token:
+        return []
+
+    try:
+        from pikorua_adflow.tools.meta_tool import fetch_insights
+        from pikorua_adflow.api.services import deploy_service as ds
+    except Exception:
+        return []
+
+    state = _load()
+    prefix_new = f"autooptimiser:{campaign_id}"
+    prefix_old = f"autopilot:{campaign_id}"
+    open_records = [
+        r for r in state["records"]
+        if ((r.get("run_id") or "").startswith(prefix_new) or (r.get("run_id") or "").startswith(prefix_old))
+        and r.get("actual_after") is None
+        and r.get("before") is not None
+    ]
+    if not open_records:
+        return []
+
+    # Fetch current 7-day insights once for this campaign (shared across records).
+    try:
+        insights_rows = fetch_insights(campaign_id, token, "last_7d")
+        if not insights_rows:
+            return []
+        agg_metrics = ds.metrics_from_insight(insights_rows[0])
+    except Exception:
+        return []
+
+    settled_out: list[dict] = []
+    for rec in open_records:
+        metric = rec.get("metric", "leads")
+        actual: float | None = None
+        if metric == "leads":
+            actual = float(agg_metrics.get("leads") or 0) or None
+        elif metric == "reach":
+            actual = float(agg_metrics.get("impressions") or 0) or None
+        elif metric == "budget":
+            # Budget changes: actual_after is the new spend level; skip if no spend data
+            actual = float(agg_metrics.get("spend") or 0) or None
+
+        if actual is None:
+            continue
+
+        result = settle(rec["id"], actual)
+        if result:
+            settled_out.append(result)
+
+    return settled_out
+

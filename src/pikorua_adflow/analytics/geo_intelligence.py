@@ -1,5 +1,5 @@
 """
-geo_intelligence.py — dynamic, data-driven geo opportunity scoring for the autopilot.
+geo_intelligence.py — dynamic, data-driven geo opportunity scoring for the autooptimiser.
 
 DESIGN PRINCIPLE (locked with the user): there is NO hardcoded city-wealth table here.
 Rankings of "rich cities" or "NRI source countries" are true today and stale tomorrow,
@@ -12,7 +12,7 @@ so nothing is frozen. Every signal is recomputed at call time from live sources:
                           intent/age layer (Graph API). How many real, reachable buyers
                           exist there now — not a static population number.
   • DEMAND TREND        — optional, best-effort, TTL-cached live signal (left as a hook;
-                          off by default so it never slows the autopilot pass).
+                          off by default so it never slows the autooptimiser pass).
 
 Two hard rules this module enforces, both reflecting the user's direction:
 
@@ -37,7 +37,7 @@ import os
 # ── Tunables (counts, not city names — the "what factors" not the "which cities") ──
 GEO_MIN_LEADS_TO_JUDGE = 6     # need at least this many leads from a city before judging it
 GEO_ADD_MIN_QUALITY = 2        # an untargeted city needs this many quality leads to suggest adding
-GEO_MAX_PROBES = 8             # cap live reach lookups per pass (keeps the autopilot fast)
+GEO_MAX_PROBES = 8             # cap live reach lookups per pass (keeps the autooptimiser fast)
 
 
 def _norm(s: str) -> str:
@@ -151,7 +151,7 @@ def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
     This makes 'should we pull back from Mumbai?' a concrete ₹ decision, not an abstract
     lead-count judgement.
 
-    All suggestions are advisory (the autopilot surfaces them as approve-decisions).
+    All suggestions are advisory (the autooptimiser surfaces them as approve-decisions).
     Nothing here ever removes or adds a geo on its own.
     """
     token = token or os.getenv("META_ACCESS_TOKEN", "")

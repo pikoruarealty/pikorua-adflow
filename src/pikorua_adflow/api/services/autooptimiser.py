@@ -1,5 +1,5 @@
 """
-Campaign Autopilot — the self-optimising brain.
+Campaign AutoOptimiser — the self-optimising brain.
 
 This is NOT a second Ads Manager. It reads each ACTIVE Meta campaign, scores its
 lead quality against the CRM (the signal Meta is blind to), and walks a decision
@@ -14,7 +14,7 @@ Cross-campaign learning is CLIENTELE-SCOPED: a bungalow campaign only ever inher
 audiences/interests proven on other bungalow campaigns, never from a flat campaign —
 the buyers are different people.
 
-State (applied log, cooldowns, last digest) persists in outputs/autopilot_state.json.
+State (applied log, cooldowns, last digest) persists in outputs/autooptimiser_state.json.
 All Meta writes go through pikorua_adflow.tools.meta_tool; predictions are tracked by
 analytics.optimization_tracker so estimates self-calibrate over time.
 
@@ -40,7 +40,7 @@ RUNG 12 — Periodic Targeting Refresh  [READY — needs cron trigger]
            POST /retarget-campaign already exists, is tested, and is dry-run safe.
   Why:     Meta's interest taxonomy weights shift over time; monthly re-resolution
            keeps targeting aligned with what Meta currently amplifies.
-  Files:   autopilot.py rung logic + cron entry in the autopilot route.
+  Files:   autooptimiser.py rung logic + cron entry in the autooptimiser route.
 ──────────────────────────────────────────────────────────────────────────────────────
 """
 
@@ -51,21 +51,26 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..config import AUDIENCES_REGISTRY_PATH, OUTPUT_DIR
+from ..config import (AUDIENCES_REGISTRY_PATH, OUTPUT_DIR,
+                      AO_BENCHMARK_CPL, AO_FREQ_SATURATED, AO_FREQ_EXHAUSTED,
+                      AO_CPL_CEILING, AO_CPL_RISING_RATIO, AO_QUALITY_LEAD_MIN,
+                      AO_COOLDOWN_DAYS)
 from ..state import RUNS, RUNS_LOCK
 
-# ── Tunables ──────────────────────────────────────────────────────────────────
-BENCHMARK_CPL = 85          # best-ever CPL (₹) — the anchor the autopilot aims at
-FREQ_SATURATED = 3.0        # Meta audience-fatigue threshold
-FREQ_EXHAUSTED = 5.0        # pause only considered above this
-CPL_CEILING = 500           # ₹ — a campaign above this is bleeding
-CPL_RISING_RATIO = 1.3      # 7d/30d CPL ratio that counts as "getting worse"
-QUALITY_LEAD_MIN = 5        # matched quality leads needed to trust real quality-CPL
-COOLDOWN_DAYS = 5           # wait for Meta's learning phase before stacking changes
+# ── Tunables (sourced from config — env-overridable, Tier-2 self-calibrating) ─
+# Aliases preserve all existing references inside this module unchanged.
+BENCHMARK_CPL    = AO_BENCHMARK_CPL
+FREQ_SATURATED   = AO_FREQ_SATURATED
+FREQ_EXHAUSTED   = AO_FREQ_EXHAUSTED
+CPL_CEILING      = AO_CPL_CEILING
+CPL_RISING_RATIO = AO_CPL_RISING_RATIO
+QUALITY_LEAD_MIN = AO_QUALITY_LEAD_MIN
+COOLDOWN_DAYS    = AO_COOLDOWN_DAYS
 AB_WINDOW_DAYS = 7          # days to run A/B pairs before declaring a winner (B2)
 AB_WINDOW_EXTENSION = 2     # days to extend once if result is inconclusive
 
-_STATE_PATH = OUTPUT_DIR / "autopilot_state.json"
+
+_STATE_PATH = OUTPUT_DIR / "autooptimiser_state.json"
 _NRI_DEFAULT = ["AE", "GB", "US", "SG"]
 
 
@@ -112,7 +117,7 @@ def _in_cooldown(camp_state: dict, fix_type: str) -> bool:
 def _register_ab_group(*, run_id: str, adset_id: str,
                        control_ad_id: str, challenger_ad_id: str) -> None:
     """
-    Record a new A/B pair in autopilot state. Called by the refresh-creatives
+    Record a new A/B pair in autooptimiser state. Called by the refresh-creatives
     endpoint when ab=True. The nightly resolve pass checks this table.
     """
     state = _load_state()
@@ -808,8 +813,8 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
             mt.update_adset_budget(target, new_b, token)
             undo = {"action": "set_budget", "target": target,
                     "daily_budget_inr": params.get("base_budget", new_b)}
-            tracker.open_record(run_id=f"autopilot:{cid}", variant=0, action="budget",
-                                basis="budget_linear", metric="leads", label="Autopilot budget cut",
+            tracker.open_record(run_id=f"autooptimiser:{cid}", variant=0, action="budget",
+                                basis="budget_linear", metric="leads", label="AutoOptimiser budget cut",
                                 before=None,
                                 raw_multiplier=new_b / max(params.get("base_budget", new_b), 1),
                                 expected=tracker.predict("budget_linear",
@@ -856,7 +861,7 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
             return {"ok": False, "error": f"Unknown action '{action}'."}
     except Exception as exc:
         from pikorua_adflow.tools.errors import explain_and_log
-        friendly = explain_and_log(f"Autopilot — {action}", exc)
+        friendly = explain_and_log(f"AutoOptimiser — {action}", exc)
         return {"ok": False, "error": friendly["message"]}
 
     # Log to state with cooldown.
@@ -909,7 +914,7 @@ def undo_fix(campaign_id: str, fix_type: str) -> dict:
             return {"ok": False, "error": "This action can't be undone automatically."}
     except Exception as exc:
         from pikorua_adflow.tools.errors import explain_and_log
-        friendly = explain_and_log(f"Autopilot undo — {fix_type}", exc)
+        friendly = explain_and_log(f"AutoOptimiser undo — {fix_type}", exc)
         return {"ok": False, "error": friendly["message"]}
     entry["undone"] = True
     cs.get("cooldowns", {}).pop(fix_type, None)
@@ -918,7 +923,7 @@ def undo_fix(campaign_id: str, fix_type: str) -> dict:
 
 
 def _resolve_clientele_interests(clientele_type: str, token: str) -> list[dict]:
-    """Resolve the clientele's interest names to Meta {id,name} (autopilot rung 7)."""
+    """Resolve the clientele's interest names to Meta {id,name} (autooptimiser rung 7)."""
     from pikorua_adflow.tools import meta_targeting as _mt
     profile = _mt.clientele_profile(clientele_type)
     cache = _mt._load_cache()
@@ -935,7 +940,7 @@ def _resolve_clientele_interests(clientele_type: str, token: str) -> list[dict]:
 
 
 # ── Orchestration ─────────────────────────────────────────────────────────────
-def run_autopilot(apply_safe: bool = True) -> dict:
+def run_autooptimiser(apply_safe: bool = True) -> dict:
     """
     Evaluate every ACTIVE campaign, auto-apply provably-safe fixes, and build the
     3-zone payload the page renders. Safe to call on a schedule or on tab open.
@@ -1040,13 +1045,55 @@ def run_autopilot(apply_safe: bool = True) -> dict:
         from pikorua_adflow.analytics import creative_learning as _cl
         _cl.update_memory(evals, token)
     except Exception:
-        pass  # never let memory write break the autopilot
+        pass  # never let memory write break the autooptimiser
+
+    # ── Tier 2 — settle outcomes for cooled-down fixes ────────────────────────
+    # Re-fetch Meta insights for each campaign that has open prediction records
+    # and automatically close them with the real outcome, updating EMA calibration.
+    settled_outcomes: list[dict] = []
+    try:
+        from pikorua_adflow.analytics import optimization_tracker as _ot
+        for ev in evals:
+            try:
+                results = _ot.settle_by_campaign(ev["campaign_id"], token)
+                settled_outcomes.extend(results)
+            except Exception:
+                pass
+    except Exception:
+        pass  # never let the settle pass break the autooptimiser
+
+    # ── Tier 3 — LLM strategist advisory pass ────────────────────────────────
+    # Advisory brain: reads live data + settled outcomes → returns explanations,
+    # anomalies, and structured suggestions (safe → auto-apply; risky → approval).
+    strategist_result: dict = {}
+    llm_safe_applied: list[dict] = []
+    try:
+        from pikorua_adflow.analytics import llm_strategist as _strat
+        strategist_result = _strat.run_daily_pass(
+            evals=evals,
+            crm_report=crm_report,
+            settled_outcomes=settled_outcomes,
+        )
+        # Route safe suggestions through the existing Tier-1 apply path.
+        for sug in strategist_result.get("suggestions", []):
+            if sug.get("risk") == "safe" and apply_safe and not dry_run:
+                fix = sug.get("fix")
+                if fix:
+                    try:
+                        res = apply_fix(fix, auto=True)
+                        if res.get("ok"):
+                            llm_safe_applied.append({**fix, "impact": res.get("impact", {}),
+                                                     "source": "llm_strategist"})
+                    except Exception:
+                        pass
+    except Exception:
+        pass  # never let the strategist break the autooptimiser
 
     _save_state(state)
 
     return {
         "campaigns": [_public_campaign(ev) for ev in evals],
-        "auto_applied": auto_applied,
+        "auto_applied": auto_applied + llm_safe_applied,
         "decisions": decisions[:2],
         "all_decisions": decisions,
         "account_actions": account_actions,
@@ -1056,7 +1103,10 @@ def run_autopilot(apply_safe: bool = True) -> dict:
         "last_run": state["last_run"],
         "benchmark_cpl": BENCHMARK_CPL,
         "ab_resolutions": ab_resolutions,
+        "settled_outcomes": len(settled_outcomes),
+        "strategist": strategist_result,
     }
+
 
 
 def _public_campaign(ev: dict) -> dict:
@@ -1086,7 +1136,7 @@ def get_applied_log() -> list[dict]:
     return out
 
 
-# ── Defensive CRM reads (never let a CRM hiccup break the autopilot) ──────────
+# ── Defensive CRM reads (never let a CRM hiccup break the autooptimiser) ──────────
 def _safe_crm_leads():
     try:
         from pikorua_adflow.analytics import crm_analytics

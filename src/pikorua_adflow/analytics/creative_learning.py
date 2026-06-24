@@ -1,7 +1,7 @@
 """
 creative_learning.py — per-clientele creative memory.
 
-On every autopilot pass (after quality-CPL data lands), this module:
+On every autooptimiser pass (after quality-CPL data lands), this module:
   1. Finds the winning variant(s) for each active campaign with enough quality leads
   2. Reads that variant's visual_prompts.json tags (palette_tag, recipe_tag, scene_tag)
      and the copy angle from the run record in RUNS
@@ -14,7 +14,7 @@ comes from Pikorua's own CRM quality data. When quality data is absent the modul
 writes nothing and the pipeline runs without a prior.
 
 Key functions:
-  update_memory(evals, token)  — called at the end of run_autopilot()
+  update_memory(evals, token)  — called at the end of run_autooptimiser()
   get_priors(clientele_type)   — called by run_pipeline() before ContentCrew
   top_tags(clientele_type, n)  — convenience; returns ranked tag strings
 """
@@ -26,7 +26,7 @@ from pathlib import Path
 
 # ── Tunables ──────────────────────────────────────────────────────────────────
 EMA_ALPHA = 0.3              # learning rate — how fast new wins displace old memories
-MIN_QUALITY_TO_LEARN = 5    # same gate as QUALITY_LEAD_MIN in autopilot
+MIN_QUALITY_TO_LEARN = 5    # same gate as QUALITY_LEAD_MIN in autooptimiser
 
 _MEMORY_PATH = Path(__file__).parent.parent.parent.parent.parent / "outputs" / "creative_memory.json"
 # Resolved at import time relative to the package root; falls back cleanly if missing.
@@ -52,13 +52,13 @@ def _ema_update(current: float, new_value: float, alpha: float = EMA_ALPHA) -> f
     return alpha * new_value + (1.0 - alpha) * current
 
 
-# ── Core: update memory after an autopilot pass ───────────────────────────────
+# ── Core: update memory after an autooptimiser pass ───────────────────────────────
 def update_memory(evals: list[dict], token: str) -> None:
     """
     For each evaluated campaign that has enough quality leads, find the best
     variant, read its visual_prompts.json tags, and update the per-clientele EMA.
 
-    evals: list of evaluate_campaign() result dicts (from run_autopilot).
+    evals: list of evaluate_campaign() result dicts (from run_autooptimiser).
     token: Meta access token (not used here — kept for API consistency).
     """
     from pikorua_adflow.api.state import RUNS, RUNS_LOCK

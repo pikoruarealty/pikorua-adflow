@@ -766,7 +766,7 @@ def create_ad_in_adset(adset_id: str, ad_account_id: str,
     return {"ad_id": ad["id"], "creative_id": creative_id}
 
 
-# ---- Autopilot: account-wide reads + geo edits ---------------------------- #
+# ---- AutoOptimiser: account-wide reads + geo edits ---------------------------- #
 
 def fetch_active_campaigns(ad_account_id: str, token: str) -> list[dict]:
     """All ACTIVE campaigns on the account: [{id, name, daily_budget, objective}].
@@ -958,7 +958,7 @@ def add_geo_countries(adset_id: str, iso_codes: list[str], token: str) -> bool:
 def add_geo_city(adset_id: str, city_name: str, token: str, *,
                  country: str = "IN", radius_km: int = 25) -> bool:
     """Resolve a city by name (via the Meta targeting-search taxonomy) and union it
-    into the ad set's geo_locations.cities. Used by autopilot's geo-opportunity 'add'
+    into the ad set's geo_locations.cities. Used by autooptimiser's geo-opportunity 'add'
     decision. Raises if the city can't be resolved or the PATCH fails."""
     from pikorua_adflow.tools import meta_targeting as _mt
     cache = _mt._load_cache()
@@ -984,7 +984,7 @@ def remove_geo_locations(adset_id: str, token: str, *, keep_city_keys: list[str]
     """
     Strip wrong-market geo from an ad set, keeping only the allowed city keys /
     countries. Returns {removed_cities: [...], removed_countries: [...], applied: bool}.
-    Used by autopilot rung 1 (e.g. an Ahmedabad property whose ad set still carries
+    Used by autooptimiser rung 1 (e.g. an Ahmedabad property whose ad set still carries
     Mumbai/Gurgaon pincodes). Raises on hard PATCH failure.
     """
     keep_city_keys = set(str(k) for k in (keep_city_keys or []))
@@ -1020,7 +1020,7 @@ def remove_geo_locations(adset_id: str, token: str, *, keep_city_keys: list[str]
 def add_custom_audiences(adset_id: str, token: str, *, include_ids: list[str] | None = None,
                          exclude_ids: list[str] | None = None) -> bool:
     """Union custom-audience include/exclude ids into an ad set's live targeting.
-    Used by autopilot rung 2 (exclusion) + rung 3 (CRM lookalike). Raises on failure."""
+    Used by autooptimiser rung 2 (exclusion) + rung 3 (CRM lookalike). Raises on failure."""
     live = _get(adset_id, token, {"fields": "targeting"}).get("targeting", {}) or {}
     new_targeting = dict(live)
     if include_ids:

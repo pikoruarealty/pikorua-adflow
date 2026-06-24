@@ -731,7 +731,7 @@ def build_targeting_spec(audience: dict) -> dict:
     return spec
 
 
-# ── CRM-profile → Meta-interest mapping (autopilot rung 7) ───────────────────
+# ── CRM-profile → Meta-interest mapping (autooptimiser rung 7) ───────────────────
 # Maps the industries crm_analytics.top_converting_profiles() produces onto Meta
 # interest names. Used to lean targeting toward whatever profile actually converts
 # for THIS campaign's clientele — never across clienteles.

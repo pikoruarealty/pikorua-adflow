@@ -90,7 +90,7 @@ def _normalize(leads: list[dict]) -> list[dict]:
 # Lead quality
 # --------------------------------------------------------------------------- #
 _QUALITY_BUYING_STATUSES = {"exploring", "hot", "warm", "interested", "postponed", "still searching"}
-# Keep old name as alias so existing callers (autopilot) don't break.
+# Keep old name as alias so existing callers (autooptimiser) don't break.
 _QUALITY_STATUSES = _QUALITY_BUYING_STATUSES
 
 # client_status values (meta_leads.status) that confirm a quality lead.
@@ -592,7 +592,7 @@ def top_converting_profiles(leads: list[dict], top_n: int = 5, min_count: int = 
 
 
 # --------------------------------------------------------------------------- #
-# 8b. Campaign lead matching + profile-match quality (autopilot north-star)
+# 8b. Campaign lead matching + profile-match quality (autooptimiser north-star)
 # --------------------------------------------------------------------------- #
 _CONFIG_KEYWORDS: dict[str, list[str]] = {
     "bungalow": ["bungalow", "villa", "independent house", "row house"],

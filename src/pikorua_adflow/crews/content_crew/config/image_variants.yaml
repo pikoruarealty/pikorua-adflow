@@ -82,6 +82,8 @@ variants:
     allowed_recipes:
       - the_open_room_anchor
       - the_architectural_dead_zone
+      - the_zoned_triptych
+      - the_editorial_triptych
     default_tone_bias: bright_aspirational
     sample_ready_cta: "Sample flat ready — come experience it"
     # Palette is dynamic (LLM picks per scene); batch distinctness is enforced in
@@ -119,6 +121,8 @@ variants:
       - the_golden_archway
       - the_horizon_anchor
       - the_zenith_gaze
+      - the_zoned_triptych
+      - the_editorial_triptych
     default_tone_bias: bright_aspirational
     sample_ready_cta: "Sample flat ready — see the space"
     allowed_palettes:
@@ -239,6 +243,8 @@ variants:
       - the_architectural_dead_zone
       - the_glass_morphism_shield
       - the_horizon_anchor
+      - the_zoned_triptych
+      - the_editorial_triptych
     default_tone_bias: dark_luxury
     sample_ready_cta: "Step inside — sample flat ready"
     allowed_palettes:

@@ -27,7 +27,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from .config import STATIC_DIR
-from .routes import (analytics, assets, audience, autopilot, campaigns, deploy,
+from .routes import (analytics, assets, audience, autooptimiser, campaigns, deploy,
                      pages, visuals)
 
 app = FastAPI(
@@ -46,6 +46,6 @@ app.include_router(visuals.router)
 app.include_router(audience.router)
 app.include_router(deploy.router)
 app.include_router(analytics.router)
-app.include_router(autopilot.router)
+app.include_router(autooptimiser.router)
 app.include_router(assets.router)
 app.include_router(pages.router)
