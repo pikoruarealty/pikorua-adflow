@@ -104,6 +104,17 @@ class StrategistApproveReq(BaseModel):
     suggestion_index: int = Field(..., ge=0, description="Index into strategist.suggestions[]")
 
 
+@router.post("/autooptimiser-retarget-all")
+def autooptimiser_retarget_all():
+    """
+    Rung 12 — refresh targeting on all active campaigns against the current
+    CLIENTELE_TARGETING_MAP. Called by APScheduler every 30 days; also
+    triggerable manually from the AutoOptimiser page.
+    """
+    result = autooptimiser.periodic_retarget_all()
+    return result
+
+
 @router.post("/autooptimiser-strategist-approve")
 def autooptimiser_strategist_approve(req: StrategistApproveReq):
     """

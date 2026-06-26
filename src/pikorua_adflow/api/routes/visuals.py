@@ -467,7 +467,7 @@ def serve_image(run_id: str, filename: str):
     run = RUNS[run_id]
     if not run.get("review_folder"):
         raise HTTPException(status_code=404, detail="No review folder for this run.")
-    if not re.fullmatch(r'image_\d+(?:_v\d+)?\.png', filename):
+    if not re.fullmatch(r'image_(?:\d+|r\d+)(?:_v\d+)?\.png', filename):
         raise HTTPException(status_code=400, detail="Invalid filename.")
     img_path = Path(run["review_folder"]) / "images" / filename
     if not img_path.exists():
@@ -690,41 +690,73 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
         k += 1
     out_path = images_dir / f"image_r{k}.png"
 
-    # ── Mode: remix ────────────────────────────────────────────────────────────
+    # ── Mode: remix (match layout + scene type, correct text from brief) ───────
     if payload.mode == "remix":
         if payload.custom_prompt:
             prompt = payload.custom_prompt.strip()
+            ref_layout = ""
         else:
-            prompt = imgs.assemble_reference_variant_prompt(brief, headline=first_headline)
+            # Extract WHERE text elements sit in the reference ad (cached)
+            ref_layout = imgs.extract_reference_ad_layout(ref_path)
+            if not ref_layout:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Could not extract ad layout from reference image. Check VISION_MODEL.",
+                )
+            # Extract the photographic scene/mood of the reference (cached)
+            ref_scene = imgs.analyze_reference_image(ref_path)
+
+            entry = {
+                "scene_prose": ref_scene,
+                "headline": first_headline,
+                "eyebrow": "",
+                "palette_tag": "charcoal_gold",
+                "tone_tag": "dark_luxury",
+                "recipe_tag": "",
+                "logo_corner": "bottom-right",
+                "composition_notes": ref_layout,
+            }
+            sanitizer_brief = {
+                "locality": brief.get("locality", ""),
+                "city": brief.get("city", ""),
+                "property_type": brief.get("property_type", ""),
+                "price_cr": str(brief.get("price_cr", "")),
+                "sample_ready": bool(brief.get("sample_ready", False)),
+                "rera_verified": bool(brief.get("rera_verified", False)),
+                "verified_awards": bool(brief.get("verified_awards", False)),
+                "verified_certifications": bool(brief.get("verified_certifications", False)),
+                "verified_landmarks": bool(brief.get("verified_landmarks", False)),
+                "config": brief.get("config", ""),
+                "usps": brief.get("usps", []),
+                "property_name": brief.get("property_name", ""),
+            }
+            raw_prompt = imgs.build_ad_prompt(entry, sanitizer_brief, "interior")
+            prompt = imgs.sanitize_image_prompt(raw_prompt, sanitizer_brief, assembled=True)
 
         if os.getenv("REMIX_MOCK") == "1":
             return {
                 "mock": True, "mode": "remix",
                 "prompt_sent": prompt, "filename": out_path.name,
-                "reference": safe_name, "image_weight": payload.image_weight,
+                "reference": safe_name, "composition_notes": ref_layout,
             }
 
         if not ideogram_key:
             raise HTTPException(status_code=400, detail="IDEOGRAM_API_KEY not configured.")
 
         try:
-            result_bytes = imgs.call_ideogram_remix(
-                image_bytes=ref_path.read_bytes(),
-                prompt=prompt,
-                key=ideogram_key,
-                speed=payload.speed,
+            result_bytes = imgs.call_ideogram(
+                prompt, ideogram_key,
+                speed=payload.speed.upper() if payload.speed else "DEFAULT",
                 aspect=payload.aspect,
-                image_weight=payload.image_weight,
             )
         except Exception as exc:
             from pikorua_adflow.tools.errors import explain_and_log
-            friendly = explain_and_log("Reference variant — Ideogram remix", exc)
+            friendly = explain_and_log("Reference variant — match layout", exc)
             raise HTTPException(status_code=502, detail=friendly["message"])
 
         provenance = {
             "reference_filename": safe_name,
             "mode": "remix",
-            "image_weight": payload.image_weight,
         }
 
     # ── Mode: new_scene ────────────────────────────────────────────────────────

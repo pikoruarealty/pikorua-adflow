@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from ..config import AUDIENCES_REGISTRY_PATH
 from ..models import AudienceSave, CRMAudienceRequest
@@ -149,3 +151,76 @@ def upload_crm_audience(req: CRMAudienceRequest):
         pass
     result["registry_saved"] = len(new_entries)
     return result
+
+
+@router.get("/download-crm-leads")
+def download_crm_leads(type: str = Query(..., pattern="^(good|bad|unclassified)$")):
+    """
+    Stream an Excel file of good, bad, or unclassified CRM leads.
+
+    ?type=good          → explicitly warm / interested leads
+    ?type=bad           → cold / not-interested / lost leads
+    ?type=unclassified  → no buying or client status set — neutral, no signal either way
+    """
+    from pikorua_adflow.tools.meta_audience_tool import (
+        _SITE_VISIT_CONFIRMED,
+        _categorise,
+        _get_raw,
+    )
+    from pikorua_adflow.utils import crm_source
+    import openpyxl
+
+    rows, _src = crm_source.fetch_rows()
+    if not rows:
+        raise HTTPException(status_code=503, detail="No CRM data available.")
+
+    categorised: list[dict] = []
+    for row in rows:
+        raw_client = (
+            _get_raw(row, "Client Status", "ClientStatus", "client_status")
+            or _get_raw(row, "Status", "status")
+        )
+        raw_buying = _get_raw(row, "Buying Status", "BuyingStatus", "buying_status")
+        raw_svisit = _get_raw(row, "Site Visit Status", "SiteVisitStatus", "site_visit_status").lower()
+
+        is_site_visitor = any(v in raw_svisit for v in _SITE_VISIT_CONFIRMED)
+        category = _categorise(raw_buying, raw_client)
+        if is_site_visitor and category not in ("bad", "broker"):
+            category = "good"
+
+        categorised.append({**row, "_category": category})
+
+    _FILE_MAP = {
+        "good":         ("pikorua_good_leads.xlsx",         "Good Leads",         {"good"}),
+        "bad":          ("pikorua_bad_leads.xlsx",          "Bad Leads",          {"bad"}),
+        "unclassified": ("pikorua_unclassified_leads.xlsx", "Unclassified Leads", {"unclassified"}),
+    }
+    filename, sheet_title, keep = _FILE_MAP[type]
+    filtered = [r for r in categorised if r["_category"] in keep]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = sheet_title
+
+    # Build columns: all original keys + Category
+    if filtered:
+        original_cols = [k for k in filtered[0].keys() if k != "_category"]
+    else:
+        original_cols = list(categorised[0].keys()) if categorised else []
+        original_cols = [k for k in original_cols if k != "_category"]
+
+    headers = original_cols + ["Category"]
+    ws.append(headers)
+
+    for row in filtered:
+        ws.append([row.get(c, "") for c in original_cols] + [row["_category"]])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

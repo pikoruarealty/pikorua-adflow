@@ -1,34 +1,36 @@
-# Competitor Ad Summaries
+```markdown
+# Competitor Ad Summaries in Ahmedabad
 
-## 1. Shree Siddhi Realty
-- **Brand Name:** Shree Siddhi Realty
-- **Headline/Main Message:** Presenting premium Weekend Villas at Thol–Kanjari Road.
-- **Emotional Angle Used:** Lifestyle, exclusivity
-- **CTA Used:** Call +91 98986 88899 to book a limited plot.
+## 1. Brand: Goyal & Co.
+- **Headline:** 4 & 5 BHK Ultra-Luxurious Apartments in Ahmedabad - Rivera One
+- **Emotional Angle:** Aspiration
+- **CTA:** Explore Now
+- **Link:** [Rivera One](https://goyalco.com/project/residential/riviera-one/)
 
-## 2. 99acres.com
-- **Brand Name:** 99acres.com
-- **Headline/Main Message:** Luxury Apartments in Ashram Road, Ahmedabad・ consists of 4 bedrooms, 4 bathrooms.
-- **Emotional Angle Used:** Aspiration, luxury living
-- **CTA Used:** View more details on 99acres.com.
+## 2. Brand: MagicBricks
+- **Headline:** Luxury Apartments in Ahmedabad
+- **Emotional Angle:** Lifestyle
+- **CTA:** Choose Your Dream Home
+- **Link:** [MagicBricks Luxury Apartments](https://www.magicbricks.com/luxury-apartments-in-ahmedabad-pppfs)
 
-## 3. Eternia Residences
-- **Brand Name:** Eternia Residences
-- **Headline/Main Message:** Premium 3 & 4 BHK Residences for Grand Living at Tech Zone IV.
-- **Emotional Angle Used:** Lifestyle, investment potential
-- **CTA Used:** Why Invest in Eternia Residences? Call for details.
+## 3. Brand: Adani Realty
+- **Headline:** Luxury Villas in Ahmedabad for Sale
+- **Emotional Angle:** Investment Return
+- **CTA:** Inquire Now
+- **Link:** [Adani Realty Villas](https://www.adanirealty.com/villa-in-ahmedabad-pcic?srsltid=AfmBOoobn91k9uLehpWHuZ3iZWBtkuZfVMafe32v2ETSdvPijDzFWTRB)
 
-## 4. Golf Facing Luxury Apartments
-- **Brand Name:** Not specified
-- **Headline/Main Message:** GOLF ⛳️ FACING and CANAL FACING Luxury Apartments at Ahmedabad.
-- **Emotional Angle Used:** Fear of missing out (FOMO), luxury
-- **CTA Used:** Call us for SITE VISIT Appointment / Booking.
+## 4. Brand: UB Heritage
+- **Headline:** Unveiling the Best 4 BHK Luxury Apartments
+- **Emotional Angle:** Aspiration
+- **CTA:** Discover More
+- **Link:** [UB Heritage](https://ubheritage.com/unveiling-the-best-4-bhk-luxury-apartments-and-plotted-homes-in-ahmedabad/)
 
-## 5. Luxurious 4BHK apartments
-- **Brand Name:** Not specified
-- **Headline/Main Message:** Luxurious 4BHK apartments in Ahmedabad.
-- **Emotional Angle Used:** Exclusivity, investment return
-- **CTA Used:** Contact for more details and booking.
+## 5. Brand: 99acres
+- **Headline:** 8227+ Luxury Apartments in Ahmedabad
+- **Emotional Angle:** Fear of Missing Out
+- **CTA:** Book Now
+- **Link:** [99acres Luxury Apartments](https://www.99acres.com/luxury-apartments-flats-in-ahmedabad-ffid)
 
 # Gap Analysis
-Currently, no competitor is leveraging the angle of **family legacy and creating a family retreat** as a central theme in their messaging. Pikorua could own this angle, emphasizing the long-term benefits and the emotional value of family gathering spaces in luxury homes.
+One angle that seems less utilized in the current market is highlighting the transparency and trustworthiness of the property transactions, especially in light of the audience's pain points about lack of transparency in the property market and concerns about property value appreciation. Pikorua could own this by promoting a strong commitment to transparent dealings and emphasizing a track record of satisfied clients and successful transactions.
+```

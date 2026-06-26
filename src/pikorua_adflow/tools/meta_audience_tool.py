@@ -18,48 +18,93 @@ import os
 import pathlib
 
 _CRM_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "project_context" / "crm_export.csv"
+_CATEGORIES_YAML = pathlib.Path(__file__).parent.parent.parent.parent / "project_context" / "lead_categories.yaml"
 
-# ── Buying Status (lead_crm_details.buying_status) ───────────────────────────
-# Values seen in live Supabase CRM as of 2026-06-22.
-_GOOD_BUYING_STATUSES = frozenset([
+# ── Default status sets ───────────────────────────────────────────────────────
+# These are used when project_context/lead_categories.yaml is absent.
+# Edit the YAML file instead of these — the YAML always takes precedence.
+
+_DEFAULT_GOOD_BUYING  = [
     "exploring", "hot", "warm", "interested", "active", "qualified",
     "follow up", "postponed", "still searching",
-])
-
-# SiteVisitStatus values that confirm a lead physically visited or is confirmed to visit.
-# These override all other status signals — a site visitor is always good.
-_SITE_VISIT_CONFIRMED = frozenset(["visited", "completed", "confirmed", "visit date confirmed"])
-
-# Budget ceiling below which an unclassified lead is excluded from the lookalike seed
-# (but still kept in the good CA for ad delivery). Pikorua's lowest-priced inventory
-# is ~4 Cr, so a 2-3 Cr budget is a genuine mismatch. The threshold is conservative
-# to avoid incorrectly excluding legitimate leads who under-report their budget.
-_LOOKALIKE_BUDGET_MIN_CR = 3.5
-_BAD_BUYING_STATUSES = frozenset([
+]
+_DEFAULT_BAD_BUYING   = [
     "not_ready", "not ready", "cold", "not interested", "no interest",
     "dead", "lost", "spam", "duplicate", "invalid", "not_interested",
-])
+]
+_DEFAULT_GOOD_CLIENT  = ["warm", "interested"]
+_DEFAULT_BAD_CLIENT   = ["not interested", "cold", "lost", "low budget"]
+_DEFAULT_BROKER       = ["broker"]
+_DEFAULT_SITE_VISIT   = ["visited", "completed", "confirmed", "visit date confirmed"]
 
-# ── Client Status (meta_leads.status) ────────────────────────────────────────
-# Sales-team disposition set after the lead is worked.  Takes priority over
-# buying_status when present, because it represents an explicit human judgement.
-_GOOD_CLIENT_STATUSES = frozenset([
-    "warm", "interested", "construction biz owner",
-])
-_BAD_CLIENT_STATUSES = frozenset([
-    "not interested", "cold", "lost", "low budget",
-])
-_BROKER_CLIENT_STATUSES = frozenset([
-    "broker",
-])
 
-# Combined convenience sets (used in _categorise for substring scanning)
-_GOOD_STATUSES  = _GOOD_BUYING_STATUSES  | _GOOD_CLIENT_STATUSES
-_BAD_STATUSES   = _BAD_BUYING_STATUSES   | _BAD_CLIENT_STATUSES
+def _load_categories() -> dict:
+    """Load lead category rules from YAML; fall back to defaults if absent."""
+    if _CATEGORIES_YAML.exists():
+        try:
+            import yaml
+            data = yaml.safe_load(_CATEGORIES_YAML.read_text(encoding="utf-8")) or {}
+            return {
+                "good_buying":   frozenset(v.lower() for v in data.get("good_buying_status", _DEFAULT_GOOD_BUYING)),
+                "bad_buying":    frozenset(v.lower() for v in data.get("bad_buying_status",  _DEFAULT_BAD_BUYING)),
+                "good_client":   frozenset(v.lower() for v in data.get("good_client_status", _DEFAULT_GOOD_CLIENT)),
+                "bad_client":    frozenset(v.lower() for v in data.get("bad_client_status",  _DEFAULT_BAD_CLIENT)),
+                "broker":        frozenset(v.lower() for v in data.get("broker_client_status", _DEFAULT_BROKER)),
+                "site_visit":    frozenset(v.lower() for v in data.get("site_visit_confirmed", _DEFAULT_SITE_VISIT)),
+            }
+        except Exception as exc:
+            print(f"[meta_audience_tool] lead_categories.yaml load failed ({exc}) — using defaults.")
+    return {
+        "good_buying":  frozenset(v.lower() for v in _DEFAULT_GOOD_BUYING),
+        "bad_buying":   frozenset(v.lower() for v in _DEFAULT_BAD_BUYING),
+        "good_client":  frozenset(v.lower() for v in _DEFAULT_GOOD_CLIENT),
+        "bad_client":   frozenset(v.lower() for v in _DEFAULT_BAD_CLIENT),
+        "broker":       frozenset(v.lower() for v in _DEFAULT_BROKER),
+        "site_visit":   frozenset(v.lower() for v in _DEFAULT_SITE_VISIT),
+    }
+
+
+# Loaded once at import; restart server or re-run script to pick up YAML changes.
+_CATS = _load_categories()
+
+_GOOD_BUYING_STATUSES  = _CATS["good_buying"]
+_BAD_BUYING_STATUSES   = _CATS["bad_buying"]
+_GOOD_CLIENT_STATUSES  = _CATS["good_client"]
+_BAD_CLIENT_STATUSES   = _CATS["bad_client"]
+_BROKER_CLIENT_STATUSES = _CATS["broker"]
+_SITE_VISIT_CONFIRMED  = _CATS["site_visit"]
+
+# Budget ceiling below which an unclassified lead is excluded from the lookalike seed.
+_LOOKALIKE_BUDGET_MIN_CR = 3.5
+
+# Combined convenience sets
+_GOOD_STATUSES = _GOOD_BUYING_STATUSES | _GOOD_CLIENT_STATUSES
+_BAD_STATUSES  = _BAD_BUYING_STATUSES  | _BAD_CLIENT_STATUSES
 
 
 def _sha256(value: str) -> str:
     return hashlib.sha256(value.strip().lower().encode()).hexdigest()
+
+
+def _get_raw(row: dict, *names: str) -> str:
+    """
+    Fetch a field from a CRM row, tolerant of space / underscore / case variants.
+
+    "Buying Status", "buying_status", and "BuyingStatus" all resolve to the same
+    value.  Tries exact key first (fast path for Supabase rows), then falls back
+    to a normalised comparison.
+    """
+    norm_map: dict[str, str] = {
+        k.strip().lower().replace(" ", "").replace("_", ""): str(v or "").strip()
+        for k, v in row.items()
+    }
+    for name in names:
+        if name in row:
+            return str(row[name] or "").strip()
+        normed = name.strip().lower().replace(" ", "").replace("_", "")
+        if normed in norm_map:
+            return norm_map[normed]
+    return ""
 
 
 def _categorise(buying_status: str, client_status: str = "") -> str:
@@ -122,46 +167,28 @@ def _load_leads(crm_path: pathlib.Path) -> list[dict]:
     if not rows:
         return []
 
-    headers = [h.strip().lower() for h in rows[0].keys()]
-    phone_key    = next((h for h in headers if h in ("phone", "mobile", "contact")), None)
-    email_key    = next((h for h in headers if h in ("email", "email address", "email_address")), None)
-    bstatus_key  = next((h for h in headers if h in ("buyingstatus", "buying_status", "buying status")), None)
-    cstatus_key  = next((h for h in headers if h in ("clientstatus", "client_status", "status")), None)
-    svisit_key   = next((h for h in headers if h in ("sitevisiststatus", "site_visit_status", "sitevisit")), None)
-    budget_key   = next((h for h in headers if h in ("budget", "budgetrange", "budget_range")), None)
-    callstat_key = next((h for h in headers if h in ("callstatus", "call_status")), None)
-    city_key     = next((h for h in headers if h in ("city", "currentcity", "current_city")), None)
-
-    def _actual(row: dict, target: str | None) -> str | None:
-        if not target:
-            return None
-        return next((k for k in row if k.strip().lower() == target), None)
-
     leads = []
     for row in rows:
         entry: dict = {}
-        pk  = _actual(row, phone_key)
-        ek  = _actual(row, email_key)
-        bk  = _actual(row, bstatus_key)
-        ck  = _actual(row, cstatus_key)
-        svk = _actual(row, svisit_key)
-        bgk = _actual(row, budget_key)
-        cak = _actual(row, callstat_key)
-        cik = _actual(row, city_key)
 
-        if pk and str(row.get(pk, "")).strip():
-            entry["phone"] = _sha256(str(row[pk]))
-        if ek and str(row.get(ek, "")).strip():
-            entry["email"] = _sha256(str(row[ek]))
+        raw_phone = _get_raw(row, "Phone", "phone", "Mobile", "mobile", "Contact", "contact")
+        raw_email = _get_raw(row, "Email", "email", "Email Address", "email_address")
+        if raw_phone:
+            entry["phone"] = _sha256(raw_phone)
+        if raw_email:
+            entry["email"] = _sha256(raw_email)
         if not entry:
             continue
 
-        raw_buying  = str(row.get(bk, "")).strip() if bk else ""
-        raw_client  = str(row.get(ck, "")).strip() if ck else ""
-        raw_svisit  = str(row.get(svk, "")).strip().lower() if svk else ""
-        raw_budget  = str(row.get(bgk, "")).strip() if bgk else ""
-        raw_call    = str(row.get(cak, "")).strip().lower() if cak else ""
-        raw_city    = str(row.get(cik, "")).strip() if cik else ""
+        # Prefer "Client Status" over plain "Status" — it's the sales-team disposition
+        # column and takes precedence over the raw inbound status.
+        raw_client  = _get_raw(row, "Client Status", "ClientStatus", "client_status") \
+                      or _get_raw(row, "Status", "status")
+        raw_buying  = _get_raw(row, "Buying Status", "BuyingStatus", "buying_status")
+        raw_svisit  = _get_raw(row, "Site Visit Status", "SiteVisitStatus", "site_visit_status").lower()
+        raw_budget  = _get_raw(row, "Budget", "budget", "Budget Range", "budget_range")
+        raw_call    = _get_raw(row, "Call Status", "CallStatus", "call_status").lower()
+        raw_city    = _get_raw(row, "City", "city", "Current City", "CurrentCity", "current_city")
 
         # Site visitors override all other signals — they confirmed intent physically.
         is_site_visitor = any(v in raw_svisit for v in _SITE_VISIT_CONFIRMED)
@@ -411,24 +438,20 @@ def upload_crm_split_audiences(
         return {"error": "No CRM leads available — neither Supabase nor crm_export.csv returned data."}
 
     # ── Split pools ─────────────────────────────────────────────────────────────
-    # Good CA (ad delivery): all good + unclassified — broad for reach, used for
-    # "include this audience" on ad sets so the full warm pool sees ads.
-    good_leads   = [l for l in all_leads if l["category"] in ("good", "unclassified")]
-    bad_leads    = [l for l in all_leads if l["category"] == "bad"]
-    broker_leads = [l for l in all_leads if l["category"] == "broker"]
+    # Unclassified = no buying status, no client status, no site visit.
+    # Not warm enough to seed a lookalike; not bad enough to exclude.
+    # Kept in their own CA so they can still see ads via the unclassified audience
+    # without polluting the quality signal of the good seed.
+    good_leads        = [l for l in all_leads if l["category"] == "good"]
+    unclassified_leads = [l for l in all_leads if l["category"] == "unclassified"]
+    bad_leads         = [l for l in all_leads if l["category"] == "bad"]
+    broker_leads      = [l for l in all_leads if l["category"] == "broker"]
 
-    # High-intent seed (lookalike): good leads minus budget-mismatched unclassified.
-    # The lookalike trains Meta on who to find MORE of — we only want the signal from
-    # leads who have the right intent AND right budget profile.  Low-budget unclassified
-    # leads can still see ads (they're in good_leads) but shouldn't seed the model.
-    high_intent_seed = [
-        l for l in good_leads
-        if not (l["category"] == "unclassified" and l.get("is_low_budget"))
-    ]
+    # High-intent seed (lookalike): only explicitly good leads — no unclassified.
+    # The lookalike trains Meta on who to find MORE of — we want clean signal only.
+    high_intent_seed = [l for l in good_leads if not l.get("is_low_budget")]
 
     # Remote buyers: non-Ahmedabad leads from good pool (investors, relocators, NRI).
-    # Kept separate so their lookalike targets out-of-city buyers without diluting the
-    # Ahmedabad-focused main lookalike.
     remote_leads = [
         l for l in good_leads
         if l.get("city") and l["city"].lower() not in ("ahmedabad", "")
@@ -442,16 +465,17 @@ def upload_crm_split_audiences(
     low_budget_count   = sum(1 for l in all_leads if l.get("is_low_budget"))
 
     result: dict = {
-        "total_leads":           len(all_leads),
-        "good_leads_count":      len(good_leads),
-        "high_intent_seed_count": len(high_intent_seed),
-        "bad_leads_count":       len(bad_leads),
-        "broker_leads_count":    len(broker_leads),
-        "remote_leads_count":    len(remote_leads),
-        "site_visitor_count":    site_visitor_count,
-        "spoken_to_count":       spoken_to_count,
+        "total_leads":              len(all_leads),
+        "good_leads_count":         len(good_leads),
+        "unclassified_leads_count": len(unclassified_leads),
+        "high_intent_seed_count":   len(high_intent_seed),
+        "bad_leads_count":          len(bad_leads),
+        "broker_leads_count":       len(broker_leads),
+        "remote_leads_count":       len(remote_leads),
+        "site_visitor_count":       site_visitor_count,
+        "spoken_to_count":          spoken_to_count,
         "low_budget_excluded_from_seed": low_budget_count,
-        "target_countries":      target_countries,
+        "target_countries":         target_countries,
     }
 
     # ── Good leads: broad CA for ad delivery ────────────────────────────────
@@ -459,7 +483,7 @@ def upload_crm_split_audiences(
         good_ca_id, good_count, err = _create_custom_audience(
             base_url, auth_headers,
             name="PIKORUA CRM — Good Leads (Ad Delivery)",
-            description="All warm/unclassified leads — include on ad sets so they see Pikorua ads",
+            description="Explicitly warm/interested leads — include on ad sets for targeted delivery",
             leads=good_leads,
             requests_lib=requests,
         )
@@ -470,7 +494,28 @@ def upload_crm_split_audiences(
             result["good_leads_uploaded"] = good_count
     else:
         result["good_leads_error"] = (
-            f"Only {len(good_leads)} good/unclassified leads — Meta requires ≥100 for Custom Audience."
+            f"Only {len(good_leads)} good leads — Meta requires ≥100 for Custom Audience."
+        )
+
+    # ── Unclassified leads: separate CA (no buying/client signal) ───────────
+    # Not warm enough to include in the good seed, not bad enough to exclude.
+    # Kept separate so they can still receive ads without diluting lookalike quality.
+    if len(unclassified_leads) >= 100:
+        unc_ca_id, unc_count, err = _create_custom_audience(
+            base_url, auth_headers,
+            name="PIKORUA CRM — Unclassified Leads",
+            description="Leads with no buying/client status — neutral pool, neither warm nor cold",
+            leads=unclassified_leads,
+            requests_lib=requests,
+        )
+        if err:
+            result["unclassified_leads_error"] = err
+        else:
+            result["unclassified_leads_audience_id"] = unc_ca_id
+            result["unclassified_leads_uploaded"] = unc_count
+    elif unclassified_leads:
+        result["unclassified_leads_note"] = (
+            f"Only {len(unclassified_leads)} unclassified leads — below Meta's 100-record minimum."
         )
 
     # ── High-intent seed: tight CA + Lookalike ──────────────────────────────

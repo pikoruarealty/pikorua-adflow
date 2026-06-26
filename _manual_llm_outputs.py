@@ -1,38 +1,28 @@
 """
 Simulates ContentCrew + Visual Prompter pipeline for Anamika Heights.
-FULL REFRESH — brand-new scenes, headlines, compositions.
+Correct variant lineup: lifestyle_private_retreat / lifestyle_social_home /
+lifestyle_dynamic_a / lifestyle_dynamic_b / interior_signature_moment.
+(lifestyle_city_connection and exterior_establishing_shot removed — city-view
+and exterior shots are no longer part of the default batch.)
 
-RULES APPLIED (after reference ad study + image review):
+PIPELINE CHANGES:
+  - ads_layout_analysis.json patterns inform recipe selection
+  - the_sky_text_canvas: sky-text-only recipe (upper zone holds all text)
+  - Disabled recipes (the_depth_integration, the_physical_3d_intrusion,
+    the_sky_chandelier, the_dark_water_canvas, the_zenith_gaze,
+    the_backlit_silhouette) filtered at _RECIPES_BY_NAME load time
+  - task_composer.py: recipe list shuffled per run for variety
+  - dedupe_visual_batch: guarantees 5 distinct palettes + recipes per batch
 
-  Eyebrow:   One SHORT contextual fact not already dominant elsewhere. Max 5 words.
-             Never repeats location name or price already shown at large scale.
-             Omit entirely if the composition is self-explanatory.
-
-  CTA badge: Max 4 words. Assertive. Specific, not generic.
-
-  Price:     Always exactly Rs 3 Cr. "3,300 sq ft" is apartment SIZE — never confused
-             with price. Kept as separate, clearly distinct elements.
-
-  Separator: Each ad picks ONE — either · or — — used consistently throughout.
-             Stated explicitly in composition_notes so the model doesn't mix them.
-
-  Location:  Must be HEAVY/BLACK weight serif. ALWAYS. Composition notes reinforce this.
-
-  Reference ad lessons applied (DreamYug / Shreeji / Suncity / Prakrit / Nehru Nagar):
-    V1 — Architectural-scale location name: "SINDHUBHAVAN / ROAD" stacked, each
-         word filling its own line. Like Nehru Nagar's "NEHRU / NAGAR". HEAVY weight.
-    V2 — "SINDHUBHAVAN" as a single frame-spanning graphic element like Prakrit's
-         "LUXURY" — one word, edge-to-edge, is the entire creative device.
-    V3 — Bold provocation headline in sky zone. Price itself is the opening line.
-         Attention through brevity and scale, not decoration.
-    V4 — "100% CHEQUE ONLY" as the status bottom bar, like Nehru Nagar's cheque bar.
-         The payment policy IS the brand signal. Made into the bottom statement.
-    V5 — Mixed-scale typography: number (3,300) in HUGE serif, descriptor in italic
-         script, address in tracked caps — three weights, one composition. Shreeji-style.
+RECIPE VARIETY ACROSS RUNS:
+  Each variant has a RECIPE_POOL with 2 configs. The script randomly picks one
+  per variant each run, then dedupe_visual_batch() resolves any conflicts.
+  Re-run to get a different combination.
 
 Run:  python _manual_llm_outputs.py
 """
 
+import random
 import sys
 from pathlib import Path
 
@@ -50,7 +40,7 @@ BRIEF = {
     "price_cr":                "3",
     "config":                  "4 & 5 BHK",
     "sample_ready":            True,
-    "usps":                    ["Clubclass Amenities / 30+ Storey Tower"],
+    "usps":                    ["Clubclass Amenities / 3,300–6,100 sq ft"],
     "standout_feature": (
         "4 & 5 BHK residences from 3,300 to 6,100 sq ft on Sindhubhavan Road, "
         "Ahmedabad. 30+ storey tower. Clubclass amenities. 100% cheque only."
@@ -62,437 +52,651 @@ BRIEF = {
 }
 
 # ---------------------------------------------------------------------------
-# STAGE 1 — Campaign copywriter output (5 fresh headlines)
-#
-# V1  3,300 sq ft of morning.          (size as poetry, not a spec — specific moment)
-# V2  Full floors. Not floor plans.    (category reframe — what a 5 BHK actually means)
-# V3  Three crore. Thirty floors.      (both numbers together = the pitch in one line)
-# V4  100% Cheque. 0% Compromise.      (payment policy as creative mirror device)
-# V5  3,300.                           (just the number — the provocation)
+# RECIPE POOLS — 2 complete configs per variant.
+# Pool-A = primary configuration; Pool-B = alternate recipe energy + palette.
 # ---------------------------------------------------------------------------
 
-LLM_OUTPUTS = [
+VARIANT_POOLS = {
 
     # =========================================================================
     # VARIANT 1 — Lifestyle / Private Retreat
-    # scene: master_bedroom_dawn_corner
-    # brief: private, unhurried, one figure, back to camera. Space is the star.
+    # scene: master bedroom OR dressing room, solo figure or empty, cool morning
     #
-    # REFERENCE INSPIRATION: Nehru Nagar ad — location name ARCHITECTURAL-SCALE,
-    # each word on its own line, filling that line width, HEAVY HEAVY HEAVY.
-    # "SINDHUBHAVAN" on one line. "ROAD" on the line below. Both HUGE.
-    # That IS the ad. Nothing else needs to be the hero.
+    # POOL-A: PHOTO-FIRST layout — full-bleed photo (78%), location text on the
+    #         natural dark walnut wall (flat overlay), dark navy footer strip (22%)
+    #         holds BHK + price + sqft. No top band. Different from V2.
     #
-    # COMPOSITION (scene-derived):
-    #   The master bedroom at dawn has a large dark plaster wall to the left of
-    #   the corner glazing — this is a natural wide canvas.
-    #   "SINDHUBHAVAN" fills this wall as a single line — H-E-A-V-Y gold serif.
-    #   "ROAD" fills the line below at the same scale — equally HEAVY, equally gold.
-    #   The two words together ARE the design.
-    #   Below "ROAD": "AHMEDABAD" in small tracked geometric sans, gold.
-    #   The campaign tagline "3,300 sq ft of morning." appears in a fine italic serif,
-    #   warm white, tucked below AHMEDABAD — caption-scale, not a second headline.
-    #   Top-right corner: eyebrow "4 & 5 BHK" in tracked caps — 3 words, that's all.
-    #   PRICE: a bold dark pill — charcoal fill, gold border — bottom-right of photo
-    #   zone, off-axis. "FROM Rs 3 CR" inside it, HEAVY serif. Unmissable.
-    #   BADGE: "FLAT OPEN" — 2 words. Small stamped rectangle, bottom-left.
-    #   Bottom: single thin tracked line: "4 & 5 BHK · Clubclass Amenities · 30+ Storeys"
-    #   Separator throughout this ad: · (centered dot). No mixing.
-    #   Top-right corner: clear for logo.
+    # POOL-B: EDITORIAL TRIPTYCH — slate top band holds location + headline ONLY
+    #         (no BHK in top band). BHK lives exclusively in the footer.
     # =========================================================================
-    {
-        "variant_key":  "lifestyle_private_retreat",
-        "prompt_num":   1,
-        "scene_prose": (
-            "Sony A7R V, 35mm f/1.4, tripod at chest height angled toward the corner "
-            "glazing wall where two glass faces meet. 6am — the first amber light of dawn "
-            "at 3200K enters diagonally from the east face, catching the left edge of a "
-            "white-on-white Calacatta marble floor and the bottom half of the far wall. "
-            "The ceiling and upper-left wall remain in a warm, deep shade. ISO 200, f/4.\n\n"
-            "The master bedroom is 28 feet wide with 10.5-foot ceilings. The corner window "
-            "bay frames a view of Ahmedabad's quieter residential canopy, still grey-blue "
-            "in the pre-dawn. The far wall to the left of the glazing is smooth warm plaster "
-            "— no shelving, no art, no hardware — a bare expanse of dark warm shadow. "
-            "A man in a charcoal cashmere robe stands at the corner glass, back to camera, "
-            "hands in the robe's deep pockets, looking out at the waking city. "
-            "Floor: polished Calacatta Gold marble 1200x2400. The room is still. "
-            "The scale of the space is apparent before anything else."
-        ),
-        "composition_notes": (
-            "The creative device is the location name rendered at architectural scale — "
-            "like a building name carved into its own facade. Everything else is secondary.\n"
-            "SINDHUBHAVAN: rendered across the top half of the dark left wall in a single "
-            "horizontal line — HEAVY or BLACK weight luxury serif, gold (#C9A84C). "
-            "Each letter must be individually legible. Scale to fill the available wall width "
-            "from left edge to where the glazing begins. This one word is visually dominant.\n"
-            "ROAD: directly below SINDHUBHAVAN on its own line, same HEAVY weight, same gold, "
-            "same scale — fills the same horizontal span. The two-line stack IS the design.\n"
-            "AHMEDABAD: below ROAD, in small tracked geometric sans-serif, gold. "
-            "Two scales below the location name. City as quiet confirmation, not a banner.\n"
-            "Tagline '3,300 sq ft of morning.': fine italic serif, warm white, caption-scale, "
-            "tucked immediately below AHMEDABAD. Reads like a photographer's whisper on the wall. "
-            "NOTE: 3,300 here is apartment size in square feet — not the price.\n"
-            "Eyebrow '4 & 5 BHK': very top of frame, right-aligned, tracked geometric caps, "
-            "warm white, small. Three words only. No price here — price is the pill.\n"
-            "Price pill: bottom-right of the photo zone, off-axis (not centred). "
-            "Warm charcoal fill (#2B2420), gold border. Inside it: 'FROM Rs 3 CR' in HEAVY "
-            "display serif, gold. Size this pill so the text inside is large and unmissable.\n"
-            "Badge 'SAMPLE APARTMENT READY': bottom-left of the photo zone. A compact stamped "
-            "rectangle, same charcoal fill, gold border. Geometric sans, medium-bold. 3 words.\n"
-            "Single spec line at very bottom of canvas, inside a slim charcoal backing strip "
-            "(full width, 7% canvas height): "
-            "'4 & 5 BHK · Clubclass Amenities · 30+ Storeys' — tracked geometric caps, gold. "
-            "Separator throughout: · (centred dot). No dashes, no pipes.\n"
-            "Top-right corner of canvas: kept entirely clear — logo compositing zone."
-        ),
-        "headline":    "3,300 sq ft of morning.",
-        "eyebrow":     "4 & 5 BHK",
-        "palette_tag": "charcoal_gold",
-        "scene_tag":   "master_bedroom_dawn_corner",
-        "tone_tag":    "bright_aspirational",
-        "recipe_tag":  "the_editorial_sidebar",
-        "logo_corner": "top-right",
-        "badge_cta":   "SAMPLE APARTMENT READY",
-    },
+    "lifestyle_private_retreat": [
+        {   # POOL-A — master bedroom, photo-first + navy footer strip
+            "variant_key":  "lifestyle_private_retreat",
+            "prompt_num":   1,
+            "scene_prose": (
+                "Sony A7R V, 35mm f/2.0, tripod at chest height positioned at the foot "
+                "of the master bed, framing the 180-degree corner glazing bay ahead. "
+                "7:15am — cool morning daylight at 5600K streams through east and south "
+                "faces of the glazing, crisp and shadowless, rendering marble veining with "
+                "near clinical precision. ISO 100, f/5.6. Faint lens haze from the "
+                "north-facing glazing pane.\n\n"
+                "The master bedroom spans 26 feet across the corner. A long low upholstered "
+                "window bench in stone-grey linen sits across the full glazing bay — a woman "
+                "in a cream cashmere wrap sits at the far right end, facing outward, bare "
+                "feet tucked under her, coffee cup resting on the marble sill. "
+                "Floor: 1200x2400 Calacatta Viola marble — pale lilac veining on warm "
+                "white ground. The left-side wall to the window bay is dark oiled walnut "
+                "cladding, floor to 3.2m ceiling — no hardware, no shelving, a single "
+                "deep-toned expanse. The room is quiet and unhurried."
+            ),
+            "composition_notes": (
+                "PHOTO-FIRST layout. The photo fills the upper 78% of the canvas completely "
+                "— no top band, no overlay panel. All address text sits on the dark walnut "
+                "wall that the scene was composed to provide.\n"
+                "SINDHUBHAVAN: overlaid as flat HEAVY gold luxury display serif floating in "
+                "front of the dark walnut wall — NOT embedded in or carved into it. "
+                "One word filling the panel width, upper portion of the wall. "
+                "Each letter individually legible at arm's length.\n"
+                "ROAD: immediately below at the same weight and scale. Two-line address stack.\n"
+                "AHMEDABAD: below ROAD in small tracked geometric caps, cream. "
+                "Quiet confirmation.\n"
+                "Headline 'A morning worth waking for.': italic display serif, warm white, "
+                "below AHMEDABAD — at 35% of SINDHUBHAVAN's cap height. Clear, confident.\n"
+                "Badge = DECORATIVE PLAQUE: positioned mid-frame on the right side of the "
+                "photo zone where the bright marble and glazing create natural negative space. "
+                "Solid ivory backing (#F5EDD8), outer gold hairline, inner gold hairline. "
+                "Badge text: 'SAMPLE FLAT READY' only. Wide, prominent — never a small stamp.\n"
+                "FOOTER STRIP (lower 22%): solid dark navy (#0D1B2A), full canvas width. "
+                "Three equal columns separated by thin gold vertical hairlines:\n"
+                "LEFT: '4 & 5 BHK' in BOLD cream geometric caps with fine gold icon above — "
+                "PRIMARY BUYING INFORMATION. Optically equal weight to the price.\n"
+                "CENTRE: 'STARTING AT' (small tracked cream) / '₹3 Cr' (dominant, 2.5× the "
+                "label cap height, gold) / 'ONWARDS' (small tracked cream) stacked.\n"
+                "RIGHT: '3,300–6,100 SQ FT' in cream tracked caps with fine gold icon above.\n"
+                "All footer text clearly readable against the dark navy — never faint.\n"
+                "Top-right corner of the photo zone: clear for logo compositing."
+            ),
+            "headline":    "A morning worth waking for.",
+            "eyebrow":     "",
+            "palette_tag": "navy_gold",
+            "scene_tag":   "master_bedroom_cool_morning_window",
+            "tone_tag":    "bright_aspirational",
+            "recipe_tag":  "the_open_room_anchor",
+            "logo_corner": "top-right",
+            "badge_cta":   "SAMPLE FLAT READY",
+        },
+        {   # POOL-B — dressing room diagonal, editorial triptych, BHK only in footer
+            "variant_key":  "lifestyle_private_retreat",
+            "prompt_num":   1,
+            "scene_prose": (
+                "Sony A7R V, 24mm f/4.0, tripod at 90cm height positioned in the threshold "
+                "between dressing room and master bedroom. 8:30am — crisp neutral daylight "
+                "at 5200K, slightly diffused by high cloud, fills the west-facing window at "
+                "the far end. ISO 200, f/8. Fine grain from a subtle push in the shadows.\n\n"
+                "The shot frames the entire 40-foot master suite in one continuous diagonal "
+                "recession — dressing room floor in the near foreground giving way to bedroom "
+                "floor, then window beyond. Floor: 1200x2400 Bianco Sivec marble, book-matched. "
+                "The dressing room has a floor-to-ceiling dark walnut joinery wall on the left "
+                "third of the frame — brass handles, no labels, absolute stillness. "
+                "No people. One slim orchid on the windowsill at the far end — the single "
+                "human gesture in the entire composition. The room communicates scale before "
+                "anything is read."
+            ),
+            "composition_notes": (
+                "EDITORIAL TRIPTYCH structure. Three distinct horizontal zones.\n"
+                "TOP BAND (upper 30% of canvas): solid dark slate backing (#1E2430). "
+                "Photography does NOT enter this zone.\n"
+                "Tier 1: a small symmetrical gold botanical ornament centred near the top — "
+                "fine line-art, bilateral symmetry, NOT text.\n"
+                "Tier 2: 'SINDHUBHAVAN' in HEAVY display serif filling 82% of canvas width — "
+                "natural letterform proportions, never condensed. Gold (#C9A84C). "
+                "Each letter individually legible. This is the primary typographic event.\n"
+                "Tier 3: a thin gold horizontal hairline rule spanning 60% of canvas width, centred.\n"
+                "Tier 4: 'ROAD' in HEAVY display serif at 55% of SINDHUBHAVAN's cap height, centred.\n"
+                "Tier 5: 'AHMEDABAD' in tracked geometric all-caps with thin gold vertical "
+                "hairlines flanking both sides (| AHMEDABAD | style), centred.\n"
+                "Tier 6: 'A morning worth waking for.' in italic display serif, warm cream, "
+                "centred — at 35% of SINDHUBHAVAN's cap height. Campaign tagline, its own tier.\n"
+                "ZONE BOUNDARY: soft gradient 2-3% where the slate top band fades into the photo.\n"
+                "PHOTO ZONE (middle 46%): the dressing room diagonal scene, full-bleed, "
+                "edge-to-edge. NO text here EXCEPT the sample badge.\n"
+                "Badge = DECORATIVE PLAQUE: solid slate backing (#1E2430), outer gold hairline, "
+                "inner gold hairline (double-frame). Badge text: 'SAMPLE FLAT READY' only. "
+                "Centred, wide, prominent — never a small stamp.\n"
+                "FOOTER STRIP (lower 24%): solid warm cream (#F5EDD8). Three equal columns "
+                "separated by thin gold vertical hairlines:\n"
+                "LEFT: '4 & 5 BHK' with fine gold icon above — PRIMARY BUYING INFORMATION. "
+                "Bold, same optical weight as the price. NOT a small label.\n"
+                "CENTRE: 'STARTING AT' (small tracked) / '₹3 Cr' (dominant, 2.5× label cap "
+                "height, gold) / 'ONWARDS' (small tracked) stacked. Price is the hero.\n"
+                "RIGHT: '3,300–6,100 SQ FT' with fine gold icon above.\n"
+                "All footer text in deep charcoal (#2B2420) — never light text on cream.\n"
+                "Top-right corner inside photo zone: clear for logo compositing."
+            ),
+            "headline":    "A morning worth waking for.",
+            "eyebrow":     "",
+            "palette_tag": "slate_cream",
+            "scene_tag":   "dressing_room_morning_long_diagonal",
+            "tone_tag":    "dark_luxury",
+            "recipe_tag":  "the_editorial_triptych",
+            "logo_corner": "top-right",
+            "badge_cta":   "SAMPLE FLAT READY",
+        },
+    ],
 
     # =========================================================================
-    # VARIANT 2 — Lifestyle / The Social Home
-    # scene: great_room_evening_reverse_angle
-    # brief: 2-3 people, warmth, ease. Never posed. The room reveals its scale.
+    # VARIANT 2 — Lifestyle / Social Home
+    # scene: dining room amber dinner party — 4 figures, city view
     #
-    # REFERENCE INSPIRATION: Prakrit's "LUXURY" edge-to-edge as the creative device.
-    # One word. Frame-spanning. The word IS the design.
-    # Here: "SINDHUBHAVAN" in HEAVY serif, spanning the full frame width across the
-    # bottom 22% of the photo zone — gold on the dark floor/shadow zone.
-    # This becomes the base of the entire composition.
-    # "ROAD" in much smaller tracked caps directly below it as an address qualifier.
-    #
-    # COMPOSITION:
-    #   The room shot from an unusual reverse angle — camera near the glazing looking
-    #   INTO the room, city behind (reflected in the glass). Warm amber cove lighting.
-    #   The scene has a naturally dark foreground floor zone (where the room floor
-    #   meets the camera position near the glass).
-    #   "SINDHUBHAVAN" sweeps across this dark foreground zone — edge-to-edge.
-    #   Above it, the room unfolds into warm amber light with three figures.
-    #   The campaign tagline floats over the sofa area in italic serif.
-    #   Price: compact burgundy pill, right side, mid-height, figure eyeline level.
-    #   Badge: "ARRANGE A PRIVATE VIEWING" — 4 words, compact pill, upper-left inside the frame.
-    #   No footer strip. The big word at the bottom IS the footer.
-    #   Separator: — (em dash). Consistent.
-    #   Top-left: clear for logo.
+    # POOL-A: the_editorial_triptych — dark top band, BHK LARGE (not eyebrow),
+    #         botanical ornament, headline as Tier 7 before zone boundary,
+    #         badge is pure CTA only (no headline inside), cream footer.
+    # POOL-B: the_golden_archway — gold frame overlay, mixed-scale type.
     # =========================================================================
-    {
-        "variant_key":  "lifestyle_social_home",
-        "prompt_num":   2,
-        "scene_prose": (
-            "Sony A7R V, 24mm f/1.8, tripod positioned at the glazing wall looking "
-            "INTO the great room. 8:30pm — warm amber cove lighting at 2700K fills the "
-            "room's depth; the city is reflected faintly in the glass behind the camera. "
-            "Three gold-finish cylindrical pendants (matte brass, 280mm diameter) hang "
-            "from the recessed plaster ceiling at 10.5 feet — their pools of light "
-            "structure the upper two-thirds of the frame. ISO 640, f/2.0.\n\n"
-            "The 5 BHK great room is 38 feet wide. A modular sofa in deep slate linen "
-            "sits central; a low travertine coffee table between it and camera. "
-            "Three figures — two women in silk slip midi-dresses (ivory and moss), "
-            "one man in a loose linen overshirt — stand at ease near the sofa in "
-            "conversation, champagne flutes present but incidental. Wide-plank European "
-            "oak flooring in natural oil finish. The room's scale becomes apparent only "
-            "when the figures register as small against the room's depth and width."
-        ),
-        "composition_notes": (
-            "The creative device: 'SINDHUBHAVAN' in HEAVY gold serif spans the full width "
-            "of the frame across the dark foreground floor zone — edge-to-edge. "
-            "Each letter must be large enough that all 12 characters fill the frame width "
-            "comfortably — roughly 1/12th of frame width per character. "
-            "This is deliberately oversized as a graphic element, not a normal headline. "
-            "It is the visual anchor of the entire composition.\n"
-            "Directly below SINDHUBHAVAN: 'ROAD — AHMEDABAD' in small tracked geometric caps, "
-            "gold, centred below the big word. The address qualifier, minimal.\n"
-            "Above the big word, floating over the dark sofa zone at mid-height: "
-            "campaign tagline 'Full floors. Not floor plans.' in bold italic display serif, "
-            "cream, large — this commands the visual centre of the photo zone.\n"
-            "Price: compact dark burgundy pill (#3D0C02), gold border (#9A7B4F), "
-            "right side of frame at mid-height, roughly aligned with the figures' "
-            "eyeline — off-axis, not centred. Inside: 'Rs 3 CR ONWARDS' in HEAVY serif, gold.\n"
-            "Badge 'ARRANGE A PRIVATE VIEWING': compact pill, upper-left of frame inside the gold border. "
-            "Dark backing, gold border, geometric sans bold. 4 words.\n"
-            "A slim gold hairline border runs edge-to-edge around the entire canvas — "
-            "the governing frame within which everything sits.\n"
-            "No separate footer strip. 'SINDHUBHAVAN' at the bottom IS the footer.\n"
-            "Spec line below the big word (between SINDHUBHAVAN and the canvas bottom): "
-            "'4 & 5 BHK — Clubclass Amenities — 30+ Storeys' in fine tracked geometric caps, "
-            "warm ivory, very small — it reads below the big word, before the canvas edge.\n"
-            "Separator throughout: — (em dash). No dots, no pipes.\n"
-            "Top-left corner, inside the gold border: clear for logo compositing."
-        ),
-        "headline":    "Full floors. Not floor plans.",
-        "eyebrow":     "",
-        "palette_tag": "burgundy_gold",
-        "scene_tag":   "great_room_evening_reverse_angle",
-        "tone_tag":    "dark_luxury",
-        "recipe_tag":  "the_golden_archway",
-        "logo_corner": "top-left",
-        "badge_cta":   "ARRANGE A PRIVATE VIEWING",
-    },
+    "lifestyle_social_home": [
+        {   # POOL-A  (editorial triptych — fixed BHK + headline placement)
+            "variant_key":  "lifestyle_social_home",
+            "prompt_num":   2,
+            "scene_prose": (
+                "Sony A7R V, 50mm f/2.0, tripod at 120cm height positioned at the far "
+                "end of the dining room, framing the length of the table. 7:45pm — warm "
+                "amber pendant light at 2700K from four matte brass cylindrical pendants "
+                "(320mm diameter) hangs above the table; a deep cool blue dusk light at "
+                "5500K fills the city-view glazing behind the diners, creating a "
+                "warm-cool tension across the frame. ISO 400, f/2.8. Soft lens glow "
+                "from the brightest pendant.\n\n"
+                "The 5 BHK dining room has a 2.8m wide, 10-seat solid smoked walnut dining "
+                "table with turned fluted legs in burnished brass — four people mid-dinner: "
+                "two couples, dressed in contemporary luxury (silk blazers, drape "
+                "tops, slim-cut trousers). Gestures are mid-sentence, never posed. The "
+                "city of Ahmedabad occupies the entire glazing wall behind them — city "
+                "lights beginning to appear in the blue dusk. Ceiling: dark charcoal "
+                "plaster tray, 3.6m high, with recessed amber cove strip — the ceiling "
+                "reads as near-black from this angle. Flooring: 1200x600 Black Galaxy "
+                "granite in natural oiled finish."
+            ),
+            "composition_notes": (
+                "EDITORIAL TRIPTYCH structure. Three distinct horizontal zones.\n"
+                "TOP BAND (upper 30% of canvas): solid warm charcoal backing (#2B2420). "
+                "Photography does NOT enter this zone. Ample breathing room between tiers.\n"
+                "Tier 1: a small symmetrical gold botanical ornament centred near the top — "
+                "fine line-art, bilateral symmetry, NOT text — a luxury divider motif.\n"
+                "Tier 2: 'SINDHUBHAVAN' in HEAVY display serif filling 82% of canvas width — "
+                "natural letterform proportions, never condensed. Gold (#C9A84C). Each letter "
+                "individually legible. This is the primary typographic event.\n"
+                "Tier 3: a thin gold horizontal hairline rule spanning 60% of canvas width, centred.\n"
+                "Tier 4: 'ROAD' in HEAVY display serif at 55% of SINDHUBHAVAN's cap height, "
+                "centred. Together the two lines read as one address name.\n"
+                "Tier 5: 'AHMEDABAD' in tracked geometric all-caps with thin gold vertical "
+                "hairlines flanking both sides (| AHMEDABAD | style), centred.\n"
+                "Tier 6: 'Full floors. Not floor plans.' in italic display serif, warm cream, "
+                "centred — at 35% of SINDHUBHAVAN's cap height. Campaign tagline, its own tier.\n"
+                "ZONE BOUNDARY: soft gradient 2-3% height where the charcoal top band fades "
+                "into the photo — never a hard cut.\n"
+                "PHOTO ZONE (middle 46%): full-bleed dining scene, edge-to-edge. "
+                "NO text here EXCEPT the sample badge.\n"
+                "Badge = DECORATIVE PLAQUE: solid charcoal backing (#2B2420), outer gold hairline, "
+                "inner gold hairline (double-frame), fine gold rules flanking the CTA word. "
+                "Badge text: 'SAMPLE FLAT OPEN' only — NO sub-label, NO headline inside. "
+                "Centred, wide, prominent.\n"
+                "FOOTER STRIP (lower 24%): solid warm cream (#F5EDD8). Three equal columns "
+                "separated by thin gold vertical hairlines:\n"
+                "LEFT: '4 & 5 BHK' with fine gold icon above — PRIMARY BUYING INFORMATION. "
+                "Bold, same optical weight as the price. NOT a small label.\n"
+                "CENTRE: 'STARTING AT' (small tracked) / '₹3 Cr' (dominant, 2.5× label cap "
+                "height, gold) / 'ONWARDS' (small tracked) stacked. Price is the hero.\n"
+                "RIGHT: '3,300–6,100 SQ FT' with fine gold icon above.\n"
+                "All footer text in deep charcoal (#2B2420) — never light text on cream.\n"
+                "Top-right corner inside photo zone: clear for logo compositing."
+            ),
+            "headline":    "Full floors. Not floor plans.",
+            "eyebrow":     "",
+            "palette_tag": "charcoal_gold",
+            "scene_tag":   "dining_room_amber_dinner_party",
+            "tone_tag":    "dark_luxury",
+            "recipe_tag":  "the_editorial_triptych",
+            "logo_corner": "top-right",
+            "badge_cta":   "SAMPLE FLAT OPEN",
+        },
+        {   # POOL-B
+            "variant_key":  "lifestyle_social_home",
+            "prompt_num":   2,
+            "scene_prose": (
+                "Sony A7R V, 35mm f/2.8, tripod at 100cm height positioned near the "
+                "kitchen island looking across into the great room. 6:30pm — bright "
+                "even interior daylight at 4500K from west-facing floor-to-ceiling "
+                "glazing fills the room laterally; warm pool light from kitchen pendant "
+                "clusters adds depth. ISO 320, f/2.8. Subtle softness from the "
+                "bright window edge catching the lens.\n\n"
+                "The 5 BHK great room + kitchen is 45 feet wide — an open-plan island "
+                "kitchen in pale Corian and fluted oak on the right; a modular sofa in "
+                "dove-grey bouclé central; three women mid-conversation between the "
+                "kitchen and sofa — laughing, candid, unhurried. Wide-plank European "
+                "oak flooring in natural oiled finish. The room feels designed for this "
+                "kind of gathering — the scale apparent when the figures register as "
+                "small against its width."
+            ),
+            "composition_notes": (
+                "The creative device: a THICK GOLD GRAPHIC OVERLAY FRAME on all four canvas "
+                "edges — a heavy gold hairline border running edge to edge. Interior corners: "
+                "ornate line-art corner rosettes (fine lines, NOT filled blocks). The frame "
+                "IS the structural container for all text.\n"
+                "Upper frame zone: 'SINDHUBHAVAN ROAD' in BOLD display sans at maximum canvas "
+                "width — edge to edge across the upper frame bar. Gold (#C9A84C). This is "
+                "the dominant typographic element.\n"
+                "Below: '4 & 5 BHK RESIDENCES' in italic mixed-scale display serif at 60% "
+                "the location name's cap height, warm white — crossing from the frame zone "
+                "into the photo, the scale contrast creates the visual drama.\n"
+                "Below: campaign headline 'Full floors. Not floor plans.' in italic serif at "
+                "45% the BHK line's cap height, gold — a third typographic layer.\n"
+                "Left border: 'AHMEDABAD' in tracked geometric caps, vertical orientation, "
+                "gold, running along the left border.\n"
+                "Bottom frame zone — three columns, gold vertical hairlines:\n"
+                "LEFT: '4 & 5 BHK RESIDENCES', warm white tracked caps — PRIMARY BUYING INFO.\n"
+                "CENTRE: '₹3 Cr ONWARDS' — gold, HEAVY serif, dominant (2× column label size).\n"
+                "RIGHT: '3,300–6,100 SQ FT', warm white tracked caps.\n"
+                "Badge 'SAMPLE FLAT READY': compact gold-bordered pill, upper-right inside "
+                "the frame, below the location name text. Dark backing, bold geometric sans. "
+                "3 words, prominent.\n"
+                "The photo inside the frame: completely uncluttered — the frame holds all text.\n"
+                "Top-left corner inside gold frame: clear for logo compositing."
+            ),
+            "headline":    "Full floors. Not floor plans.",
+            "eyebrow":     "",
+            "palette_tag": "burgundy_gold",
+            "scene_tag":   "great_room_kitchen_bright_afternoon",
+            "tone_tag":    "bright_aspirational",
+            "recipe_tag":  "the_golden_archway",
+            "logo_corner": "top-left",
+            "badge_cta":   "SAMPLE FLAT READY",
+        },
+    ],
 
     # =========================================================================
-    # VARIANT 3 — Lifestyle / City Connection
-    # scene: balcony_floor_level_dusk
-    # brief: City is visible. View IS the subject. Bold, attention-catching.
+    # VARIANT 3 — Lifestyle / Dynamic Scene A
+    # scene: family living room sunday afternoon
+    # brief: couple + child, open-plan living room, cool Sunday daylight,
+    #        dark basalt feature wall = natural text anchor.
     #
-    # REFERENCE INSPIRATION: Make the TEXT the attention event, not decoration.
-    # Price and floor count together = the provocation. Both numbers in one line.
-    # Suncity's approach — let one typographic element be the drama.
-    #
-    # COMPOSITION:
-    #   Camera at balcony floor level — railing at mid-frame, city drops away below.
-    #   The sky occupies the upper 45% of the frame — deep cobalt at dusk.
-    #   THIS is the primary text zone.
-    #   "SINDHUBHAVAN ROAD" centred in the cobalt sky — HEAVY serif, gold, very large.
-    #   The headline "Three crore. Thirty floors." — directly below, in italic serif,
-    #   cream, large. This is the provocation. Both numbers. Both facts. One line.
-    #   "AHMEDABAD" in small tracked caps, gold, below the headline.
-    #   Eyebrow "4 & 5 BHK" — very top of sky, centred, tiny tracked caps.
-    #   The balcony railing and city = completely untouched. No text in this zone.
-    #   Price is already IN the headline — no separate price module.
-    #   Bottom-right: "EXPERIENCE THE SHOW APARTMENT" compact badge — 4 words, slate backing, gold border.
-    #   Bottom: thin slate-backed line: "30+ Storeys · Clubclass Amenities · Sample Flat Ready"
-    #   Separator: · throughout.
-    #   Bottom-left: clear for logo.
+    # POOL-A: the_open_room_anchor — location name on basalt wall, floating
+    #         pill headline, compact spec row. ivory_warmth palette.
+    # POOL-B: the_golden_archway — gold frame overlay device, entire photo
+    #         uncluttered inside. burgundy_gold palette.
     # =========================================================================
-    {
-        "variant_key":  "lifestyle_city_connection",
-        "prompt_num":   3,
-        "scene_prose": (
-            "Sony A7R V, 20mm f/2.8, tripod at balcony floor level — lens 15cm above "
-            "the polished granite balcony surface, aimed along the floor toward the railing "
-            "and city beyond. 6:15pm blue-hour — deep cobalt sky at 5800K above; the city "
-            "grid below is beginning to light up, warm orange arterial glow at mid-distance. "
-            "ISO 400, f/8, 4-second exposure. The railing is frameless glass with a slim "
-            "dark powder-coated top rail at mid-frame height. Atmospheric perspective "
-            "compresses the distant city into soft warm bokeh.\n\n"
-            "The balcony is 12 feet deep with a honed dark grey granite floor — the long "
-            "floor plane, shot at this angle, creates strong perspective recession toward "
-            "the railing. A single sculptural outdoor chair in dark powder-coated steel "
-            "with teak armrests sits left of centre — occupied by a man in a grey linen "
-            "suit, half-turned toward the railing, ankle crossed. The city is 30 floors "
-            "below. The balcony and city together make the argument for the address."
-        ),
-        "composition_notes": (
-            "The cobalt sky in the upper 45% of the frame is the primary text zone — "
-            "open, dark, naturally reads text.\n"
-            "Very top of sky: eyebrow '4 & 5 BHK' — tracked geometric caps, platinum white, "
-            "very small, centred. New context — not repeating anything else in the ad.\n"
-            "Below it: 'SINDHUBHAVAN ROAD' — the primary location name in HEAVY gold "
-            "luxury display serif, centred. Scale it so the two words together span "
-            "roughly 55% of the frame width. Each letter must be clearly legible. "
-            "HEAVY weight — not medium, not regular.\n"
-            "Below the location name: 'Three crore. Thirty floors.' — the headline. "
-            "Bold italic display serif, cream, large — roughly 60% of the scale of "
-            "the location name. This is the provocation. The price and the floor count "
-            "in one sentence. Nothing else says this.\n"
-            "Below that: 'AHMEDABAD' — small tracked geometric caps, gold. "
-            "Confirmation, not a feature.\n"
-            "The railing, balcony floor, and city occupying the lower 55% of the frame: "
-            "completely clear. No text in this zone. The city makes its own argument.\n"
-            "Bottom-right of the photo zone (just above the canvas bottom): "
-            "'EXPERIENCE THE SHOW APARTMENT' — a compact slate pill, gold border, bold geometric sans. 4 words.\n"
-            "Canvas bottom: thin slate-backed strip (7% height), "
-            "'30+ Storeys · Clubclass Amenities · Sample Flat Ready' — tracked geometric "
-            "caps, gold on slate. Separator: · (centred dot) throughout this ad only.\n"
-            "Bottom-left corner: clear for logo compositing."
-        ),
-        "headline":    "Three crore. Thirty floors.",
-        "eyebrow":     "4 & 5 BHK",
-        "palette_tag": "slate_cream",
-        "scene_tag":   "balcony_floor_level_dusk",
-        "tone_tag":    "dark_luxury",
-        "recipe_tag":  "the_horizon_anchor",
-        "logo_corner": "bottom-left",
-        "badge_cta":   "EXPERIENCE THE SHOW APARTMENT",
-    },
+    "lifestyle_dynamic_a": [
+        {   # POOL-A
+            "variant_key":  "lifestyle_dynamic_a",
+            "prompt_num":   3,
+            "scene_prose": (
+                "Sony A7R V, 35mm f/2.8, tripod at 105cm height positioned in the far "
+                "right corner of the 5 BHK living room, framing the open-plan width. "
+                "11:00am — cool even daylight at 4900K from north-facing floor-to-ceiling "
+                "glazing, no direct sun, fills the room with a soft even wash that renders "
+                "marble veining with near clinical clarity. ISO 200, f/5.6. Faint chromatic "
+                "fringe at the far glazing corner pane.\n\n"
+                "The 5 BHK living room stretches 40 feet across. A modular sectional sofa "
+                "in dove-grey bouclé holds a couple and one child (approximately 7) in an "
+                "unhurried Sunday moment — the child on the floor beside the sofa, adults "
+                "with books and coffee. Floor: 1200×2400 Arabescato Corchia marble, highly "
+                "polished. Ceiling void at 4.0m with a thin brass linear pendant track above "
+                "the seating group. Left wall: flat deep charcoal basalt tile, floor to "
+                "ceiling, no hardware — a single tonally dark expanse in the even daylight."
+            ),
+            "composition_notes": (
+                "The deep charcoal basalt left wall, floor-to-ceiling, is the primary text "
+                "zone — the scene's highest-contrast natural surface. All location text sits "
+                "here as a FLAT OVERLAY — not embedded in or carved into the wall surface.\n"
+                "SINDHUBHAVAN: overlaid as flat HEAVY or BLACK weight gold luxury display serif "
+                "floating in front of the basalt panel. One word filling the full panel width — "
+                "scale so each letter is individually legible at arm's length.\n"
+                "ROAD: immediately below, same weight, same gold — second line at the same "
+                "scale. The two-line stack IS the primary typographic event.\n"
+                "AHMEDABAD: below ROAD in small tracked geometric caps, gold. Quiet confirmation.\n"
+                "'4 & 5 BHK': below AHMEDABAD in HEAVY display serif italic, gold — same "
+                "typeface family as the location name, NOT geometric sans. At least 55% of "
+                "SINDHUBHAVAN's cap height. Large enough to read across a room.\n"
+                "Headline pill: upper-right corner of canvas — compact semi-transparent pill "
+                "(#2B2420 fill, 65% opacity, gold hairline border). Inside: 'The home that "
+                "fits your whole life.' in italic mixed-case serif, warm white. Pill sized to "
+                "the text only, never a sidebar.\n"
+                "Price: compact warm charcoal pill (#2B2420, gold hairline), bottom-centre of "
+                "the photo zone. '₹3 CR ONWARDS' in HEAVY display serif, gold. Unmissable.\n"
+                "Badge 'SAMPLE FLAT READY': bottom-left of photo zone. Compact rectangular "
+                "stamp, charcoal fill, gold hairline border. Bold geometric sans. 3 words.\n"
+                "Spec strip: single slim strip at very bottom (7% canvas height), dark charcoal "
+                "backing, full width. 'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT' "
+                "in tracked geometric caps, warm white. Two items, centred, centre-dot separator.\n"
+                "The marble floor, sofa group, and glazing wall: completely clear of all text.\n"
+                "Bottom-right corner: clear for logo compositing."
+            ),
+            "headline":    "The home that fits your whole life.",
+            "eyebrow":     "",
+            "palette_tag": "ivory_warmth",
+            "scene_tag":   "family_living_room_sunday_afternoon",
+            "tone_tag":    "bright_aspirational",
+            "recipe_tag":  "the_open_room_anchor",
+            "logo_corner": "bottom-right",
+            "badge_cta":   "SAMPLE FLAT READY",
+        },
+        {   # POOL-B
+            "variant_key":  "lifestyle_dynamic_a",
+            "prompt_num":   3,
+            "scene_prose": (
+                "Sony A7R V, 24mm f/4.0, tripod at 95cm height at the open kitchen-to-"
+                "living-room threshold, facing the 5 BHK living room width. 12:30pm — "
+                "bright even overhead daylight at 5000K through north-west facing glazing "
+                "fills the room with near-uniform clean light. ISO 160, f/5.6. Subtle "
+                "softening at the glazing edge where the lens catches the bright sky beyond.\n\n"
+                "The scene frames the entire 40-foot living room in one wide shot — the sofa "
+                "group mid-left, a couple and two children (~5 and ~9) in an after-lunch "
+                "moment: one child drawing on the marble floor, the other settled on a "
+                "parent's lap. Floor: 1200×2400 Calacatta Gold marble, book-matched, the "
+                "gold veining rendered clearly in the neutral midday light. The glazing wall "
+                "at the far end reveals a rooftop garden beyond. Ceiling: pale plaster at "
+                "4.0m, two recessed pendant clusters in warm brass. The room feels designed "
+                "for exactly this kind of gathering."
+            ),
+            "composition_notes": (
+                "The creative device: a THICK GOLD GRAPHIC OVERLAY FRAME on all four canvas "
+                "edges — a heavy gold hairline border running edge to edge. Interior corners: "
+                "ornate line-art corner rosettes (fine lines, NOT filled blocks). The frame "
+                "IS the structural container for all text. The photo inside is uncluttered.\n"
+                "Upper frame zone: 'SINDHUBHAVAN ROAD' in BOLD display sans at maximum canvas "
+                "width — spanning the full upper frame bar. Gold (#C9A84C). This is the "
+                "dominant typographic element.\n"
+                "Below: '4 & 5 BHK RESIDENCES' in italic mixed-scale display serif at 60% "
+                "the location name's cap height, warm white — crossing from the frame zone "
+                "into the photo, the scale contrast creates the visual drama.\n"
+                "Below: campaign headline in italic serif at 45% the BHK line, gold.\n"
+                "Left border: 'AHMEDABAD' in tracked geometric caps, vertical orientation, "
+                "gold, running along the left border.\n"
+                "Bottom frame zone — three equal columns, gold hairlines:\n"
+                "LEFT: '4 & 5 BHK RESIDENCES', warm white tracked caps — PRIMARY BUYING INFO.\n"
+                "CENTRE: '₹3 Cr ONWARDS' — gold, HEAVY serif, dominant.\n"
+                "RIGHT: '3,300–6,100 SQ FT', warm white tracked caps.\n"
+                "Badge 'SAMPLE FLAT READY': compact gold-bordered pill inside the frame, "
+                "upper-left below the location name. Dark backing, bold geometric sans. Prominent.\n"
+                "Top-right corner inside frame: clear for logo compositing."
+            ),
+            "headline":    "The home that fits your whole life.",
+            "eyebrow":     "",
+            "palette_tag": "burgundy_gold",
+            "scene_tag":   "family_living_room_bright_midday",
+            "tone_tag":    "bright_aspirational",
+            "recipe_tag":  "the_golden_archway",
+            "logo_corner": "top-right",
+            "badge_cta":   "SAMPLE FLAT READY",
+        },
+    ],
 
     # =========================================================================
-    # VARIANT 4 — Exterior Establishing Shot
-    # scene: tower_night_from_street
-    # brief: Building authority. Scale. Night exterior. 100% cheque as the statement.
+    # VARIANT 4 — Lifestyle / Dynamic Scene B
+    # scene: luxury kitchen — evening (POOL-A) / morning (POOL-B)
+    # brief: domestic interior moment, warm kitchen, aspirational but lived-in.
+    # No balcony, no city view, no exterior.
     #
-    # REFERENCE INSPIRATION: Nehru Nagar's bottom bar — "100% CHEQUE PAYMENT ONLY"
-    # as the single dominant bottom statement. For Anamika Heights, this is a genuine
-    # USP (100% cheque only is rare). The bottom bar becomes the brand signal.
-    # Like Nehru Nagar, it does not need anything else in that bar.
-    #
-    # COMPOSITION:
-    #   Tower at 11pm, shot from 70m on the approach road. Full building in frame.
-    #   Sky: dark cobalt to black. The tower is luminous — every lit floor glowing.
-    #   SKY ZONE (top 35%): "SINDHUBHAVAN ROAD" centred, HEAVY serif, gold.
-    #   Below: "AHMEDABAD" in small tracked caps.
-    #   Below: "Rs 3 CR ONWARDS" in large HEAVY serif, gold — the price is prominent
-    #   because the sky zone is open enough to hold it.
-    #   Below the price: "4 & 5 BHK — 30+ STOREY TOWER" in fine tracked caps.
-    #   The tower (middle 55%): completely untouched.
-    #   Sample badge: "SAMPLE APARTMENT NOW OPEN" — 4 words. A bold forest-green pill with gold
-    #   border, anchored above the podium entry canopy, centred.
-    #   BOTTOM BAR: Like Nehru Nagar's cheque bar — dark forest-green strip, full
-    #   canvas width, 10% canvas height. Single dominant statement:
-    #   "100% CHEQUE ONLY" — bold, large, geometric caps, gold. Nothing else in this bar.
-    #   The bar IS the brand signal.
-    #   Eyebrow: "Ahmedabad" — one word. Top edge.
-    #   Separator: — throughout this ad.
-    #   Top-right: clear for logo.
+    # POOL-A: the_zoned_triptych — dark top band (kitchen ceiling), photo zone,
+    #         cream footer. Headline as Tier 7 in top band. charcoal_gold.
+    # POOL-B: the_glass_morphism_shield — floating pill, location name on dark
+    #         cabinet shadow zone, compact spec row. slate_cream.
     # =========================================================================
-    {
-        "variant_key":  "exterior_establishing_shot",
-        "prompt_num":   4,
-        "scene_prose": (
-            "Sony A7R V, 50mm f/5.6 tilt-shift on carbon-fibre tripod, positioned on "
-            "the approach road 70 metres from the tower's primary facade, perfectly "
-            "centred. 11pm — the sky is dark cobalt to black above. ISO 800, 15-second "
-            "exposure at f/8. No light trails — traffic is paused for the shot. "
-            "A faint warm glow from the podium entry canopy reads as a horizon line "
-            "at the base of the building.\n\n"
-            "The 30+ storey tower presents its primary south facade symmetrically: "
-            "champagne-finished aluminium curtain wall, flush dark bronze mullions at "
-            "900mm centres, honed travertine spandrel cladding. Interior warm amber "
-            "glow from occupied floors reads through the glazing as a luminous grid "
-            "of warm rectangles — each floor a separate band of light. Podium uplift "
-            "lighting: Queen palms at the base glow amber-green. The building is "
-            "the tallest and brightest point in the entire frame — it commands the night."
-        ),
-        "composition_notes": (
-            "The dark cobalt sky in the upper 35% of the frame is the primary text zone. "
-            "The building is the visual hero; typography hangs from the sky above it.\n"
-            "Very top of sky: eyebrow 'Ahmedabad' — tracked geometric caps, warm cream, "
-            "tiny, centred. One word only.\n"
-            "Below it: 'SINDHUBHAVAN ROAD' — HEAVY or BLACK weight gold luxury display "
-            "serif, centred. Scale to span roughly 60% of frame width. "
-            "CRITICAL: both words must be clearly legible, HEAVY strokes, no thin cuts.\n"
-            "Below: 'AHMEDABAD' in small tracked geometric caps, gold. Confirmation.\n"
-            "Below: 'Rs 3 CR ONWARDS' in large HEAVY display serif, gold. "
-            "The price is given room here because the sky zone is open and dark.\n"
-            "Below the price: '4 & 5 BHK — 30+ STOREY TOWER' in fine tracked caps, "
-            "warm cream, small. Separator in this ad: — (em dash). Consistent throughout.\n"
-            "The luminous tower occupying the middle 55% of the frame: completely clear. "
-            "The building makes its own visual argument.\n"
-            "Sample badge: 'SAMPLE APARTMENT NOW OPEN' — 4 words. A prominent forest-green pill "
-            "(#1C3325 fill, gold border), centred horizontally, anchored just above the "
-            "podium entry canopy glow. Bold geometric sans, clearly legible.\n"
-            "BOTTOM BAR: Full canvas width, dark forest-green (#1C3325) backing strip, "
-            "10% canvas height. Inside: ONE statement — '100% CHEQUE ONLY' — in bold "
-            "large tracked geometric caps, gold (#C9A84C). Nothing else in this bar. "
-            "This bar IS the brand signal. Do not add price or config here.\n"
-            "Top-right corner: sky is open and dark — logo compositing zone."
-        ),
-        "headline":    "100% Cheque. 0% Compromise.",
-        "eyebrow":     "Ahmedabad",
-        "palette_tag": "forest_gold",
-        "scene_tag":   "tower_night_from_street",
-        "tone_tag":    "dark_luxury",
-        "recipe_tag":  "the_sky_chandelier",
-        "logo_corner": "top-right",
-        "badge_cta":   "SAMPLE APARTMENT NOW OPEN",
-    },
+    "lifestyle_dynamic_b": [
+        {   # POOL-A — kitchen evening, the_zoned_triptych
+            "variant_key":  "lifestyle_dynamic_b",
+            "prompt_num":   4,
+            "scene_prose": (
+                "Sony A7R V, 50mm f/2.0, tripod at 100cm height positioned at the far end "
+                "of the kitchen island, framing the cooking range wall. 7:30pm — warm amber "
+                "pendant light at 2700K from three matte black cylindrical pendants (280mm "
+                "diameter) above the island creates a pool of warm light; deep shadows fall "
+                "beyond the pendant cluster. ISO 640, f/2.0. Soft lens glow from the nearest "
+                "pendant directly above.\n\n"
+                "The 5 BHK kitchen has an island in Calacatta Paonazzo marble — a woman in a "
+                "cream silk top stands at the six-burner range along the far wall, gesturing "
+                "mid-task. Cabinet faces: flat painted deep charcoal matte, push-to-open "
+                "hardware, no visible handles. Above the range: a deep dark stone hood. "
+                "Floor: 600×600 honed black basalt tile. Open shelving in smoked oak on the "
+                "right wall holds ceramics and glassware. The pendant cluster overhead reads "
+                "as near-dark from this angle — a natural dark zone for the top band."
+            ),
+            "composition_notes": (
+                "ZONED TRIPTYCH structure. The near-black pendant hood and dark charcoal ceiling "
+                "above the island serve as the natural top band backing — no artificial panel.\n"
+                "TOP BAND (upper 26–30% of canvas): 'SINDHUBHAVAN' in HEAVY gold display serif "
+                "filling 82% of canvas width — not condensed, natural letterform proportions. "
+                "'ROAD' on the second line at 55% of SINDHUBHAVAN's cap height, centred. "
+                "'AHMEDABAD' below in tracked geometric caps with thin gold vertical hairlines "
+                "flanking (| AHMEDABAD | style). "
+                "'4 & 5 BHK' in a double-bordered frame box: outer thin gold hairline, 3px gap, "
+                "inner gold hairline — text in BOLD cream caps centred inside. Box spans 50% "
+                "canvas width, centred. PROMINENT — a primary buying decision, not a footnote.\n"
+                "Campaign headline 'Where the kitchen earns its square footage.' as a final tier "
+                "below the BHK box, in italic display serif, warm cream, centred — at 30% of "
+                "SINDHUBHAVAN's cap height. Just above the gradient zone boundary.\n"
+                "ZONE BOUNDARY: soft gradient 2-3% where the dark ceiling fades to the photo.\n"
+                "PHOTO ZONE (middle 46%): the kitchen cooking scene, full-bleed, edge-to-edge. "
+                "NO text except the badge. Badge = DECORATIVE PLAQUE: charcoal backing (#2B2420), "
+                "outer gold hairline, inner gold hairline (double-frame), fine gold rules "
+                "flanking the CTA word. 'SAMPLE FLAT OPEN' only — NO sub-label, NO headline "
+                "inside the badge. Centred horizontally, anchored mid-frame.\n"
+                "FOOTER STRIP (lower 24%): solid warm cream (#F5EDD8). Three equal columns, "
+                "thin gold vertical hairlines:\n"
+                "LEFT: '4 & 5 BHK' with fine gold icon above — PRIMARY BUYING INFO.\n"
+                "CENTRE: 'STARTING AT' (small tracked) / '₹3 Cr' (dominant gold, 2.5× label "
+                "cap height) / 'ONWARDS' (small tracked) stacked. Price is the hero.\n"
+                "RIGHT: '3,300–6,100 SQ FT' with fine gold icon above.\n"
+                "All footer text in deep charcoal (#2B2420) — never light text on cream.\n"
+                "Top-right corner: clear for logo compositing."
+            ),
+            "headline":    "Where the kitchen earns its square footage.",
+            "eyebrow":     "",
+            "palette_tag": "charcoal_gold",
+            "scene_tag":   "kitchen_solo_cooking_evening",
+            "tone_tag":    "dark_luxury",
+            "recipe_tag":  "the_zoned_triptych",
+            "logo_corner": "top-right",
+            "badge_cta":   "SAMPLE FLAT OPEN",
+        },
+        {   # POOL-B — kitchen morning, the_glass_morphism_shield
+            "variant_key":  "lifestyle_dynamic_b",
+            "prompt_num":   4,
+            "scene_prose": (
+                "Sony A7R V, 35mm f/2.8, tripod at 95cm height positioned at the kitchen "
+                "entry, framing the island and glazing beyond. 9:00am — cool morning daylight "
+                "at 5400K streams through east-facing floor-to-ceiling glazing beside the "
+                "kitchen, rendering the marble island surface in near-clinical precision. "
+                "ISO 100, f/5.6. Fine chromatic fringe at the glazing leading edge.\n\n"
+                "The 5 BHK kitchen shows the island full length in the foreground — a man in "
+                "a grey linen shirt seated at the island end, reading, untouched coffee at his "
+                "elbow. Cabinet faces: flat warm linen matte, frameless. Counter: Calacatta "
+                "Viola marble, book-matched. The glazing to the right fills the frame with soft "
+                "morning sky — implied trees beyond. Floor: 1200×600 light ivory Bianco Sivec "
+                "marble. The shadow side of the left cabinet column falls in deep cool shadow — "
+                "a natural high-contrast zone within the otherwise bright kitchen."
+            ),
+            "composition_notes": (
+                "The shadow side of the left cabinet column, where the morning light does not "
+                "reach, is the primary text zone — a deep cool-toned dark surface within the "
+                "bright kitchen. This is the natural contrast zone the scene creates.\n"
+                "Headline glass morphism pill: upper-left corner — compact narrow semi-"
+                "transparent pill (#1E2430 fill, 50% opacity, gold hairline border). Inside: "
+                "'Where the kitchen earns its square footage.' in bold italic display serif, "
+                "warm white. Pill sized to the text only — not a full-column sidebar.\n"
+                "SINDHUBHAVAN ROAD: overlaid as flat HEAVY gold display serif floating in front "
+                "of the shadow-side cabinet column — NOT embedded in or engraved into the "
+                "surface. Two lines: SINDHUBHAVAN spanning the shadow zone width, "
+                "ROAD below at the same scale. This is the primary typographic event.\n"
+                "AHMEDABAD: below ROAD in small tracked geometric caps, gold.\n"
+                "'4 & 5 BHK': below AHMEDABAD in HEAVY display serif italic, gold — same "
+                "serif family as the location name. At least 55% of SINDHUBHAVAN's cap height. "
+                "NOT geometric sans.\n"
+                "Price: compact charcoal pill (#2B2420 backing, gold hairline), anchored "
+                "bottom-right of the photo zone. '₹3 CR ONWARDS' in HEAVY serif, gold.\n"
+                "Badge 'STEP INSIDE — SAMPLE READY': compact stamp, bottom-centre. Charcoal "
+                "fill, gold hairline. Bold geometric sans. 4 words.\n"
+                "Spec strip: single slim strip at very bottom (7% height), charcoal backing, "
+                "full width. 'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT' "
+                "in tracked geometric caps, warm white.\n"
+                "The morning marble counter, the glazing, and the man reading: completely "
+                "clear of text.\n"
+                "Bottom-left corner: clear for logo compositing."
+            ),
+            "headline":    "Where the kitchen earns its square footage.",
+            "eyebrow":     "",
+            "palette_tag": "slate_cream",
+            "scene_tag":   "kitchen_morning_solo_coffee",
+            "tone_tag":    "bright_aspirational",
+            "recipe_tag":  "the_glass_morphism_shield",
+            "logo_corner": "bottom-left",
+            "badge_cta":   "STEP INSIDE — SAMPLE READY",
+        },
+    ],
 
     # =========================================================================
     # VARIANT 5 — Interior Signature Moment
-    # scene: living_room_empty_arrival_angle
-    # brief: NO PEOPLE. Room is protagonist. One carefully placed detail.
-    #        Light and material carry everything.
+    # scene: empty living room — dramatic light, material showcase.
+    # No people. Architecture is the subject.
     #
-    # REFERENCE INSPIRATION: Shreeji's mixed-scale mixed-weight typography.
-    # Three different type treatments in one composed lockup:
-    #   "3,300" — HUGE heavy serif, gold (the number is the drama)
-    #   "sq ft." — italic script-weight serif, smaller (a qualifier, not a label)
-    #   "SINDHUBHAVAN ROAD" — tracked geometric caps, medium, below
-    # This creates scale contrast and visual hierarchy WITHOUT being a template.
-    # The number is the creative device. The address follows as quiet confirmation.
-    #
-    # COMPOSITION:
-    #   The shot is from the front door, looking down the full 40-foot living room
-    #   toward the floor-to-ceiling glazing wall. The room is empty — no staging,
-    #   no furniture except a single low travertine console against the far wall.
-    #   The marble floor stretches away. Dusk light fills the glazing wall.
-    #   The scale of the room is overwhelming from this perspective.
-    #   Left wall (dark plaster): the mixed-scale typography lockup lives here.
-    #   "3,300" in HUGE HEAVY gold serif — fills most of the upper-left quadrant.
-    #   "sq ft." in italic display serif, smaller, immediately below.
-    #   "SINDHUBHAVAN ROAD" in tracked geometric caps, medium-small, below.
-    #   "AHMEDABAD" in smaller tracked caps, gold.
-    #   The floor, glazing, and city beyond: completely untouched.
-    #   Price: "Rs 3 CR ONWARDS" in a slim ivory-backed label, bottom of left wall zone.
-    #   NOTE: 3,300 IS the apartment size. Rs 3 Cr IS the price. Separate. Distinct.
-    #   Badge: "SCHEDULE YOUR PRIVATE TOUR" — 4 words. Bottom-right corner, ivory fill, gold border.
-    #   Bottom: single thin tracked line directly on the dark floor reflection zone:
-    #   "4 & 5 BHK · Clubclass Amenities · 30+ Storeys" — fine gold caps, no backing strip.
-    #   Separator: · throughout. NO backing strip at bottom (ivory_warmth = no dark panels).
-    #   Top-left: clear for logo.
+    # POOL-A: the_glass_morphism_shield — floating pill headline upper-left,
+    #         location name on dark basalt wall, compact spec row. navy_gold.
+    # POOL-B: the_editorial_triptych — dark top band from natural ceiling,
+    #         photo zone (empty room + badge), cream footer. charcoal_gold.
     # =========================================================================
-    {
-        "variant_key":  "interior_signature_moment",
-        "prompt_num":   5,
-        "scene_prose": (
-            "Sony A7R V, 20mm f/4.0, tripod at eye level in the apartment's entry threshold "
-            "— the door frame partially visible at the extreme left and right edges. "
-            "6:50pm — warm amber dusk light floods through the full-height west-facing "
-            "glazing wall at the far end of the room, at 2400K. The room stretches 40 feet "
-            "away from camera; the floor recedes in strong perspective to the glazing. "
-            "ISO 100, f/11. No artificial lighting inside.\n\n"
-            "The 5 BHK living room is completely empty — no furniture, no rugs, no art. "
-            "The floor is large-format Calacatta Gold marble 1200x2400, book-matched — "
-            "the gold veining catches the dusk light and renders near three-dimensional. "
-            "Left wall: smooth warm plaster, no hardware, no openings — a single clean "
-            "expanse from floor to 10.5-foot ceiling. Far wall: a single low travertine "
-            "console against the glazing, 4 metres wide, 35cm deep — nothing on it. "
-            "Through the glazing: Ahmedabad 30 floors below, dusk sky above. "
-            "The room communicates scale before a single word is read."
-        ),
-        "composition_notes": (
-            "The left plaster wall — in partial shadow from the dusk light entering "
-            "at the far end — is the text zone. No backing panels anywhere on this canvas. "
-            "Text lives on the wall's own surface.\n"
-            "The typographic lockup on the left wall, reading downward:\n"
-            "'3,300' — HUGE HEAVY gold luxury display serif. Scale this number so it "
-            "occupies the upper half of the left wall from roughly 15% down from the "
-            "ceiling to mid-wall. The number must feel monumental — this is the visual "
-            "drama of the ad. NOTE: 3,300 is the apartment size in square feet, not the price.\n"
-            "'sq ft.' — immediately below '3,300', in italic display serif, warm gold, "
-            "at roughly 35% of the scale of '3,300'. Reads as a qualifier, not a label. "
-            "Mixed weight creates the visual contrast — this is the creative device.\n"
-            "'SINDHUBHAVAN ROAD' — below 'sq ft.', in tracked geometric caps, gold, "
-            "at roughly the same scale as 'sq ft.' or slightly smaller. "
-            "One line. The address follows the scale like a caption.\n"
-            "'AHMEDABAD' — below, tracked geometric caps, gold, smaller still. Quiet confirmation.\n"
-            "The marble floor, glazing wall, city beyond: completely clear of text. "
-            "The scale of the room is the emotional event — protect it.\n"
-            "Price: 'Rs 3 CR ONWARDS' — a slim one-line label on the left wall, below "
-            "AHMEDABAD. Warm gold on the natural wall surface, no pill, no backing. "
-            "Price as a measured statement, not a badge.\n"
-            "Badge 'SCHEDULE YOUR PRIVATE TOUR': bottom-right corner of the photo zone — a compact "
-            "rectangle, warm ivory fill, gold border, geometric sans medium-bold. 4 words.\n"
-            "Bottom edge: '4 & 5 BHK · Clubclass Amenities · 30+ Storeys' — single "
-            "fine tracked line set directly on the darkest band of the floor reflection "
-            "at the canvas bottom. No backing strip. Gold on the natural dark surface. "
-            "Separator: · (centred dot) throughout this ad only.\n"
-            "Top-left corner — the darkest corner of the frame — reserved for logo compositing."
-        ),
-        "headline":    "3,300.",
-        "eyebrow":     "",
-        "palette_tag": "ivory_warmth",
-        "scene_tag":   "living_room_empty_arrival_angle",
-        "tone_tag":    "bright_aspirational",
-        "recipe_tag":  "the_architectural_dead_zone",
-        "logo_corner": "top-left",
-        "badge_cta":   "SCHEDULE YOUR PRIVATE TOUR",
-    },
-]
+    "interior_signature_moment": [
+        {   # POOL-A
+            "variant_key":  "interior_signature_moment",
+            "prompt_num":   5,
+            "scene_prose": (
+                "Sony A7R V, 24mm f/8.0, tripod at 100cm height, positioned at the "
+                "entry threshold of the 5 BHK living room. 10:30am — overcast cool "
+                "daylight at 5500K, perfectly diffused through north-west facing floor-"
+                "to-ceiling glazing, rendering a single wide diagonal light shaft across "
+                "the room from upper-left to lower-right. ISO 100, f/11. Near-perfect "
+                "technical exposure with a faint residual bloom at the brightest glazing "
+                "pane corner.\n\n"
+                "The 5 BHK living room stretches 42 feet from the entry threshold to "
+                "the glazing wall at the far end. Floor: 1200x2400 Calacatta Gold marble, "
+                "book-matched — the light shaft rakes across the veined surface, creating "
+                "a dramatic bright diagonal stripe across the dark ground. No furniture "
+                "anywhere — completely empty. The left wall: smooth dark basalt tile, "
+                "floor to 3.8m ceiling, no hardware. The right wall: plaster, in full "
+                "shadow. The diagonal light shaft on the marble is the entire emotional "
+                "event. Through the glazing at the far end: overcast Ahmedabad sky."
+            ),
+            "composition_notes": (
+                "The left dark basalt wall and the shadow pool on the right side of the "
+                "room are the text zones — both naturally dark, high-contrast surfaces.\n"
+                "Headline glass morphism pill: upper-left corner of canvas. A compact "
+                "semi-transparent rounded pill with a delicate gold hairline border and "
+                "a very slightly frosted dark backing (45% opacity, #1E2430). Inside: "
+                "'100% Cheque. 0% Compromise.' in bold italic display serif, warm white. "
+                "Pill sized exactly to the text — never a sidebar or column.\n"
+                "'SINDHUBHAVAN ROAD': overlaid as flat HEAVY gold luxury display serif floating "
+                "in front of the dark basalt left wall — NOT carved into or embedded in the "
+                "wall surface. SINDHUBHAVAN spans the full basalt zone width; ROAD on the "
+                "line below at the same scale. Clean flat typographic layer, independent of "
+                "the wall geometry — the primary typographic event.\n"
+                "'AHMEDABAD': below ROAD, small tracked geometric caps, gold.\n"
+                "'4 & 5 BHK': italic tracked HEAVY serif, gold, below AHMEDABAD — same "
+                "typographic stack floating in front of the dark basalt wall. NOT geometric sans.\n"
+                "Price: compact navy pill (#0D1B2A fill, gold hairline) anchored in the "
+                "bottom-right of the shadow zone on the right side of the room. "
+                "'₹3 CR ONWARDS' in HEAVY serif, gold. Unmissable.\n"
+                "Badge 'STEP INSIDE — SAMPLE READY': compact wide pill, bottom centre "
+                "of the photo zone. Slate-grey fill, gold border. Bold geometric sans. "
+                "4 words only.\n"
+                "Spec strip: single slim strip at very bottom of canvas (8% height), "
+                "dark navy backing (#0D1B2A), full width. Text: "
+                "'CLUBCLASS AMENITIES  ·  3,300–6,100 SQ FT' — tracked caps, gold.\n"
+                "The marble floor diagonal and the glazing wall beyond: completely clear.\n"
+                "Top-right corner: clear for logo compositing."
+            ),
+            "headline":    "100% Cheque. 0% Compromise.",
+            "eyebrow":     "",
+            "palette_tag": "navy_gold",
+            "scene_tag":   "living_room_diagonal_daylight",
+            "tone_tag":    "bright_aspirational",
+            "recipe_tag":  "the_glass_morphism_shield",
+            "logo_corner": "top-right",
+            "badge_cta":   "STEP INSIDE — SAMPLE READY",
+        },
+        {   # POOL-B
+            "variant_key":  "interior_signature_moment",
+            "prompt_num":   5,
+            "scene_prose": (
+                "Sony A7R V, 24mm f/8.0, tripod at 90cm height at the midpoint of the "
+                "5 BHK living room, framing the far glazing wall and its city view. "
+                "5:45pm — warm dusk amber at 3200K enters from below the overcast, "
+                "a 15-minute window of directional warm light raking across the marble "
+                "at a low angle. ISO 200, f/8. Slight warm veil from the hazy dusk light.\n\n"
+                "The room is entirely empty — marble, walls, glazing, and dusk light. "
+                "Floor: 1200x2400 Calacatta Oro marble — the dusk light renders the "
+                "gold veining near luminous. The glazing at the far end is full-height, "
+                "frameless, and shows the dusk Ahmedabad skyline, amber haze at the "
+                "horizon. The near ceiling at 3.8m has a dark coffered plaster grid — "
+                "near-black from this angle, a naturally dark upper zone."
+            ),
+            "composition_notes": (
+                "EDITORIAL TRIPTYCH structure. The natural dark coffered ceiling is the "
+                "backing for the top band — near-black, clearly delineated from the photo zone.\n"
+                "TOP BAND (upper 26% of canvas): 'SINDHUBHAVAN' fills this band in HEAVY "
+                "gold display serif at 82% canvas width — not condensed, natural letterform "
+                "proportions. 'ROAD' on a second line at 55% of SINDHUBHAVAN's cap height, "
+                "centred. 'AHMEDABAD' below in tracked geometric caps with gold vertical "
+                "hairlines flanking both sides (| AHMEDABAD | style). "
+                "'4 & 5 BHK' in a double-bordered frame box: outer thin gold hairline, "
+                "3px gap, inner gold hairline, text in BOLD cream caps centred inside. "
+                "Box spans 50% of canvas width, centred. PROMINENT — primary buying info.\n"
+                "Campaign headline 'Not just bigger. Properly big.' as final tier, italic "
+                "display serif, warm cream, at 30% of SINDHUBHAVAN's cap height.\n"
+                "Gradient zone boundary: soft fade into the photo — never a hard cut.\n"
+                "PHOTO ZONE (middle 50%): the empty dusk room, edge-to-edge. "
+                "NO text here EXCEPT sample badge. Badge = DECORATIVE PLAQUE: dark "
+                "charcoal backing, outer gold hairline, inner gold hairline, fine gold "
+                "rules above and below the CTA word. 'SAMPLE FLAT OPEN' only — no "
+                "sub-label inside the badge. Centred, prominent.\n"
+                "FOOTER STRIP (lower 24%): solid warm cream (#F5EDD8). Three equal columns "
+                "with thin gold vertical hairlines:\n"
+                "LEFT: '4 & 5 BHK' with a fine gold icon above — PRIMARY BUYING INFO.\n"
+                "CENTRE: 'STARTING AT' (small tracked) / '₹3 Cr' (dominant gold) / 'ONWARDS'.\n"
+                "RIGHT: '3,300–6,100 SQ FT' with a fine gold icon above.\n"
+                "All footer text in deep charcoal (#2B2420).\n"
+                "Top-right corner: clear for logo compositing."
+            ),
+            "headline":    "Not just bigger. Properly big.",
+            "eyebrow":     "",
+            "palette_tag": "charcoal_gold",
+            "scene_tag":   "living_room_dusk_diagonal_light",
+            "tone_tag":    "dark_luxury",
+            "recipe_tag":  "the_editorial_triptych",
+            "logo_corner": "top-right",
+            "badge_cta":   "SAMPLE FLAT — VISIT TODAY",
+        },
+    ],
+}
 
 # ---------------------------------------------------------------------------
+# SELECT ONE CONFIG PER VARIANT — randomly picks POOL-A or POOL-B for each,
+# then dedupe_visual_batch() resolves any residual palette/recipe collisions.
+# Re-run the script to get a different combination.
+# ---------------------------------------------------------------------------
+LLM_OUTPUTS = []
+for vk, pool in VARIANT_POOLS.items():
+    pick = random.choice(pool)
+    LLM_OUTPUTS.append(pick)
+
+# Assign sequential prompt numbers after random selection
+for i, entry in enumerate(LLM_OUTPUTS, 1):
+    entry["prompt_num"] = i
+
+# Deduplicate palettes and recipes across the batch
 entries = dedupe_visual_batch(LLM_OUTPUTS)
 
+# ---------------------------------------------------------------------------
 output_lines = []
 output_lines.append("=" * 70)
-output_lines.append("ANAMIKA HEIGHTS - FINAL IDEOGRAM PROMPTS (FULL REFRESH)")
-output_lines.append("Reference-ad-informed composition. No template layout blocks.")
+output_lines.append("ANAMIKA HEIGHTS - IDEOGRAM PROMPTS")
+output_lines.append("Variants: private_retreat / social_home / dynamic_a / dynamic_b / interior")
 output_lines.append("=" * 70)
 
 for entry in entries:
@@ -501,8 +705,6 @@ for entry in entries:
 
     meta = get_variant_meta(vk)
     cta_brief = dict(BRIEF)
-    # entry-level badge_cta overrides the variant yaml's sample_ready_cta so
-    # both composition_notes and the text-strings list stay in sync.
     cta_brief["sample_ready_cta"] = entry.get("badge_cta") or meta.get("sample_ready_cta", "")
 
     final = build_ad_prompt(entry, cta_brief, vk)

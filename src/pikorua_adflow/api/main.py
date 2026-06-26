@@ -23,17 +23,72 @@ litellm.drop_params = True
 litellm.num_retries = 6
 litellm.request_timeout = 120
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from .config import STATIC_DIR
 from .routes import (analytics, assets, audience, autooptimiser, campaigns, deploy,
-                     pages, visuals)
+                     pages, visuals, webhook)
+
+
+# ── Scheduled jobs ────────────────────────────────────────────────────────────
+
+def _daily_autooptimiser_run() -> None:
+    """Daily pass at 7:30 AM IST (02:00 UTC). Auto-applies safe fixes."""
+    try:
+        from .services import autooptimiser as ao
+        ao.run_autooptimiser(apply_safe=True)
+    except Exception as exc:
+        print(f"[scheduler] daily autooptimiser error: {exc}")
+
+
+def _monthly_retarget() -> None:
+    """Rung 12 — refresh targeting on all active campaigns every 30 days."""
+    try:
+        from .services import autooptimiser as ao
+        result = ao.periodic_retarget_all()
+        n = len(result.get("results", []))
+        print(f"[scheduler] monthly retarget: {n} campaigns processed "
+              f"(dry_run={result.get('dry_run')})")
+    except Exception as exc:
+        print(f"[scheduler] monthly retarget error: {exc}")
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """Start APScheduler on startup; shut it down cleanly on exit."""
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler(timezone="UTC")
+        # 7:30 AM IST = 02:00 UTC
+        scheduler.add_job(_daily_autooptimiser_run, "cron",
+                          hour=2, minute=0, id="daily_autooptimiser",
+                          replace_existing=True)
+        # Every 30 days (first run 30 days after server start)
+        scheduler.add_job(_monthly_retarget, "interval",
+                          days=30, id="monthly_retarget",
+                          replace_existing=True)
+        scheduler.start()
+        print("[scheduler] APScheduler started — daily 02:00 UTC + 30-day retarget.")
+    except Exception as exc:
+        print(f"[scheduler] Could not start APScheduler: {exc}")
+        scheduler = None  # type: ignore[assignment]
+
+    yield
+
+    if scheduler and scheduler.running:
+        scheduler.shutdown(wait=False)
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="Pikorua Campaign Portal",
     description="Internal tool — launches AI-generated ad campaigns for the Pikorua Realty team.",
     version="2.0.0",
+    lifespan=_lifespan,
 )
 
 # Static assets (app.js, bundled CSS/icons). Created on first import if absent.
@@ -47,5 +102,6 @@ app.include_router(audience.router)
 app.include_router(deploy.router)
 app.include_router(analytics.router)
 app.include_router(autooptimiser.router)
+app.include_router(webhook.router)
 app.include_router(assets.router)
 app.include_router(pages.router)

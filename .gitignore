@@ -29,6 +29,7 @@ project_context/campaign_data.csv
 
 # Project context media — reference images; not needed in repo
 project_context/ad_images_examples/
+project_context/ads/
 project_context/*.jpeg
 project_context/*.jpg
 project_context/*.png

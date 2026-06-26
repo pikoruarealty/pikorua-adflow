@@ -1,0 +1,56 @@
+# Lead categorisation rules
+# Edit these lists to change how CRM leads are classified — no code change needed.
+# Matching is case-insensitive and substring-based: "warm" matches "warm buyer", "still warm", etc.
+# Restart the server (or re-run export_crm_leads.py) after editing.
+
+# ── Buying Status (lead_crm_details.buying_status) ───────────────────────────
+# Sales pipeline stage set by the CRM team.
+
+good_buying_status:
+  - exploring
+  - hot
+  - warm
+  - interested
+  - active
+  - qualified
+  - follow up
+  - postponed
+  - still searching
+
+bad_buying_status:
+  - not_ready
+  - not ready
+  - cold
+  - not interested
+  - no interest
+  - dead
+  - lost
+  - spam
+  - duplicate
+  - invalid
+  - not_interested
+
+# ── Client Status (meta_leads.status / lead_crm_details.client_status) ───────
+# Explicit sales-team disposition — takes priority over buying_status when set.
+
+good_client_status:
+  - warm
+  - interested
+
+bad_client_status:
+  - not interested
+  - cold
+  - lost
+  - low budget
+
+broker_client_status:
+  - broker
+
+# ── Site Visit ────────────────────────────────────────────────────────────────
+# A confirmed site visitor overrides all status signals (always moved to good).
+
+site_visit_confirmed:
+  - visited
+  - completed
+  - confirmed
+  - visit date confirmed

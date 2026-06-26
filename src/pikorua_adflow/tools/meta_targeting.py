@@ -423,8 +423,98 @@ CLIENTELE_TARGETING_MAP: dict[str, dict] = {
         "income_clusters": _INCOME_TOP_10,
         "age_min": 32, "age_max": 58,
     },
+
+    # ── Simplified 3-option profiles ─────────────────────────────────────────
+    # These are the primary options shown in the campaign form.  They merge the
+    # best-verified signals from the granular profiles above.
+
+    "hni": {
+        # All domestic HNI buyers — business owner, trader, doctor, professional,
+        # investor.  Uses the signals verified across the best-performing campaigns
+        # (₹220 CPL bungalow, ₹376 CPL LAARGE apartment).
+        "label": "HNI",
+        "interests": [
+            "Small business (business and finance)",      # ₹220 CPL verified
+            "Bungalow",                                   # ID 6003011972081
+            "Property investing (investing)",             # cross-verified in all HNI campaigns
+            "Property investment trust (investing)",      # ₹376 CPL LAARGE verified
+            "Investment (business and finance)",
+            "Investor (investing)",
+            "First-class travel (travel and tourism business)",
+            "Luxury goods (retail)",
+            "Luxury vehicle (vehicles)",
+            "Luxury Lifestyle (website)",
+        ],
+        "behaviours": [
+            "Frequent international travelers",
+            "Small business owners",
+            "Frequent Travelers",
+            "Engaged Shoppers",
+        ],
+        "work_positions": _WORK_POSITIONS_OWNERS,
+        "industries": _INDUSTRIES_ENTERPRISE,
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 28, "age_max": 68,
+    },
+
+    "nri": {
+        # All NRI buyers — investor or end-user.  Expat behaviours are the primary
+        # differentiator; Lived in India is the single strongest NRI signal (LAARGE verified).
+        "label": "NRI",
+        "interests": [
+            "Property investing (investing)",
+            "Property investment trust (investing)",
+            "Investment (business and finance)",
+            "Luxury Lifestyle (website)",
+            "luxury (lifestyle content)",
+            "First-class travel (travel and tourism business)",
+            "Apartment (property)",
+            "Interior design",
+        ],
+        "behaviours": [
+            "Expats (All)",
+            "Lived in India (Formerly Expats - India)",   # strongest NRI signal
+            "Frequent international travelers",
+            "Engaged Shoppers",
+        ],
+        "work_positions": _WORK_POSITIONS_OWNERS,
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 28, "age_max": 62,
+    },
+
+    "hni_nri": {
+        # HNI + NRI combined — broadest luxury real estate audience.
+        # Includes both domestic owner/investor signals and expat signals.
+        "label": "HNI + NRI",
+        "interests": [
+            "Small business (business and finance)",
+            "Bungalow",
+            "Property investing (investing)",
+            "Property investment trust (investing)",
+            "Investment (business and finance)",
+            "Investor (investing)",
+            "First-class travel (travel and tourism business)",
+            "Luxury goods (retail)",
+            "Luxury vehicle (vehicles)",
+            "Luxury Lifestyle (website)",
+            "Apartment (property)",
+            "Interior design",
+        ],
+        "behaviours": [
+            "Expats (All)",
+            "Lived in India (Formerly Expats - India)",
+            "Frequent international travelers",
+            "Small business owners",
+            "Frequent Travelers",
+            "Engaged Shoppers",
+        ],
+        "work_positions": _WORK_POSITIONS_OWNERS,
+        "industries": _INDUSTRIES_ENTERPRISE,
+        "income_clusters": _INCOME_TOP_10,
+        "age_min": 28, "age_max": 68,
+    },
 }
-DEFAULT_CLIENTELE = "premium_apartment"
+DEFAULT_CLIENTELE = "hni"
 
 
 def clientele_profile(clientele_type: str) -> dict:

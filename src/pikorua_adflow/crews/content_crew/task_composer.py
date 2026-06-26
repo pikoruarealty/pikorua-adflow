@@ -33,6 +33,7 @@ campaign inputs dict at kickoff time.
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 from typing import Optional
 
@@ -82,7 +83,7 @@ def _load_design_principles() -> dict:
 _RECIPES_BY_NAME: dict[str, dict] = {
     r["name"]: r
     for r in _load_design_principles().get("recipes", [])
-    if isinstance(r, dict) and r.get("name")
+    if isinstance(r, dict) and r.get("name") and not r.get("disabled")
 }
 
 
@@ -218,7 +219,11 @@ def compose_description(
 
     recipe_block = ""
     if allowed_recipes:
-        summaries = "\n".join(_recipe_summary(r) for r in allowed_recipes)
+        # Shuffle so the LLM encounters a different ordering each run — prevents
+        # habitual selection of the same first-listed recipe across every campaign.
+        shuffled_recipes = list(allowed_recipes)
+        random.shuffle(shuffled_recipes)
+        summaries = "\n".join(_recipe_summary(r) for r in shuffled_recipes)
         recipe_block = (
             "DESIGN RECIPE — pick exactly one coherent design bundle for this variant. "
             "The recipe drives the ad's composition, lighting, negative space, and how much "

@@ -761,7 +761,7 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
     inputs.setdefault("cta", "GET_QUOTE")
     inputs.setdefault("sample_ready", "no")
     inputs.setdefault("cheque_only", "no")
-    inputs.setdefault("clientele_type", "premium_apartment")
+    inputs.setdefault("clientele_type", "hni_nri")
     inputs.setdefault("standout_feature", "none provided — use the thin-brief fallback")
 
     try:

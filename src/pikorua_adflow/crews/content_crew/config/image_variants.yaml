@@ -84,6 +84,7 @@ variants:
       - the_architectural_dead_zone
       - the_zoned_triptych
       - the_editorial_triptych
+      - the_sky_text_canvas
     default_tone_bias: bright_aspirational
     sample_ready_cta: "Sample flat ready — come experience it"
     # Palette is dynamic (LLM picks per scene); batch distinctness is enforced in
@@ -120,7 +121,6 @@ variants:
     allowed_recipes:
       - the_golden_archway
       - the_horizon_anchor
-      - the_zenith_gaze
       - the_zoned_triptych
       - the_editorial_triptych
     default_tone_bias: bright_aspirational
@@ -156,10 +156,10 @@ variants:
     label: "Lifestyle — Scene A"
     allowed_recipes:
       - the_open_room_anchor
-      - the_zenith_gaze
       - the_architectural_dead_zone
-      - the_depth_integration
       - the_horizon_anchor
+      - the_golden_archway
+      - the_zoned_triptych
     default_tone_bias: bright_aspirational
     sample_ready_cta: "Sample flat ready — step inside"
     allowed_palettes:
@@ -199,10 +199,11 @@ variants:
     label: "Lifestyle — Scene B"
     allowed_recipes:
       - the_glass_morphism_shield
-      - the_backlit_silhouette
-      - the_sky_chandelier
       - the_golden_archway
       - the_open_room_anchor
+      - the_sky_text_canvas
+      - the_zoned_triptych
+      - the_editorial_triptych
     default_tone_bias: dark_luxury
     sample_ready_cta: "Sample flat open — experience it"
     allowed_palettes:
@@ -273,9 +274,8 @@ variants:
   exterior_establishing_shot:
     label: "Exterior Establishing Shot"
     allowed_recipes:
-      - the_dark_water_canvas
-      - the_sky_chandelier
       - the_horizon_anchor
+      - the_architectural_dead_zone
     opt_in: true
     default_tone_bias: dark_luxury
     sample_ready_cta: "Visit the site — sample flat now open"
@@ -309,9 +309,9 @@ variants:
   lifestyle_city_connection:
     label: "Lifestyle — The Address"
     allowed_recipes:
-      - the_depth_integration
       - the_open_room_anchor
       - the_horizon_anchor
+      - the_sky_text_canvas
     default_tone_bias: dark_luxury
     sample_ready_cta: "Sample flat ready — see the address"
     allowed_palettes:

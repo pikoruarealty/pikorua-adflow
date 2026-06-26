@@ -44,6 +44,7 @@ recipes:
     type_treatment: "HEAVY serif location name dominant in photo zone; bold italic headline at photo/footer boundary; tight tracked geometric sans for the footer spec row"
 
   - name: the_sky_chandelier
+    disabled: true
     scene_types: [exterior, lifestyle_single]
     tones: [dark_luxury, bright_aspirational]
     text_tier: full_detail
@@ -71,6 +72,7 @@ recipes:
     type_treatment: "bold serif headline in the pill; thin tracked geometric sans for spec row at bottom"
 
   - name: the_depth_integration
+    disabled: true
     scene_types: [lifestyle_single]
     tones: [dark_luxury]
     text_tier: full_detail
@@ -84,6 +86,7 @@ recipes:
     type_treatment: "locality name as ultra-large gold letterforms filling the night sky behind subject"
 
   - name: the_dark_water_canvas
+    disabled: true
     scene_types: [exterior, lifestyle_single]
     tones: [dark_luxury]
     text_tier: full_detail
@@ -98,6 +101,7 @@ recipes:
     type_treatment: "hero price+headline in darkest foreground zone; single compact spec strip at very bottom"
 
   - name: the_physical_3d_intrusion
+    disabled: true
     scene_types: [interior, lifestyle_single]
     tones: [dark_luxury, bright_aspirational]
     text_tier: moderate
@@ -138,6 +142,7 @@ recipes:
     type_treatment: "massive bold display sans at one scale, overlapping italic script at a contrasting scale; a secondary subhead in tightly tracked all-caps geometric sans — mixed scale is the visual drama"
 
   - name: the_backlit_silhouette
+    disabled: true
     scene_types: [lifestyle_single, lifestyle_social]
     tones: [bright_aspirational]
     text_tier: moderate
@@ -151,6 +156,7 @@ recipes:
     type_treatment: "bold centered serif headline in gold, placed on bright foreground"
 
   - name: the_zenith_gaze
+    disabled: true
     scene_types: [lifestyle_social]
     tones: [bright_aspirational]
     text_tier: moderate
@@ -190,6 +196,19 @@ recipes:
     subject_rule: "candid group or solo — positioned in the photo zone clear of the top-band cut-line and above the footer strip; never cropped by either zone boundary"
     negative_space_rule: "top band exclusively holds location + city + BHK; photo zone holds only scene + sample badge; footer strip holds price + specs + icon grid; zones never overlap"
     type_treatment: "HEAVY display serif location name fills the dark top band — dominant scale, cream or warm gold; inline framed pill for BHK; stacked price hierarchy in footer (STARTING AT small / ₹X Cr large / ONWARDS small)"
+
+  - name: the_sky_text_canvas
+    scene_types: [lifestyle_single, lifestyle_social, exterior]
+    tones: [bright_aspirational, dark_luxury]
+    text_tier: full_detail
+    text_roles: [headline, subhead, price, badge, cta]
+    info_band_style: compact_spec_row
+    layout_type: full-bleed
+    text_primary_hex: "#FFFFFF"
+    lighting: "blue-hour or open-sky backlight; upper zone dark enough for gold/white text; atmospheric depth compresses distant city"
+    subject_rule: "back-facing or absent; figure small against sky if present; scene dominant over human element"
+    negative_space_rule: "upper 35-40% sky or ceiling holds ALL identity text; lower photo zone entirely clear of every text element"
+    type_treatment: "HEAVY serif location name centered in sky zone; italic serif headline below; price in a floating pill; no footer strip anywhere"
 
 layout_discipline:
   - "COMPARTMENTALIZATION: Never float spec text over photo — use a solid opaque footer block."

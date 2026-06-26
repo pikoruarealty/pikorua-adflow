@@ -753,36 +753,18 @@ def _build_typography_block(
             lines.append(f'Price: "\u20b9{price_cr} Cr ONWARDS"')
         if sample_ready:
             lines.append(f'Sample badge: "{sample_cta}"')
-        # Apartment configuration (BHK) is a PRIMARY photo-zone element — it is kept
-        # OUT of the footer spec list so the model never double-places or shrinks it.
+        # In composition_driven mode the composition_notes specify exactly where BHK goes.
+        # Emit the text string only — no placement instruction that could contradict the notes.
         if config_combined:
-            if info_band_style in ("zoned_triptych", "editorial_triptych"):
-                lines.append(
-                    f'Apartment configuration (render in the TOP BAND — '
-                    f'alongside location name and city, as an inline framed pill or '
-                    f'engraved sub-header — NOT in the photo zone): "{config_combined}"'
-                )
-            else:
-                lines.append(
-                    f'Apartment configuration (render as a LARGE standalone element in the '
-                    f'photo zone — never in the footer, never a corner label): "{config_combined}"'
-                )
+            lines.append(f'Apartment configuration: "{config_combined}"')
         # Footer / supporting specs: USPs only. BHK excluded above. Fill-to-3 applies
         # to THESE items so a strip/grid that IS rendered carries balanced content.
         spec_items = list(usp_parts)
         if brief.get("cheque_only"):
             spec_items.append("100% CHEQUE PAYMENT")
-        # Pad to at least 3 spec items for sparse briefs — same fallback pool as
-        # the legacy icon_grid_strip / compact_spec_row paths. Only relevant WHEN the
-        # composition_notes render a strip/grid; floating-line footers ignore the 3rd.
-        _COMP_FOOTER_DEFAULTS = ["GATED COMMUNITY", "SIGNATURE LIVING", "ELEVATED SPACES"]
-        _used_spec = [s.upper() for s in spec_items]
-        for _d in _COMP_FOOTER_DEFAULTS:
-            if len(spec_items) >= 3:
-                break
-            if _d.upper() not in _used_spec:
-                spec_items.append(_d)
-                _used_spec.append(_d.upper())
+        # Do NOT pad with defaults in composition_driven mode.
+        # The composition_notes already specify exactly what goes in the footer.
+        # Filler items (GATED COMMUNITY etc.) pollute the spec strip with non-brief data.
         if spec_items:
             lines.append(
                 f'Footer / supporting specs (only if the composition renders a strip or '
@@ -1157,7 +1139,7 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
         "• Badge / CTA: same Bold geometric sans, medium-bold, clearly legible at arm's length. "
         "NEVER smaller than spec text.\n"
         "• NUMBER DISAMBIGUATION: If the composition contains '3,300' or '3300', this refers to "
-        "apartment size in square feet — NOT the price. The price is Rs 3 Cr. Treat these as "
+        "apartment size in square feet — NOT the price. The price is ₹3 Cr. Treat these as "
         "two entirely separate elements in different positions.\n"
         "• NEVER: thin serifs, light weights, rounded soft fonts, or any font from a presentation deck.\n"
         "• EDITORIAL ACCENTS (optional, scene-permitting): Where the palette and composition "
@@ -1210,6 +1192,11 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             "typography around the people using the scene's natural negative space. Never "
             "sacrifice a text element to accommodate a figure.\n\n"
             f"{layout_section}\n\n"
+            "TEXT COLOUR IS NOT ALWAYS GOLD: Choose colour per element based on the surface behind it. "
+            "Gold (#C9A84C) on a dark surface — yes. Gold on a mid-toned or busy background — no, use cream or white. "
+            "Dark charcoal or navy on a bright/pale surface is often more premium than forced gold. "
+            "The headline may be cream, the price may be white, the spec line may be charcoal — they do NOT all need to match. "
+            "Reserve gold as an accent, not a mandate.\n\n"
             f"Text strings to render (exact wording, placement per composition notes):\n"
             f"{typography_block}\n\n"
             f"Colour tokens: {palette_section}\n"
@@ -1246,8 +1233,7 @@ def build_ad_prompt(entry: dict, brief: dict, variant_key: str) -> str:
             "halo / soft glow behind it — do NOT leave bare text blending into a similar-toned "
             "surface. Bare text with no backing is allowed ONLY on a genuinely high-contrast "
             "surface (gold on a near-black floor, dark text on white). When in doubt, back it. "
-            "CENTRAL-FOCUS CONSTRAINT: both price and CTA sit within the central 70-80% focus "
-            "area — never an extreme corner, never against the frame edge.\n\n"
+            "\n\n"
             "SCENE NEGATIVE SPACE (compose room for the text): Do NOT let the furniture and "
             "architecture fill every usable surface so the text elements get crammed into "
             "whatever narrow strip is left — a thin side wall, a corner, a bright ceiling. "
@@ -1653,7 +1639,7 @@ def call_ideogram_remix(
     aspect: str = "4x5",
     image_weight: float = 0.5,
 ) -> bytes:
-    """Ideogram v2 remix — generate a variant of a reference image guided by a text prompt.
+    """Ideogram v4 remix — generate a variant of a reference image guided by a text prompt.
 
     image_weight: 0.0 (ignore reference, follow prompt) → 1.0 (preserve reference maximally).
     Returns PNG bytes of the generated image.
@@ -1664,26 +1650,20 @@ def call_ideogram_remix(
     import urllib.request
 
     speed = speed.upper() if speed else "DEFAULT"
-    _ASPECT_MAP = {
-        "1x1": "ASPECT_1_1",
-        "4x5": "ASPECT_4_5",
-        "16x9": "ASPECT_16_9",
-        "9x16": "ASPECT_9_16",
-        "2x3": "ASPECT_2_3",
-        "3x2": "ASPECT_3_2",
+    if speed not in ("TURBO", "DEFAULT", "QUALITY"):
+        speed = "DEFAULT"
+    _RESOLUTION_MAP = {
+        "1x1": "2048x2048",
+        "4x5": "1792x2240",
+        "16x9": "2560x1440",
+        "9x16": "1440x2560",
+        "2x3": "1664x2496",
+        "3x2": "2496x1664",
     }
-    clean_aspect = aspect.lower().replace(":", "x") if aspect else "4x5"
-    aspect_ratio = _ASPECT_MAP.get(clean_aspect, "ASPECT_4_5")
+    clean_aspect = (aspect or "4x5").lower().replace(":", "x")
+    resolution = _RESOLUTION_MAP.get(clean_aspect, "1792x2240")
     # Ideogram remix uses integer image_weight 1-100
     weight_int = max(1, min(100, int(round(image_weight * 100))))
-
-    image_request_json = _json.dumps({
-        "prompt": prompt,
-        "aspect_ratio": aspect_ratio,
-        "rendering_speed": speed,
-        "image_weight": weight_int,
-        "model": "V_2",
-    })
 
     boundary = "----PikoruaRemixBoundary3Qn7vRxK"
 
@@ -1702,13 +1682,16 @@ def call_ideogram_remix(
         ).encode("utf-8") + content + b"\r\n"
 
     body = (
-        _file_field("image_file", "reference.png", image_bytes)
-        + _field("image_request", image_request_json)
+        _file_field("image", "reference.png", image_bytes)
+        + _field("text_prompt", prompt)
+        + _field("resolution", resolution)
+        + _field("rendering_speed", speed)
+        + _field("image_weight", str(weight_int))
         + f"--{boundary}--\r\n".encode("utf-8")
     )
 
     req = urllib.request.Request(
-        "https://api.ideogram.ai/v2/remix",
+        "https://api.ideogram.ai/v1/ideogram-v4/remix",
         data=body,
         headers={
             "Api-Key": key,
@@ -1730,7 +1713,7 @@ def call_ideogram_remix(
                 time.sleep(5 * (attempt + 1))
                 continue
             raise RuntimeError(
-                f"Ideogram remix request failed [{e.code}]: {detail}"
+                f"Ideogram v4 remix request failed [{e.code}]: {detail}"
             ) from e
 
     img_url = data["data"][0]["url"]
@@ -1741,7 +1724,7 @@ def call_ideogram_remix(
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")
         raise RuntimeError(
-            f"Ideogram remix image download failed [{e.code}]: {detail}"
+            f"Ideogram v4 remix image download failed [{e.code}]: {detail}"
         ) from e
 
 

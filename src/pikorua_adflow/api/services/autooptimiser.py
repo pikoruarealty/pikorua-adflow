@@ -1091,6 +1091,14 @@ def run_autooptimiser(apply_safe: bool = True) -> dict:
 
     _save_state(state)
 
+    # Rung 11 — CAPI: fire QualifiedLead events for newly-qualified CRM leads.
+    capi_result: dict = {}
+    try:
+        from pikorua_adflow.analytics import meta_capi as _capi
+        capi_result = _capi.fire_pending_qualified_leads(crm_leads)
+    except Exception:
+        pass  # never let CAPI break the autooptimiser
+
     return {
         "campaigns": [_public_campaign(ev) for ev in evals],
         "auto_applied": auto_applied + llm_safe_applied,
@@ -1105,6 +1113,7 @@ def run_autooptimiser(apply_safe: bool = True) -> dict:
         "ab_resolutions": ab_resolutions,
         "settled_outcomes": len(settled_outcomes),
         "strategist": strategist_result,
+        "capi": capi_result,
     }
 
 
@@ -1134,6 +1143,51 @@ def get_applied_log() -> list[dict]:
                 out.append({**e, "campaign_id": cid, "undoable": undoable})
     out.sort(key=lambda e: e.get("applied_at", ""), reverse=True)
     return out
+
+
+# ── Rung 12 — Periodic targeting refresh ─────────────────────────────────────
+def periodic_retarget_all() -> dict:
+    """
+    Rung 12 — called by APScheduler every 30 days (and via POST /autooptimiser-retarget-all).
+    Refreshes the flexible_spec on all ACTIVE campaigns against the current
+    CLIENTELE_TARGETING_MAP. DRY_RUN-gated; geo/custom-audiences never touched.
+    """
+    from pikorua_adflow.tools.meta_tool import fetch_active_campaigns, retarget_campaign_adsets
+
+    token   = os.getenv("META_ACCESS_TOKEN", "")
+    account = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    if not token or not account:
+        return {"error": "META credentials not configured.", "results": []}
+
+    campaigns = fetch_active_campaigns(account, token)
+    results: list[dict] = []
+    for c in campaigns:
+        cid  = c["id"]
+        name = c.get("name", "")
+        _, brief = _run_for_campaign(name)
+        clientele_type = (brief or {}).get("clientele_type", "")
+        if not clientele_type:
+            results.append({"campaign_id": cid, "campaign_name": name,
+                            "skipped": True, "reason": "no clientele_type in brief"})
+            continue
+        try:
+            res = retarget_campaign_adsets(cid, clientele_type, token, dry_run=dry_run)
+            results.append({
+                "campaign_id":    cid,
+                "campaign_name":  name,
+                "clientele_type": clientele_type,
+                "updated":        len(res.get("updated", [])),
+                "errors":         len(res.get("errors", [])),
+                "dry_run":        dry_run,
+            })
+        except Exception as exc:
+            results.append({"campaign_id": cid, "campaign_name": name, "error": str(exc)})
+
+    state = _load_state()
+    state["last_retarget"] = _now().isoformat()
+    _save_state(state)
+    return {"last_retarget": state["last_retarget"], "results": results, "dry_run": dry_run}
 
 
 # ── Defensive CRM reads (never let a CRM hiccup break the autooptimiser) ──────────

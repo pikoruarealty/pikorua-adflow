@@ -1,79 +1,72 @@
-# Targeting Brief for Luxury Real Estate in Ahmedabad 
+```markdown
+# Targeting Brief for 4-5 BHK Priced at ₹3 Cr in Ahmedabad
 
 ## 1. Geo Targeting
 | Locality Name          | Pincode |
 |-----------------------|---------|
 | Nehrunagar            | 380015  |
-| Satellite             | 380015  |
-| Jodhpur               | 380015  |
-| Shyamal Char Rasta    | 380015  |
-| Jivraj Park           | 380015  |
 | Ambawadi              | 380015  |
+| Satellite             | 380015  |
+| Jivraj Park           | 380051  |
 | Bodakdev              | 380054  |
-| Prahlad Nagar         | 380015  |
-| Vastrapur             | 380015  |
 | Thaltej               | 380059  |
-| SG Highway            | 380061  |
-| Bopal                 | 380058  |
+| Sindhu Bhavan Road    | 380059  |
+| Shyamal               | 380015  |
+| Prahlad Nagar         | 380061  |
+| 100 Ft Ring Road      | 380015  |
+| Bimanagar             | 380027  |
+| Vastrapur             | 380015  |
 
 ## 2. Demographics
-- **Age Range**: 40–55
+- **Age Range**: 35–50
 - **Household Income Bracket**: ₹50L+
-- **Gender Targeting Recommendation**: All (most luxury property buyers are typically joint decisions involving family members)
-- **NRI Segment**: Yes, targeting primarily UK and UAE diaspora.
+- **Gender Targeting Recommendation**: All (wealth accumulation is often shared among genders in affluent households)
+- **NRI Segment**: Yes, targeting diaspora in UAE, US, and UK.
 
 ## 3. Professional Targeting
-- **Job Titles**:
-  - C-suite: CEOs, MDs, CFOs, CMOs, COOs 
-  - Founders/Promoters of large enterprises (manufacturing, pharma, FMCG)
-  - Senior professionals: VPs, Directors at law firms and investment banks
-  - NRI Professionals: IT Directors/VPs in the USA/UK, Finance professionals in UAE/Singapore
-  - Entrepreneurs with active businesses valued at ₹20 Cr+
-- **Platforms for Targeting**: 
+- **Job Titles**: 
+  - CEOs, MDs, CMOs, CFOs, COOs of mid-to-large companies
+  - Founders/Promoters of manufacturing, pharma, textile, and real estate companies
+  - Senior professionals: VPs, Directors, Partners in law firms, CA firms, investment banks
+  - NRI professionals: IT Directors/VPs in US/UK, finance professionals in UAE/Singapore
+  - Entrepreneurs with exits or active businesses valued ₹20 Cr+
+- **Platforms**: 
   - LinkedIn for professional targeting
-  - Meta for interests relevant to luxury buyers
+  - Meta for interest/employer categories.
 
 ## 4. Meta Ads Targeting Segments
-- **Interests**:
+- **Interests**: 
   - Luxury real estate
   - Property investment
   - Interior design
   - Golf
   - Business class travel
   - Wealth management
-  - Premium automobiles 
-- **Behaviours**:
+  - Premium automobiles
+- **Behaviours**: 
   - Frequent international travellers
   - Business owners
   - High-value purchases
-- **Restrictions Noted**: The special ad category "Housing" may restrict certain targeting options based on age, gender, and radius.
+- **Restrictions**: Note that special ad category "Housing" restricts age/gender/radius targeting.
 
 ## 5. Google Ads
-- **Keywords**:
-  - “Luxury apartments in Ahmedabad”
-  - “4 BHK homes Nehrunagar”
-  - “Luxury real estate Ahmedabad”
-  - “Invest in Ahmedabad property”
-  - “High-end residential properties Ahmedabad”
-  - “Luxury homes for sale Ahmedabad”
-  - “Ahmedabad real estate market”
-  - “Elite properties Nehrunagar”
-  - “Premium flats for sale Ahmedabad”
-  - “4 BHK luxury homes near me”
-  - “Luxury apartments near Vastrapur”
-  - “High net worth properties Ahmedabad”
-  - “Family homes in Ahmedabad”
-  - “Real estate investment Ahmedabad”
-  - “Exclusive villas in Ahmedabad”
-- **Negative Keywords**:
-  - “Cheap”
-  - “Under 1 crore”
-  - “Budget”
-  - “Affordable”
-  - “Low cost”
-- **In-market Audience Segments**: 
-  - Real Estate Investors
-  - High Net Worth Individuals
-- **Recommended Bidding Strategy**: Lead Generation (target CPC or CPA bidding) 
-
-This brief is structured for immediate implementation into advertising campaigns for luxury real estate targeting in Ahmedabad.
+- **Keywords**: 
+  1. "Luxury 4 BHK apartments in Ahmedabad"
+  2. "Ahmedabad luxury real estate"
+  3. "5 BHK homes for sale in Ahmedabad"
+  4. "Invest in luxury property Ahmedabad"
+  5. "Nehru Nagar real estate"
+  6. "High-end apartments Ahmedabad"
+  7. "Luxury housing options Ahmedabad"
+  8. "Ahmedabad real estate investment"
+  9. "4 BHK luxury flats Ahmedabad"
+  10. "Premium properties in Ahmedabad"
+- **Negative Keywords**: 
+  1. "cheap"
+  2. "budget"
+  3. "under 1 crore"
+  4. "affordable housing"
+  5. "low price property"
+- **In-Market Audiences**: Target individuals actively looking for luxury real estate or related purchase intents.
+- **Bidding Strategy**: Use "Maximize Conversions" to optimize for lead generation.
+```

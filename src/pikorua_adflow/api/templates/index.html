@@ -68,28 +68,6 @@
           <label class="label-caps text-outline block mb-1" for="standout_feature">What makes it special? <span class="text-outline-variant normal-case">(optional)</span></label>
           <input id="standout_feature" name="standout_feature" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. infinity pool on the 32nd floor"/>
         </div>
-        <div>
-          <label class="label-caps text-outline block mb-1" for="clientele_type">Who is it for?</label>
-          <select id="clientele_type" name="clientele_type" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0">
-            <optgroup label="Residential — end user">
-              <option value="luxury_bungalow">Luxury Bungalow / Villa — HNI business owner, owner-occupier (₹5 Cr+)</option>
-              <option value="trader_industrialist">Trader / Industrialist — Gujarati business community upgrade (₹5 Cr+)</option>
-              <option value="doctor_professional">Doctor / Healthcare — independent home buyer (₹3–8 Cr)</option>
-              <option value="premium_apartment">Premium Apartment — corporate / IT professional (₹1.5–4 Cr)</option>
-              <option value="it_professional">IT / Tech Professional — GIFT City / tech park buyer (₹1–3.5 Cr)</option>
-              <option value="affordable_luxury">Affordable Luxury — first premium home, young professional (₹1–2.5 Cr)</option>
-            </optgroup>
-            <optgroup label="Residential — investor / NRI">
-              <option value="hni_portfolio_investor">HNI Portfolio Investor — multi-property / yield-seeker (₹4 Cr+)</option>
-              <option value="nri_investment">NRI Investor — diaspora yield / portfolio buyer (₹2–6 Cr)</option>
-              <option value="nri_end_user">NRI End User — homeland / family home buyer (₹2–5 Cr)</option>
-            </optgroup>
-            <optgroup label="Commercial">
-              <option value="commercial_office">Commercial / Office — business asset buyer (₹2 Cr+)</option>
-            </optgroup>
-          </select>
-          <p class="text-xs text-outline mt-1">We auto-tune the audience to this buyer and only carry learnings between campaigns of the same type.</p>
-        </div>
         <label class="flex items-center gap-3 cursor-pointer text-sm">
           <input type="checkbox" id="sample_ready" name="sample_ready" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
           Sample apartment ready to view
@@ -330,7 +308,6 @@ form.addEventListener('submit', function (e) {
     landing_page_url: form.landing_page_url.value.trim() || 'https://pikorua.in/',
     daily_budget_inr: parseInt(form.daily_budget_inr.value, 10) || 1000,
     cta: form.cta.value, company_name: form.company_name.value.trim(),
-    clientele_type: form.clientele_type.value,
     sample_ready: form.sample_ready.checked,
     cheque_only: form.cheque_only.checked,
   };

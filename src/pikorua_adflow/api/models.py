@@ -29,9 +29,8 @@ class CampaignBrief(BaseModel):
     cta: str = Field("GET_QUOTE", description="Call to action: GET_QUOTE, CONTACT_US, LEARN_MORE")
     company_name: str = Field("", description="Optional company/page name to reference in copy. Blank = omit.")
     clientele_type: str = Field(
-        "premium_apartment",
-        description="Buyer-clientele bucket that gates targeting + cross-campaign learning: "
-        "luxury_bungalow | premium_apartment | nri_investment | commercial_office.",
+        "",
+        description="Derived from buyer_type if blank. hni | nri | hni_nri.",
     )
     cheque_only: bool = Field(False, description="If true, a '100% Cheque Payment' selling point is surfaced in images + copy.")
     target_adset_id: str = Field("", description="When set, deploy injects ads into this existing Meta adset instead of creating a new campaign.")
@@ -40,6 +39,16 @@ class CampaignBrief(BaseModel):
     verified_awards: bool = Field(False, description="If true, award claims in image prompts are allowed.")
     verified_certifications: bool = Field(False, description="If true, certification claims in image prompts are allowed.")
     verified_landmarks: bool = Field(False, description="If true, landmark distance claims in image prompts are allowed.")
+
+    def model_post_init(self, __context) -> None:
+        if not self.clientele_type:
+            bt = (self.buyer_type or "").strip().upper()
+            if bt == "NRI":
+                self.clientele_type = "nri"
+            elif bt == "HNI":
+                self.clientele_type = "hni"
+            else:
+                self.clientele_type = "hni_nri"
 
 
 class ApproveRequest(BaseModel):

@@ -1,18 +1,18 @@
 ```json
 {
-  "age_range": "40-55",
-  "net_worth": "₹20-50 Cr",
-  "primary_motivation": "Lifestyle and legacy, with emphasis on creating a family retreat in a premium location.",
+  "age_range": "35-50",
+  "net_worth": "₹15 Cr - ₹30 Cr",
+  "primary_motivation": "Lifestyle & Investment",
   "pain_points": [
-    "Concerns over the transparency and authenticity of property documents and valuations.",
-    "Fear of property value depreciation and market fluctuations, particularly as the Gujarat real estate market can be volatile."
+    "Lack of transparency in the property market",
+    "Concerns about property value appreciation over time"
   ],
   "preferred_channels": [
     "WhatsApp",
     "Email",
-    "Phone Calls"
+    "Instagram"
   ],
-  "decision_style": "Considered, typically involving a family committee where multiple family members evaluate options together before making a final decision.",
-  "trust_trigger": "A proven track record and testimonials from other luxury home buyers in Ahmedabad, particularly from influential or recognizable figures."
+  "decision_style": "Considered, often involving the family in discussions",
+  "trust_trigger": "A strong track record of successful transactions and satisfied clients"
 }
 ```

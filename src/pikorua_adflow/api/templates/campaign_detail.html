@@ -489,15 +489,12 @@ function renderRefImages(images) {
           // Mode selector
           '<div class="flex gap-1">' +
             '<button id="refmode-remix-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'remix\')" ' +
-              'class="flex-1 label-caps text-[9px] py-1 border rounded border-primary bg-primary text-on-primary transition-colors">Remix reference</button>' +
+              'class="flex-1 label-caps text-[9px] py-1 border rounded border-primary bg-primary text-on-primary transition-colors">Match ref layout</button>' +
             '<button id="refmode-new-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'new_scene\')" ' +
               'class="flex-1 label-caps text-[9px] py-1 border rounded border-outline text-on-surface-variant hover:border-primary hover:text-primary transition-colors">New scene, ref layout</button>' +
           '</div>' +
-          // Remix controls (visible by default)
-          '<div id="refcontrols-remix-' + esc(img.filename) + '">' +
-            '<label class="label-caps text-[9px] text-on-surface-variant">Preserve layout ←→ Adapt freely</label>' +
-            '<input type="range" id="refweight-' + esc(img.filename) + '" min="0" max="100" value="50" class="w-full accent-primary h-1"/>' +
-          '</div>' +
+          // No extra controls needed for remix mode now (layout + scene extracted automatically)
+          '<div id="refcontrols-remix-' + esc(img.filename) + '" class="hidden"></div>' +
           // New-scene controls (hidden by default)
           '<div id="refcontrols-new-' + esc(img.filename) + '" class="hidden">' +
             '<label class="label-caps text-[9px] text-on-surface-variant">Lifestyle scene</label>' +
@@ -573,7 +570,7 @@ function genRefVariant(filename, btn) {
   const origHtml = btn ? btn.innerHTML : '';
   const spin = '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>';
   if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Generating…'; }
-  const statusMsg = mode === 'new_scene' ? 'Extracting layout + generating scene…' : 'Sending to Ideogram…';
+  const statusMsg = mode === 'new_scene' ? 'Extracting layout + generating scene…' : 'Extracting layout + scene from reference…';
   if (statusEl) { statusEl.textContent = statusMsg; statusEl.classList.remove('hidden'); }
   const body = { reference_filename: filename, mode: mode, image_weight: imageWeight, speed: speed, scene_variant: sceneVariant };
   if (customPrompt) body.custom_prompt = customPrompt;
