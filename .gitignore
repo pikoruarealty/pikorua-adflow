@@ -50,3 +50,22 @@ CLIENT_REQUIREMENTS.md
 /test_*.py
 /*_prompts*.txt
 /tasklist.md
+/scratch_graph.py
+
+# Generated image + prompt output directories (all test renders, baked outputs)
+baked_out/
+test_images/
+test_output/
+
+# Archived old pipeline — not part of active codebase
+old_image_generation/
+
+# Root-level generated JSON data blobs (visual prompts, ad data dumps)
+/*_visual_prompts*.json
+/anamika_heights_*.json
+
+# Log files at repo root
+/*.log
+
+# Pytest / test cache
+.pytest_cache/

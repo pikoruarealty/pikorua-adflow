@@ -1,0 +1,30 @@
+# Type pairings — one home for typography (§9). Max 3 styles per image.
+# `file` is relative to libraries/fonts/. `variation` is the named instance for
+# variable fonts (ignored for static fonts). fonts.py resolves these, falling back
+# to a comparable bundled/system font if a file is missing.
+# All fonts are SIL OFL 1.1 (Google Fonts). The LLM selects type_pairing_id.
+
+type_pairings:
+  - id: playfair_montserrat
+    tone: refined
+    display: {file: PlayfairDisplay-Black.ttf, variation: Black}
+    body:    {file: Montserrat-Medium.ttf, variation: SemiBold}
+    accent:  {file: Montserrat-Medium.ttf, variation: Medium}
+
+  - id: cormorant_inter
+    tone: refined
+    display: {file: Cormorant.ttf, variation: Bold}
+    body:    {file: Inter.ttf, variation: SemiBold}
+    accent:  {file: Cormorant.ttf, variation: Medium}
+
+  - id: abril_source
+    tone: editorial
+    display: {file: AbrilFatface.ttf, variation: null}
+    body:    {file: SourceSans.ttf, variation: SemiBold}
+    accent:  {file: SourceSans.ttf, variation: Regular}
+
+  - id: dm_serif_nunito
+    tone: aspirational
+    display: {file: DMSerifDisplay.ttf, variation: null}
+    body:    {file: NunitoSans.ttf, variation: SemiBold}
+    accent:  {file: NunitoSans.ttf, variation: Light}

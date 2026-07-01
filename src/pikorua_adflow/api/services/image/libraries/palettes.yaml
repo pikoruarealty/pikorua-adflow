@@ -1,0 +1,129 @@
+# Colour palettes — pure hex data, one home for colour (§3).
+# Luxury is not a formula. Deep emerald, burgundy, steel blue, copper are all
+# legitimate luxury registers — do NOT default to dark-brown + gold + white.
+# Every CTA is either accent-filled (dark text on it) or deep-filled (light text) —
+# never a pale outline pill. BatchDedup guarantees no two ads share a palette.
+
+palettes:
+  - id: charcoal_gold
+    locality_color: "#C9A84C"
+    headline_color: "#F5F0E8"
+    body_color: "#D4CFC6"
+    eyebrow_color: "#C9A84C"
+    price_bg: "#1A1A1A"
+    price_text: "#C9A84C"
+    price_border: "#C9A84C"
+    cta_bg: "#C9A84C"
+    cta_text: "#1A1A1A"
+    scrim_color: "#1A1A1A"
+    scrim_opacity: 0.55
+
+  - id: navy_cream
+    locality_color: "#F5F0E8"
+    headline_color: "#F5F0E8"
+    body_color: "#C8C0B0"
+    eyebrow_color: "#C9A84C"
+    price_bg: "#0D1B2A"
+    price_text: "#F5F0E8"
+    price_border: "#C9A84C"
+    cta_bg: "#C9A84C"
+    cta_text: "#0D1B2A"
+    scrim_color: "#0D1B2A"
+    scrim_opacity: 0.60
+
+  - id: warm_espresso
+    locality_color: "#F0E8D0"
+    headline_color: "#F0E8D0"
+    body_color: "#D4C8A8"
+    eyebrow_color: "#C9A84C"
+    price_bg: "#1C1208"
+    price_text: "#F0E8D0"
+    price_border: "#C9A84C"
+    cta_bg: "#C9A84C"
+    cta_text: "#1C1208"
+    scrim_color: "#1C1208"
+    scrim_opacity: 0.58
+
+  - id: deep_slate
+    locality_color: "#F2EDE0"
+    headline_color: "#F2EDE0"
+    body_color: "#C8C2B4"
+    eyebrow_color: "#C9A84C"
+    price_bg: "#181C22"
+    price_text: "#F2EDE0"
+    price_border: "#C9A84C"
+    cta_bg: "#C9A84C"
+    cta_text: "#181C22"
+    scrim_color: "#181C22"
+    scrim_opacity: 0.60
+
+  - id: midnight_gold
+    locality_color: "#C9A84C"
+    headline_color: "#E8E2D4"
+    body_color: "#B0A890"
+    eyebrow_color: "#C9A84C"
+    price_bg: "#0A0A0E"
+    price_text: "#C9A84C"
+    price_border: "#C9A84C"
+    cta_bg: "#C9A84C"
+    cta_text: "#0A0A0E"
+    scrim_color: "#0A0A0E"
+    scrim_opacity: 0.65
+
+  - id: warm_ivory
+    locality_color: "#1C1208"
+    headline_color: "#1C1208"
+    body_color: "#3A2E1A"
+    eyebrow_color: "#8C6A2A"
+    price_bg: "#1C1208"
+    price_text: "#F5EDD8"
+    price_border: "#C9A84C"
+    cta_bg: "#1C1208"
+    cta_text: "#F5EDD8"
+    scrim_color: "#F5EDD8"
+    scrim_opacity: 0.92
+
+  # Deep emerald with warm cream text and burnished bronze (not gold) accent.
+  # Evokes private members' clubs, Aman properties, understated old-money green.
+  - id: emerald_bronze
+    locality_color: "#F2EBD4"
+    headline_color: "#F2EBD4"
+    body_color: "#C8C0A0"
+    eyebrow_color: "#B87333"
+    price_bg: "#1A2F1E"
+    price_text: "#F2EBD4"
+    price_border: "#B87333"
+    cta_bg: "#B87333"
+    cta_text: "#1A2F1E"
+    scrim_color: "#1A2F1E"
+    scrim_opacity: 0.65
+
+  # Deep burgundy/wine with champagne text and cool silver accent.
+  # Heritage luxury — Christie's, old-money estate, private club register.
+  - id: burgundy_silver
+    locality_color: "#EDE8DC"
+    headline_color: "#EDE8DC"
+    body_color: "#C0B8A8"
+    eyebrow_color: "#A8A8C0"
+    price_bg: "#2A1518"
+    price_text: "#EDE8DC"
+    price_border: "#A8A8C0"
+    cta_bg: "#EDE8DC"
+    cta_text: "#2A1518"
+    scrim_color: "#2A1518"
+    scrim_opacity: 0.68
+
+  # Deep steel blue with warm ivory and rose-copper accent.
+  # Contemporary luxury — boutique hotel, architect-designed living.
+  - id: steel_rose
+    locality_color: "#F0EBDF"
+    headline_color: "#F0EBDF"
+    body_color: "#C4BEB2"
+    eyebrow_color: "#C4857A"
+    price_bg: "#1E2430"
+    price_text: "#F0EBDF"
+    price_border: "#C4857A"
+    cta_bg: "#C4857A"
+    cta_text: "#1E2430"
+    scrim_color: "#1E2430"
+    scrim_opacity: 0.62

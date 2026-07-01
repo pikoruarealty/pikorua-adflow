@@ -1,0 +1,317 @@
+# Design grammar — the *creative* layer for BAKED mode (§6b).
+#
+# This is NOT a set of fixed layout strings. It is the vocabulary the art_director LLM
+# draws on to *design its own* ad composition each call: a brand essence, the kind of
+# scene that reads as luxury, skeleton archetypes, an info-band menu, a sophisticated
+# typography system, and the craft rules distilled from (a) the old pipeline's hard-won
+# typeface block, (b) an 18-ad corpus, and (c) a set of best-in-class reference ads
+# (Addela, Monarch, Vertex Florenza, Vastrapur, Prakrit).
+#
+# The LLM picks ONE skeleton, then writes fresh composition prose. BatchDedup guarantees
+# distinct skeletons + palettes across the five creatives.
+
+# ── Who this ad is for (Pikorua brand_voice.md) ───────────────────────────────
+# Inject into every prompt so the whole ad carries the brand register.
+brand_essence: >
+  A luxury real-estate advisory for HNI/NRI buyers (net worth ₹5 Cr+). The feeling is
+  QUIET CONFIDENCE — the buyer has already arrived; this was curated for someone exactly
+  like them. Certainty, not excitement; restraint, not volume. The ad must feel
+  understated, refined, considered and expensive — never loud, never a spec-shouting
+  developer flyer, never an exclamation. Think Sotheby's, not a billboard.
+  IMPORTANT: Never render the advisory/company name as visible text — brand identity
+  comes entirely from visual aesthetic and typographic register, not a name stamp.
+  Leave space for the brand mark only when explicitly instructed (logo_zone field).
+
+# ── What makes the PHOTOGRAPH read as luxury (the #1 lever) ────────────────────
+# A bare, flatly-lit room reads as a rental, not a ₹3 Cr home. Luxury comes from
+# considered, cinematic light + rich styling — NOT from being dark. Bright, luminous,
+# airy daylight spaces are just as luxurious as warm low-key evening ones; VARY across
+# the batch. The art_director must honour this in every scene_prose.
+scene_direction:
+  lighting: >
+    Specify the exact camera system: body (e.g. Sony A7R V, Canon R5, Hasselblad X2D),
+    lens (50mm f/1.8, 35mm f/2.0), tripod height (e.g. 110cm), and shot time (e.g.
+    7:45pm, golden hour, blue-hour dusk). Describe the lighting in colour temperature
+    terms: warm amber pendant at 2700K, cool blue dusk at 5500K creating a warm-cool
+    tension — or a single directional source raking across materials. The point is
+    QUALITY of light (direction, softness, glow, highlight on materials), not darkness.
+    Vary tone across the batch: luminous midday (airy luxury), soft golden hour, warm
+    dusk / blue hour, or warm low-key evening.
+  styling: >
+    The space is fully furnished and styled to a high standard — designer furniture,
+    layered textiles (velvet, linen, wool rugs), book-matched marble or stone, brass /
+    bronze metalwork, walnut or fluted timber, sculptural pendant lighting, framed art,
+    fresh flowers, considered objects. NEVER empty, bare, sparse, or under-construction.
+    Name specific materials: e.g. smoked walnut table, fluted brass legs, Black Galaxy
+    granite, Calacatta marble. The more specific the material language, the richer the
+    photographic result.
+  figure: >
+    LIFESTYLE SCENES REQUIRE PEOPLE. Include 2-4 people in a CANDID MOMENT — mid-activity,
+    gestures mid-sentence, never posed or looking at the camera. State exact count,
+    dress code, and activity: e.g. 'two couples seated at a 10-seat dining table in
+    mid-conversation, dressed in silk blazers and drape tops.' Clothing: tailored suits,
+    slim-fit blazers, silk or linen resort-wear, elegant dresses ONLY — no traditional
+    Indian clothing. People read as OWNERS in their own home — at ease, proprietary in
+    posture, unhurried. People do NOT displace text — all text elements appear at full
+    size regardless of figures in frame; compose the scene so negative space hosts the
+    text stack.
+  mood: "Serene, expensive, lived-in, private. The 'already arrived' feeling — bright or warm, always refined."
+
+# Preferred default — ornate vertical rail; only fall to dark_triptych for wide-format scenes.
+default_skeleton: editorial_rail
+
+skeletons:
+  - id: dark_triptych
+    name: "Header band · photo · footer band (HORIZONTAL zones, NOT a side rail)"
+    feel: "The classic, confident property ad. Premium and unmistakably an ad."
+    design: >
+      THREE HORIZONTAL BANDS stacked top-to-bottom across the full frame width — this is
+      NOT a side rail, NOT a vertical column. The layout axis is HORIZONTAL.
+      TOP HEADER BAND (solid dark or rich colour, full-width, top ~20-28%): locality name
+      set VERY LARGE filling the band width + city name in small tracked caps immediately
+      beneath + config/BHK tag in a gold-bordered pill immediately below city + a thin
+      drawn gold hairline + one centred ornament. The header holds the full identity
+      lockup: locality, city, BHK — all three together here.
+      CENTRE BAND: the cinematic PHOTOGRAPH filling the full width. Inside the photo zone,
+      the CONVERSION CLUSTER (price in bordered container + CTA solid badge + tagline
+      italic) is placed as a floating group in a clean photo area — grouped together,
+      never scattered.
+      BOTTOM FOOTER BAND (solid or rich colour, full-width, bottom ~18-24%): ONLY the
+      brief's spec strip items — the actual USP labels from the brief (e.g. size in sq ft,
+      prelaunch status). NEVER repeat locality, BHK config, or price here — those already
+      appear above. The footer is a refined spec row with thin hairline column dividers and
+      a drawn ornament at the top edge of the band.
+    discipline: "HORIZONTAL layout only — top and bottom bands must each span the FULL WIDTH of the frame. Never drift to a vertical side rail. Both bands must feel designed with hairlines, ornaments and deliberate spacing — not flat colour bars. HEADER BAND holds the complete identity lockup: locality (very large) + city (tracked small-caps) + config/BHK pill (BOLD, large, gold-bordered — clearly readable in the header, NOT in the photo zone) + one thin drawn ornament/hairline. The config/BHK tag belongs in the header — NEVER float it into the photo zone. Price and CTA group together in the PHOTO ZONE as the conversion cluster. Footer band holds ONLY the brief's spec strip items (size, prelaunch status, etc.) — NEVER repeat locality, BHK, or price in the footer; those already appear above. Each element renders EXACTLY ONCE across the entire ad — no duplication."
+
+  - id: photo_first_floating
+    name: "Full-bleed photo, text grouped in one calm zone"
+    feel: "Editorial, restrained, gallery-grade — the most 'expensive' look (see Addela, Vertex)."
+    design: >
+      The photograph fills the frame. ALL text is GROUPED into ONE calm, low-detail
+      region (an open wall, a soft floor plane, sky, or a shadow side) as a single tight
+      stack — never scattered across the frame. A soft gradient (deepened OR lightened to
+      contrast the text) keeps type legible. Locality lockup leads; the headline sits
+      beneath; price and CTA form a refined cluster directly below. A slim footer strip
+      can carry the USPs.
+    discipline: "Use only when the scene has ONE calm zone large enough for the whole text stack with clear contrast. If text would scatter, choose dark_triptych instead."
+
+  - id: editorial_rail
+    name: "Vertical rail beside the photo (Addela-style)"
+    feel: "Dramatic, couture. A vertical text column on a contrasting scrim against a cinematic photo."
+    design: >
+      A vertical panel (~35-42% on one side) holds a FULLY COMPOSED text stack from
+      top to bottom. The panel must have DEPTH — render it as: (a) a GRADIENT (opaque
+      rich colour at the outer edge fading to semi-transparent toward the photo, so the
+      photo bleeds softly through), OR (b) a GLASSMORPHISM/FROSTED surface (~55% opacity,
+      photo subtly visible through it, a soft inner-edge highlight), OR (c) a RICH
+      TEXTURED SOLID with visible micro-grain — never flat paint. The depth treatment is
+      the luxury signal. Architecturally designed with generous LEADING as the primary
+      separator; use at most TWO drawn hairline rules in the entire rail — never a line
+      between every element.
+
+      Stack from top: (1) small botanical or Art Deco corner ornament at the top of the
+      rail; (2) locality name set VERY LARGE — for a long locality name (>8 characters)
+      SPLIT it across two lines at its natural syllable or word break (e.g. NEHRU /
+      NAGAR, PRAHLA / DPUR) — same weight and tracking, both lines filling the rail
+      width, displayed at dramatically larger scale than a single-line rendition; (3) city
+      name in tracked small-caps immediately beneath; (4) config tag — the SECOND-most-
+      prominent line on the ad, BOLD and immediately readable (heavy/black display serif
+      or bold tracked sans), optionally in a thin gold-bordered pill; sized to read
+      effortlessly at arm's length, roughly co-equal with the price in weight — NEVER a
+      thin caption; (5) headline in one of these creative treatments —
+      CHOOSE ONE: (a) first clause in cream/ivory, second clause (after a period or dash)
+      in gold accent serif italic; or (b) one key word in an elegant script/cursive serif
+      while the rest is roman; — NEVER plain single-weight same-colour; (6) sparse USP
+      lines in small wide-tracked caps; (7) one hairline rule above the conversion cluster;
+      (8) price box (LARGE numeral in display serif, 'onwards' at ⅓ size, gold hairline
+      border); (9) CTA badge (solid gold-filled, dark text). The cinematic photo fills the
+      rest of the frame.
+    discipline: "CRITICAL: The locality lockup (locality name + config tag) MUST be the FIRST elements inside the rail, positioned at the top — NEVER placed in the photo zone. The photo zone contains ONLY the photograph; all text lives inside the rail. The rail must feel FULL and spaciously luxurious — wide leading between elements, NO mechanical per-element horizontal lines. At most 2 thin drawn hairline rules in the whole rail. The locality name must dominate the rail — split long names across 2 lines. The rail is a solid/gradient scrim with strong contrast against the photo — dark rail on the side opposite the photo's brightest light source."
+
+  - id: full_bleed_vignette
+    name: "Full-bleed photo, text in natural vignette zones (no separate panel)"
+    feel: "The most editorial, magazine-pure look — the photo IS the ad; text exists only in the darkened edge zones."
+    design: >
+      The photograph fills 100% of the frame — edge to edge, no panel, no rail, no band.
+      The scene is lit and composed so the top 25-30% naturally darkens (a deep shadow
+      ceiling, a rich wall texture, or a directional gradient burn applied to that zone)
+      and the bottom 20-25% naturally darkens (floor shadow, table edge, soft burn).
+      Text lives only in these natural dark vignette zones — never floated over the bright
+      centre of the photo. TOP ZONE: locality name split across 2 lines in very large
+      display serif, cream/ivory, filling the width of the top vignette; city name in
+      small tracked caps immediately beneath. BOTTOM ZONE: price in a bordered container,
+      CTA badge solid-filled, grouped as a tight pair; spec strip items as a slim row at
+      the very base. The headline floats in a slightly lighter sub-zone between the top
+      and centre photo, styled in italic gold or a contrasting weight. A thin drawn gold
+      hairline rule (1px) may frame the inner edge of each vignette zone as a finishing
+      touch. The config tag sits directly below the locality/city lockup in BLACK weight
+      display serif, wide-tracked, inside the top vignette.
+    discipline: "NO separate text panel, no rail, no band. The photo is the entire frame. Both vignette zones must genuinely contrast for readability — apply a directional gradient burn to the photo where needed. All text is horizontal and upright. The top vignette is the HERO zone: locality+city+config there, at maximum scale. NEVER scatter text across the bright centre of the photo."
+
+  - id: corner_anchor_pyramid
+    name: "Full-bleed photo, entire text stack anchored to one corner"
+    feel: "Asymmetric tension — the radical negative space IS the luxury signal; the text stack is a confident tight cascade."
+    design: >
+      The photograph fills 100% of the frame. ALL text is grouped into a tight pyramid
+      stack anchored to the LOWER-LEFT corner (or LOWER-RIGHT — pick whichever side has
+      the calmer photo zone). The stack reads top-to-bottom from the anchor corner:
+      (1) locality name very large, split across 2 lines at the natural word break, in
+      display serif cream/ivory; (2) city name in tracked small-caps; (3) config tag in
+      BLACK weight display serif, wide-tracked, at 65% of locality cap-height; (4) a
+      single thin drawn gold hairline rule; (5) tagline in gold italic, small, one or two
+      lines; (6) price in a bordered framed container; (7) CTA solid-filled badge grouped
+      with the price. The rest of the photo (typically the upper ~60-65% and opposite
+      side) is completely unobstructed — the cinematic scene breathes freely. A semi-
+      transparent GLASSMORPHISM ground (frosted ~50% opacity, subtle inner highlight,
+      photo visible through it) underpins the text stack where needed for legibility
+      without blocking the photo entirely. A PRICE CORNER STAMP (a bold rotated square
+      badge with the price, in strong contrast) may be placed at the opposite top corner
+      as a second visual anchor, balancing the composition.
+    discipline: "The opposite two-thirds of the photo must be COMPLETELY clean — no text, no ornament. The tight corner stack is the entire typography zone. The glassmorphism ground must never be a hard-edged solid panel — it is a soft frosted surface the photo shows through. The stack direction is always vertical, anchored to ONE corner only."
+
+  - id: split_canvas
+    name: "Left half pure photo / right half pure editorial page"
+    feel: "Magazine spread — not a photo with captions, but two equally designed halves that together form the advertisement."
+    design: >
+      A strict vertical split: the LEFT 50% is occupied entirely by the cinematic
+      photograph bleeding to the left, top, and bottom edges. The RIGHT 50% is a FULLY
+      DESIGNED EDITORIAL PAGE — a deep rich solid (charcoal, espresso, deep navy, or
+      forest green) with its own considered composition from top to bottom. The vertical
+      edge where photo meets editorial page is a single thin drawn gold hairline rule
+      (1px) — this is the only divider between halves. The editorial page is NOT a rail
+      or sidebar — it is a complete typographic composition: locality name very large at
+      the top (split across 2 lines, filling ~80% of the half-width), city name in small
+      tracked caps below, a thin drawn gold hairline rule, config tag in BLACK weight
+      display serif at 65% of locality cap-height, a botanical leaf ornament (drawn), the
+      headline in italic gold at 35% of locality size, generous white space, then the
+      price in a bordered gold-frame container filling the container width, CTA solid-
+      filled badge beside or below price. Spec strip items in a slim row at the base of
+      the editorial page, full-width, with hairline dividers between columns.
+    discipline: "The split is exactly 50/50 — never a narrow rail (that is editorial_rail). The editorial page right half is a FULL COMPOSITION — rich, layered, intentionally designed, not a list of specs on a dark background. The photo left half bleeds to all three edges (left, top, bottom). The dividing hairline is the only hard edge in the composition."
+
+  - id: framing_device
+    name: "Decorative frame / arch around the photo"
+    feel: "Ornamental, heritage-luxury. Use sparingly."
+    design: >
+      A thin metallic (gold/bronze) inset border or arch/portal frames the cinematic photo
+      within margin zones. NEVER solid flat colour margins — they read cheap and dated.
+      Instead use one of: (a) GRADIENT margins: the margin fades from deep at the edge
+      to near-transparent at the photo border, so the photo bleeds softly into it;
+      (b) GLASSMORPHISM strip: a frosted-glass band — semi-transparent (~55% opacity),
+      subtle inner-highlight edge, photo visible through it — the text sits sharply above
+      this frosted layer; (c) DARK GRADIENT SCRIM: the photo itself darkens/vignettes
+      toward the frame edge, creating natural contrast for text without any solid panel.
+      The top zone carries the locality lockup + config; bottom carries the conversion
+      cluster. Side margins may carry botanical motifs or a short decorative word in
+      very small tracked caps (never the locality or city). All text is horizontal and
+      upright, on a clearly contrasting surface.
+    discipline: "Frame is delicate (hairline weight). Margins must NEVER be a solid flat colour slab — gradient, glassmorphism, or photo vignette only. Text must sit on clearly contrasting ground even through a glassmorphism surface."
+
+  - id: lower_text_panel
+    name: "Photo top, full rich text panel bottom"
+    feel: "Impactful and magazine-ready. Photo is cinematic statement; text panel is a fully composed luxury block beneath it."
+    design: >
+      The cinematic photograph fills the upper 55-62% of the frame edge-to-edge — no
+      text overlays on the photo at all. The photo fades softly into the panel via a
+      gradient blend (bottom 10% of photo zone dissolves into the panel tone) — no
+      hard cut. The panel is DEEP AND DARK: deep espresso near-black, charcoal-walnut,
+      dark mahogany, or midnight navy — always clearly darker than mid-value. Never a
+      bright amber, orange, or warm mid-tone panel: the darkness is what makes cream
+      and gold text read at luxury-print contrast. The panel has a SUBTLE GRAIN TEXTURE
+      or micro-linen pattern — never flat solid paint. A thin drawn gold hairline rule
+      with ONE restrained ornament mark (a pair of parallel drawn lines, a small
+      botanical leaf sprig, or a single serpentine wave — drawn shapes only, no typed
+      characters) marks the photo-panel boundary.
+      PANEL LAYOUT — each tier is a SEPARATE freestanding element with generous
+      breathing space (20-28px leading) between every group. NEVER merge multiple
+      elements into one shared card or container:
+      (1) LOCALITY name — VERY LARGE display serif, wide-tracked, filling ~80% of panel
+      width, centred or left-aligned;
+      (2) city name — tracked small-caps, immediately beneath locality, clearly readable;
+      (3) config/BHK tag — in its own gold-bordered pill at 65% of locality cap-height,
+      generously padded inside the pill, BOLD weight, clearly separated from city above
+      with breathing room;
+      (4) PRICE BOX — a standalone gold-hairline-bordered rectangle containing ONLY the
+      price numeral (LARGE, the biggest character in the lower half) + ₹ symbol +
+      'ONWARDS' label at ⅓ size. This box contains the price and NOTHING ELSE;
+      (5) CTA BADGE — a solid-filled button sitting BESIDE the price box in the SAME
+      horizontal row, to the right of it. The CTA badge is a SEPARATE element from the
+      price box — never merged into a shared container with price or tagline;
+      (6) TAGLINE — standalone italic serif, breathing on the panel background directly
+      below the price+CTA row. Generous space above and below it. NOT inside any box or
+      card. Single line preferred if it fits — larger and bolder. Only split if too long;
+      (7) ONE drawn ornament mark (botanical sprig, parallel hairlines, or serpentine
+      wave — drawn shape only) placed HERE as a decorative divider between the tagline
+      and the spec strip. This is the ONLY place an ornament appears in the panel —
+      NEVER between locality/city/config, and NEVER between config and the price row;
+      (8) SPEC STRIP — a thin hairline rule, then the brief's spec items (icons + labels,
+      full-width), at the very bottom of the panel.
+      A thin gold inner border inset 5px from the full image edge is mandatory.
+    discipline: "DARK PANEL IS MANDATORY — deep espresso/charcoal/mahogany, never bright amber or mid-tone. GRADIENT DISSOLVE IS MANDATORY — the photo and panel must merge via a soft gradient; there must be ZERO hard horizontal edge or cut line between them. Each panel element breathes separately with generous leading — no merged cards. The price box contains ONLY price. The CTA badge is BESIDE the price box, not below it and not sharing its container. The tagline sits freely on the panel below the price+CTA row — single line preferred if it fits. ORNAMENT POSITION: the single drawn ornament appears ONLY between the tagline and the spec strip — never above the config pill, never between config and price. Diamond is not valid here; use botanical sprig, parallel hairlines, or serpentine wave only. The panel is a fully designed luxury document, not a stacked list of widgets."
+
+# Info-band / footer layout menu (the bottom conversion zone). Vary across the batch.
+info_band_styles:
+  compact_spec_row: "One narrow refined spec row at the bottom edge."
+  strip_three_col: "Three equal columns separated by thin gold hairlines."
+  icon_grid_strip: "Three columns, a line-icon stacked above each label, hairline dividers."
+  asymmetric_band: "Config set LARGE on the left, stacked USPs on the right."
+  single_pill: "One elegant rounded outline container holding config · price · location, gold hairline (Vertex-style)."
+
+# Reusable ad elements (a menu, not a mandate).
+elements:
+  locality_lockup: "The hero. Large refined display serif; city smaller beneath, often between two short gold rule lines."
+  config_tag: "Config + property type (e.g. '4 & 5 BHK APARTMENTS') in a small bordered/ruled tag — horizontal, never rotated."
+  price_box: "Price in a refined thin-bordered container or framed tag with a gold hairline; 'STARTING AT'/'ONWARDS' small caps. Not a flat UI button."
+  cta_badge: "A refined framed badge / outline pill (gold hairline, optional inner rule) — elegant, never a solid flat app-style button."
+  info_strip: "2-3 column footer with small line-icons and hairline dividers."
+  ornament: "All ornaments are DRAWN visual elements — never typed character strings. Options: a thin drawn gold hairline rule, a small diamond motif, a botanical leaf sprig in hairline gold, a single serpentine wave flourish. One accent per zone."
+
+# Typography — harvested from the old pipeline + reference ads. System fonts are
+# unacceptable; this is what separates a luxury ad from a cheap flyer.
+typography:
+  - "ZERO system/UI fonts anywhere in the ad. No Arial, Calibri, Helvetica, Roboto, or any rounded web-default font. Every element must use a clearly luxury-register typeface: refined display serif (Cormorant/Playfair Display/Didot-style high contrast), geometric luxury sans (Futura Light, Optima), or elegant script accent. If any text looks like a Word document or a product label, the wrong font has been used."
+  - "Locality / hero headline word: refined HIGH-CONTRAST display serif (Didot or Cormorant style — the thin hairline strokes are what signal luxury), generously LETTER-SPACED (wide tracking) — luxury serifs breathe; cramped tracking reads cheap. In a vertical rail, split long locality names across 2 lines to achieve a dramatically larger scale — both lines same width-filling size, same weight."
+  - "MIXED SCALE creates the luxury feel: one hero word large, supporting words much smaller on the same line/stack. Avoid uniform sizing across tiers."
+  - "Headline / tagline treatment — always styled, never plain. CHOOSE ONE: (a) two-clause split across 2 lines: first clause on line 1 in cream/ivory roman weight, second clause (after the natural period or dash break) on line 2 in gold accent italic — generous leading between them, never cramped; (b) single accent-word: one key word set in an elegant italic script while the rest is roman — eye goes straight to the accent; (c) size-cut: first clause at full size, second clause at 55-60% as a subordinate line beneath. When the headline has a natural period or dash break, ALWAYS split it to 2 lines — a single cramped line is never acceptable. NEVER plain single-weight same-colour same-size: that reads as a Word document."
+  - "Price numeral: display serif ONLY — large, high-contrast, generous tracking. The ₹ symbol and Cr label may be lighter weight or smaller-tracked sans to create a hierarchy within the price string itself. NEVER a rounded geometric sans for the price — it reads as a UI element, not a luxury property anchor."
+  - "Config (e.g. '4 & 5 BHK APARTMENTS') is a CO-PRIMARY buying signal — set it in the HEAVY or BLACK weight of the display serif family (Cormorant Black / Playfair Display Black / Didot Heavy), wide-tracked. It should feel bold and immediate, not the same weight as body text."
+  - "TEXT ZONE PURITY — never place text over a visually busy or structurally complex background (window frames, column grids, balustrade rails, architectural pattern repeats). Such backgrounds destroy readability. When the photo has a clean zone (open wall, sky, soft floor plane, blur depth-of-field background) compose text there, OR add a gradient scrim / glassmorphism layer to suppress the busy detail behind the text. A frosted glass panel works well: choose a zone, apply a semi-transparent frosted surface, and the text reads crisply over it regardless of what the photo does."
+  - "Footer spec text / labels: Bold geometric sans, uppercase, generously tracked, optically heavy enough to read from several feet."
+  - "Ornamental dividers (thin gold rule with a centred diamond/botanical motif) separate TEXT GROUPS (not individual elements) — used SPARINGLY as a signature luxury cue, not as mechanical per-line rules."
+  - "Price and CTA are refined framed elements with gold hairlines — NEVER flat solid app-style buttons or pale lozenges."
+  - "NEVER: hard bevel, metallic 3D sheen, plastic gloss, video-game-title rendering. Text belongs in the scene, lit by it."
+
+# Distilled craft — applies to every skeleton.
+ad_craft:
+  # — Contrast (hard, non-negotiable) —
+  - "CONTRAST IS MANDATORY: every text element sits on a clearly contrasting ground. Light text on a dark scrim/zone, or dark text on a light band. NEVER light-on-light or tonal-on-tonal. If the surface doesn't contrast, add a dark gradient scrim, a solid band, or a framed backing behind the text."
+  # — One message (single tagline) —
+  - "ONE tagline only. Render a single headline line — never a headline AND a separate eyebrow/sub-tagline competing as two messages. Pick the strongest single line."
+  - "The headline must NOT restate the price, the locality, or the config — those already appear as their own elements. The headline adds emotion/positioning, not a repeated fact."
+  # — Hierarchy & prominence (quiet confidence, not loud) —
+  - "PRIMARY LOCKUP IS LOCALITY + CONFIG: The buyer's eye scans: (1) LOCATION — 'NEHRUNAGAR', (2) PRODUCT — '4 & 5 BHK APARTMENTS', (3) PRICE — '₹3 Cr', and only then (4) the tagline. Design must reflect this scan order. NEHRUNAGAR and 4 & 5 BHK APARTMENTS are a SINGLE LOCKUP — they must appear together at the top/leading position of the ad in the largest, most prominent treatment. The tagline is Tier 3 — it comes AFTER the property lockup and price, smaller and styled as an emotional caption, never the lead. An ad where the tagline appears more prominent than the locality is WRONG — this is the most common failure."
+  - "Price and CTA are the conversion pair — generous in size (prominent at a glance), high-contrast, and GROUPED together (not scattered to opposite corners). Prominence comes from scale + space + contrast, never from clutter or shouting."
+  - "The price and CTA must each contrast their OWN local background, overriding the palette if needed: on a dark zone use a light/gold-filled CTA (never a dark outline or dark pill on dark); on a light zone use a dark-filled or dark-bordered CTA. A solid filled badge reads stronger than a thin outline — the CTA should never disappear into its surface."
+  - "The LOCALITY NAME is the single largest text element in the composition — the hero at a glance. Set it larger than everything else, but NOT so large that the config below it is crushed: locality should be roughly 1.3–1.5× the config cap-height (a moderate step, not a chasm). If the locality is so huge the BHK line becomes a thin afterthought, the locality is TOO large — pull it back."
+  - "ABSOLUTE SIZE FLOOR (overrides every fraction rule): the config/BHK line and the price must each be large enough to read effortlessly at arm's length on a phone — a confident, bold, unmissable line, never a thin caption. If applying a percentage would make the BHK smaller than this floor, IGNORE the percentage and make it bigger. Readability of BHK and price is more important than any ratio to the locality. This is the single most common failure — err on the side of BHK being TOO big."
+  - "CONFIG/BHK TREATMENT: set '4 & 5 BHK APARTMENTS' (or equivalent) in a BOLD, high-contrast, immediately readable line — heavy/black display-serif OR bold tracked sans — optionally enclosed in a thin gold-bordered pill/tag (this pill treatment guarantees prominence and is strongly encouraged). It is the SECOND-most-prominent element after the locality, roughly co-equal with the price in visual weight. NEVER thin, NEVER a caption, NEVER the same size as the tagline."
+  - "TAGLINE FLOOR: the tagline is Tier 3 (smaller than locality, config, and price) but still comfortably legible — a real reading size, never a micro-caption squeezed to fit. Tier 1 locality > Tier 2 config ≈ price > Tier 3 tagline > spec strip. Each tier clearly readable; the STEPS between them are moderate, not extreme."
+  - "BHK configuration is a SCALE SIGNAL — the buyer scans for it before reading the headline. Set '4 & 5 BHK' (or equivalent) in display serif with wide generous tracking. In a rail or triptych header it belongs in the upper section, immediately beneath the locality lockup — NEVER buried below the tagline or after the USP stack."
+  - "The price numeral is the primary CONVERSION HOOK — it must read as a LARGE number. Fill its bordered container generously: price cap-height should be equal to or larger than the config tag. A small, timid price signals the wrong register for a ₹Cr property. Label such as 'onwards' or 'starting at', if used, is one-third the price size; the number itself is what the eye must catch first."
+  - "The CTA badge (PRIVATE PREVIEW, BY APPOINTMENT, etc.) must ALWAYS be a SOLID FILLED badge — filled with the strongest accent colour (gold, deep charcoal, navy, or warm dark), never a pale outline, never a washed-out or translucent pill, never an app-style grey or blue rounded rectangle. A pale outline pill on ANY background is forbidden. On a dark rail: gold-filled with dark text. On a light zone: dark charcoal-filled or deep navy-filled with light text. The fill makes it unmissable; an outline makes it ignorable."
+  - "Footer spec strip labels must be set at a size that reads effortlessly at a glance — generously sized bold geometric sans, uppercase, wide-tracked. The strip itself should have enough height (minimum ~12-15% of frame height) that the icons and labels breathe within it. A cramped, tiny footer strip reads as an afterthought; it should feel like a designed element."
+  - "INNER BORDER OPTION: A thin metallic (gold or silver, hairline weight, 1-2px) border inset 4–6px inside the full image frame adds premium print-finish quality and definition — the 'frame within a frame' cue that separates a luxury magazine ad from a developer hoarding. When used, draw it as one continuous rectangle at the image edge, visible behind all text zones. Use on at least one variant per batch for variety."
+  - "ORNAMENT RULE — ALL decorative dividers and ornaments MUST be described as DRAWN VISUAL SHAPES, never as typed character strings. Ideogram renders typed characters literally; describing them as characters causes =, -, ., _ and similar junk to appear in the image. NEVER use any character sequence as a divider. Approved ornament vocabulary (describe as drawn elements): (a) a pair of parallel drawn hairline rules, each 1px, spaced 4px apart; (b) a single small botanical leaf or branch sprig in drawn hairline gold; (c) a single thin drawn serpentine or wave flourish in gold hairline weight; (d) a single drawn thin gold horizontal rule (1px); (e) a small diamond shape motif — use at most ONCE per ad. VARY — the top divider and the bottom divider must be different drawn elements. Never repeat the same ornament twice in one ad."
+  - "CREATIVE FILL VOCABULARY — when a text zone has breathing room beyond the minimum hierarchy stack, fill it rather than leaving dead space. Options: (a) stacked USP lines in wide-tracked small-caps with hairline separators, (b) a short decorative word in very small tracked small-caps (never the locality or city already rendered), (c) a quiet tonal texture field as a scrim, (d) botanical or Art Deco corner ornament at ONE corner only (not all four), (e) a thin rule at zone edge. The key is variety — never repeat the same fill device from header to footer."
+  # — Secondary info placement (flexible — NOT a forced bottom strip) —
+  - "Secondary info (USPs, amenity tier, payment flag) is flexible in placement: it may live as elegant stacked lines separated by hairline+diamond dividers INSIDE the text zone (Addela-style), as a bottom strip, or as a single refined pill. Choose whatever fills the composition best. NEVER force a 3-icon bottom strip when it leaves the layout sparse or looks tacked-on. Secondary info never includes the locality, project name, or storey/tower counts. IMPORTANT — never name or invent specific USP strings in the composition: the exact spec items are fixed by the brief and listed in the 'Spec strip items' line below. In the composition prose, refer to them only as 'the spec items' or 'the three spec labels' — do not write out any actual label text."
+  # — Surfaces, colour, space —
+  - "Per-element colour: choose each text colour for the surface behind it (gold/cream on dark, deep charcoal on light). Small spec text needs absolute contrast — never gold-on-dark at small size."
+  - "NO SOLID FLAT PANELS anywhere except a slim spec strip at the very bottom. For any text zone that covers a significant area, use one of: (a) GRADIENT — fading from opaque at edge to transparent toward centre, so the photo shows through; (b) GLASSMORPHISM — a frosted-glass panel (semi-transparent ~50-60%, soft blur behind it, a subtle white/gold inner highlight edge, photo visible through it); (c) PHOTO VIGNETTE — darkening/lightening the photo itself toward the text zone via a directional gradient burn. Hard-edged solid colour blocks read as developer placards, not luxury ads. COLOR VARIETY — the batch must not be monotone dark-brown+gold+white in every ad. Use the full palette range including emerald, burgundy, steel blue. Vary the accent colour: bronze, silver, rose-copper are all viable luxury accents alongside gold."
+  - "Every zone must read as intentionally RESOLVED — either richly composed (layered hierarchy, supporting lines, hairline+ornament dividers, an accent) or a deliberately calm field that frames the photo. A large area that is neither (sparse, half-empty, unbalanced, or filled only with a lone line) reads as boring and unfinished. Negative space is a deliberate design choice, never leftover void; balance breathing room against rich detail so the whole composition feels considered."
+  # — Fidelity —
+  - "Build EXACTLY on the chosen skeleton — do not silently drift to a different structure."
+  - "Render each text string EXACTLY ONCE (no duplicated city/locality), spelled exactly as given; render the locality as one unbroken word."
+  - "No decorative or repeated text anywhere — do not echo a word (e.g. the city) as filler in margins, borders, frames, or corners. Every word is horizontal and upright; never set any text vertically, rotated, or running up a side."
+  - "Never render the project/property name anywhere. Show locality, city, specs only."
+  - "BRAND NAME IS FORBIDDEN: never render the advisory/company name ('PIKORUA', 'Pikorua', or any variant) as visible text anywhere in the ad. If a logo zone was specified, leave that zone clear and unprinted — it will receive the composited brand mark after generation. If no logo zone was specified, there is NO brand presence in the ad at all."

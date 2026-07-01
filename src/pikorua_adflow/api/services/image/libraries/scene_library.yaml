@@ -1,0 +1,67 @@
+# Scene families for the fixed anchors + the rotating pool (§2, §6).
+# variant_planner.py samples these. The art_director LLM turns a scene family name
+# into 120-140 words of photography-only scene_prose. No layout/text here.
+
+anchors:
+  private_retreat:
+    label: "Lifestyle — Private Retreat"
+    creative_brief: "Intimate luxury; quiet private moment; 2 to 4 people (a couple or small group of close friends) together in relaxed ease — sharing a drink, in low conversation, reclining together. 2 is the natural default; 3-4 only if the scene suits it. NO solitary activities. The energy is 'we arrived' calm, not hotel-guest polite. People are seated or reclining in their own space, never standing awkwardly at a railing or boundary. For bungalow/villa: prefer interior scenes with exterior visibility over pure outdoor/pool scenes unless brief requests it."
+    scene_families:
+      - living_room_glazed_garden_view      # interior with garden/sky visible through glass
+      - living_room_couple_evening           # warm interior, sofa/armchair moment
+      - covered_terrace_couple_evening       # sheltered outdoor, architecture as backdrop
+      - private_terrace_couple_drinks        # open terrace, kept as option
+      - window_seat_couple_dusk              # interior window alcove
+      - pool_edge_dusk_couple                # pool-side: only if brief mentions pool/outdoor water
+
+  social_family:
+    label: "Lifestyle — The Social Home"
+    creative_brief: "Warm aspiration; 2–4 people present (HARD MAX 4 — never 5 or more, even for dining/gathering scenes); naturally mixed genders (not all-female or all-male); social energy inside a beautiful home."
+    scene_families:
+      - kitchen_morning_couple
+      - living_room_family_evening
+      - rooftop_gathering
+      - dining_celebration
+      - lounge_conversation_dusk
+
+  interior_signature:
+    label: "Interior Signature Moment"
+    creative_brief: "Empty room; light quality + material are the hero; no people."
+    scene_families:
+      - diagonal_light_marble_floor
+      - dusk_city_through_glazing
+      - staircase_geometry
+      - lobby_vanishing_point
+      - double_height_living_empty
+
+  exterior:
+    label: "Exterior Establishing Shot"
+    opt_in: true
+    creative_brief: "Building facade in urban context; three-quarter angle; twilight preferred."
+    scene_families:
+      - blue_hour_facade
+      - street_level_approach
+      - aerial_oblique
+
+# Drawn from to grow toward 20-30 creatives across regenerations without repeating.
+rotating_pool:
+  - spa_interior_empty
+  - rooftop_terrace_couple
+  - double_height_living
+  - glass_balcony_morning
+  - kitchen_hero_detail
+  - library_reading_nook
+  - pool_interior_reflection
+  - corridor_vanishing_point
+  - panoramic_cityscape_window
+  - master_bedroom_sunrise
+  - walk_in_wardrobe_detail
+  - bathroom_marble_spa
+  - home_office_afternoon
+  - terrace_dinner_group
+  - entrance_foyer_arrival
+  - living_room_couple_evening
+  - dining_couple_evening
+  - balcony_garden_family
+  - lounge_material_macro
+  - sky_deck_panorama

@@ -1,0 +1,81 @@
+# Layout templates — zone boxes (% of image dims) + BAKED-mode descriptions.
+# Stage 6a (compositor.py, legacy RENDER mode) reads `zones`. BAKED mode no longer uses
+# these layouts: the art_director LLM authors the ad composition from design_grammar.yaml.
+# Each zone: {x, y, w, h, align}. All values are fractions of image width/height.
+# `null` means the element is not rendered for this layout.
+# The LLM (art_director) selects layout_id from this list; BatchDedup prevents repetition.
+
+layouts:
+  - id: top_band
+    description: "Narrow band across the top third; scene occupies bottom two thirds."
+    zones:
+      locality:    {x: 0.05, y: 0.04, w: 0.90, h: 0.10, align: left}
+      city:        {x: 0.05, y: 0.145, w: 0.50, h: 0.04, align: left}
+      headline:    {x: 0.05, y: 0.19, w: 0.70, h: 0.06, align: left}
+      config:      {x: 0.05, y: 0.255, w: 0.50, h: 0.05, align: left}
+      price:       {x: 0.70, y: 0.04, w: 0.25, h: 0.10, align: right}
+      cta_badge:   {x: 0.72, y: 0.85, w: 0.23, h: 0.08, align: right}
+      footer:      {x: 0.05, y: 0.92, w: 0.90, h: 0.06, align: left}
+
+  - id: lower_panel
+    description: "Full-bleed scene above; text in a graded dark panel at the bottom third."
+    scrim: {x: 0.0, y: 0.62, w: 1.0, h: 0.38}
+    zones:
+      eyebrow:     {x: 0.05, y: 0.635, w: 0.60, h: 0.035, align: left}
+      locality:    {x: 0.05, y: 0.675, w: 0.62, h: 0.10, align: left}
+      city:        {x: 0.05, y: 0.775, w: 0.40, h: 0.035, align: left}
+      price:       {x: 0.68, y: 0.675, w: 0.27, h: 0.10, align: right}
+      headline:    {x: 0.05, y: 0.82, w: 0.62, h: 0.05, align: left}
+      config:      {x: 0.68, y: 0.79, w: 0.27, h: 0.045, align: right}
+      cta_badge:   {x: 0.68, y: 0.86, w: 0.27, h: 0.06, align: right}
+      footer:      {x: 0.05, y: 0.93, w: 0.58, h: 0.045, align: left}
+
+  - id: full_bleed_gradient
+    description: "Scene fills frame; text floats on a radial dark-to-transparent vignette at lower left."
+    scrim: {x: 0.0, y: 0.55, w: 0.72, h: 0.45, shape: gradient_corner}
+    zones:
+      eyebrow:     {x: 0.04, y: 0.565, w: 0.55, h: 0.035, align: left}
+      locality:    {x: 0.04, y: 0.60, w: 0.60, h: 0.12, align: left}
+      city:        {x: 0.04, y: 0.72, w: 0.40, h: 0.035, align: left}
+      headline:    {x: 0.04, y: 0.765, w: 0.55, h: 0.05, align: left}
+      config:      {x: 0.04, y: 0.815, w: 0.45, h: 0.045, align: left}
+      price:       {x: 0.04, y: 0.86, w: 0.40, h: 0.07, align: left}
+      cta_badge:   {x: 0.50, y: 0.86, w: 0.30, h: 0.065, align: left}
+      footer:      null
+
+  - id: side_rail
+    description: "Narrow vertical rail on the right edge; full scene on left."
+    scrim: {x: 0.70, y: 0.0, w: 0.30, h: 1.0}
+    zones:
+      locality:    {x: 0.72, y: 0.06, w: 0.26, h: 0.16, align: center}
+      city:        {x: 0.72, y: 0.225, w: 0.26, h: 0.035, align: center}
+      price:       {x: 0.72, y: 0.30, w: 0.26, h: 0.10, align: center}
+      config:      {x: 0.72, y: 0.42, w: 0.26, h: 0.05, align: center}
+      headline:    {x: 0.72, y: 0.49, w: 0.26, h: 0.22, align: center}
+      cta_badge:   {x: 0.72, y: 0.80, w: 0.26, h: 0.07, align: center}
+      footer:      {x: 0.72, y: 0.90, w: 0.26, h: 0.08, align: center}
+
+  - id: framed_border
+    description: "Thin decorative border inset; text clusters in the upper and lower border bands."
+    border: {inset: 0.035, color_role: locality_color, width: 0.004}
+    zones:
+      locality:    {x: 0.06, y: 0.06, w: 0.62, h: 0.09, align: left}
+      city:        {x: 0.06, y: 0.155, w: 0.45, h: 0.035, align: left}
+      price:       {x: 0.70, y: 0.06, w: 0.24, h: 0.09, align: right}
+      config:      {x: 0.70, y: 0.155, w: 0.24, h: 0.04, align: right}
+      headline:    {x: 0.06, y: 0.80, w: 0.62, h: 0.06, align: left}
+      cta_badge:   {x: 0.70, y: 0.80, w: 0.24, h: 0.07, align: right}
+      footer:      {x: 0.06, y: 0.90, w: 0.88, h: 0.05, align: center}
+
+  - id: editorial_split
+    description: "Upper 60% is pure photography; lower 40% is a solid dark editorial block with structured text."
+    scrim: {x: 0.0, y: 0.60, w: 1.0, h: 0.40, opacity_boost: 0.25}
+    zones:
+      eyebrow:     {x: 0.05, y: 0.625, w: 0.60, h: 0.035, align: left}
+      locality:    {x: 0.05, y: 0.665, w: 0.62, h: 0.11, align: left}
+      city:        {x: 0.05, y: 0.775, w: 0.40, h: 0.035, align: left}
+      price:       {x: 0.66, y: 0.665, w: 0.29, h: 0.11, align: right}
+      config:      {x: 0.66, y: 0.78, w: 0.29, h: 0.045, align: right}
+      headline:    {x: 0.05, y: 0.82, w: 0.60, h: 0.055, align: left}
+      cta_badge:   {x: 0.66, y: 0.83, w: 0.29, h: 0.06, align: right}
+      footer:      {x: 0.05, y: 0.92, w: 0.90, h: 0.05, align: left}
