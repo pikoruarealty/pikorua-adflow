@@ -1498,6 +1498,10 @@ def call_ideogram(
         _field("text_prompt", prompt)
         + _field("resolution", resolution)
         + _field("rendering_speed", speed)
+        # MagicPrompt rewrites the prompt through Ideogram's own LLM before generation.
+        # On long structured prompts it can drop or replace the exact TEXT STRINGS,
+        # producing fully hallucinated ad copy — exact-text ads need it OFF.
+        + _field("magic_prompt", "OFF")
     )
     for fname, content in _collect_style_refs(recipe_tag):
         body += _file_field("style_reference_images", fname, content)

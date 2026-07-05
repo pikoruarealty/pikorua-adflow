@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -534,6 +536,14 @@ DEFAULT_AGE_MAX = 65
 
 _CACHE_PATH = pathlib.Path("outputs") / "targeting_cache.json"
 
+# Meta occasionally retires/renames interest & behaviour IDs (e.g. the "Interior
+# design" id 6003263790983 that caused the Jul 1-2 deploy failures) — an
+# unbounded cache keeps serving a dead id forever. Force a re-resolve after this
+# many seconds so a retired id gets flushed out on its own.
+_CACHE_TTL_SECONDS = 30 * 24 * 3600  # 30 days
+
+_MISS = object()  # sentinel: distinct from a legitimately cached "no match" (None)
+
 
 # ── low-level HTTP + cache ───────────────────────────────────────────────────
 def _get(params: dict[str, Any], token: str) -> list[dict]:
@@ -563,6 +573,20 @@ def _save_cache(cache: dict) -> None:
         _CACHE_PATH.write_text(json.dumps(cache, indent=2), encoding="utf-8")
     except OSError:
         pass  # cache is an optimisation; never fail a deploy over it
+
+
+def _cache_get(cache: dict, key: str) -> Any:
+    """Return the cached value for `key`, or `_MISS` if absent/expired/legacy-shaped."""
+    entry = cache.get(key)
+    if not isinstance(entry, dict) or "value" not in entry or "cached_at" not in entry:
+        return _MISS  # missing, or written before the TTL wrapper existed
+    if time.time() - entry["cached_at"] > _CACHE_TTL_SECONDS:
+        return _MISS
+    return entry["value"]
+
+
+def _cache_set(cache: dict, key: str, value: Any) -> None:
+    cache[key] = {"value": value, "cached_at": time.time()}
 
 
 # ── search (typeahead) — uncached, returns several candidates ────────────────
@@ -620,46 +644,65 @@ def search_behaviours(query: str, token: str, limit: int = 8) -> list[dict]:
 
 
 # ── resolve (best single match) — cached ─────────────────────────────────────
+def _search_query(name: str) -> str:
+    """Meta's adinterest/behaviour typeahead frequently returns zero hits when queried
+    with the full "Name (category)" string verbatim, but reliably matches on the bare
+    name — the trailing parenthetical is a disambiguator for humans, not a search token.
+    Only the query is stripped; matching below still compares against the full name."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", name).strip() or name
+
+
 def _best_interest(name: str, token: str, cache: dict) -> dict | None:
     key = f"interest::{name.lower()}"
-    if key in cache:
-        return cache[key] or None
-    hits = search_interests(name, token, limit=5)
+    cached = _cache_get(cache, key)
+    if cached is not _MISS:
+        return cached
+    hits = search_interests(_search_query(name), token, limit=8)
     # Prefer an exact (case-insensitive) name match, else the top result.
     match = next((h for h in hits if h["name"].lower() == name.lower()), hits[0] if hits else None)
     result = {"id": match["id"], "name": match["name"]} if match else None
-    cache[key] = result
+    _cache_set(cache, key, result)
     return result
 
 
 def _best_city(name: str, token: str, country: str, cache: dict) -> dict | None:
     key = f"city::{country}::{name.lower()}"
-    if key in cache:
-        return cache[key] or None
+    cached = _cache_get(cache, key)
+    if cached is not _MISS:
+        return cached
     hits = search_cities(name, token, country=country, limit=5)
     match = next((h for h in hits if h["name"].lower() == name.lower()), hits[0] if hits else None)
     result = {"key": match["key"], "name": match["name"], "region": match.get("region", "")} if match else None
-    cache[key] = result
+    _cache_set(cache, key, result)
     return result
 
 
 def _best_behaviour(name: str, token: str, cache: dict) -> dict | None:
     key = f"behaviour::{name.lower()}"
-    if key in cache:
-        return cache[key] or None
-    hits = search_behaviours(name, token, limit=5)
+    cached = _cache_get(cache, key)
+    if cached is not _MISS:
+        return cached
+    hits = search_behaviours(_search_query(name), token, limit=8)
     match = next((h for h in hits if h["name"].lower() == name.lower()), hits[0] if hits else None)
     result = {"id": match["id"], "name": match["name"]} if match else None
-    cache[key] = result
+    _cache_set(cache, key, result)
     return result
 
 
 def build_default_audience(city: str, token: str, *, locality: str = "",
                            country: str = "IN",
                            nri_geographies: str = "",
-                           clientele_type: str = "") -> dict:
+                           clientele_type: str = "",
+                           llm_selection: dict | None = None) -> dict:
     """
     Resolve the curated starting audience for a campaign.
+
+    `llm_selection` — a pre-validated dict from resolve_llm_targeting(), i.e. the
+    AudienceCrew's per-campaign targeting pick. When present, its interests/
+    behaviours/work_positions/age_min/age_max are used INSTEAD OF the static
+    clientele_type profile (income_clusters/industries still come from the
+    clientele profile — those are a fixed, verified lever, not something the LLM
+    reasons about). When absent, falls back to today's behavior unchanged.
 
     `clientele_type` (luxury_bungalow | premium_apartment | nri_investment |
     commercial_office) picks the interest/behaviour/age profile so a bungalow HNI
@@ -676,41 +719,46 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
 
     resolved_city = _best_city(city, token, country, cache) if city and city != "India" else None
 
-    if clientele_type:
-        profile = clientele_profile(clientele_type)
-        interest_names  = profile["interests"]
-        behaviour_names = profile["behaviours"]
-        age_min, age_max = profile["age_min"], profile["age_max"]
-        # Pre-resolved fields — passed straight through, no API lookup needed.
-        work_positions        = profile.get("work_positions", [])
-        income_clusters       = profile.get("income_clusters", [])
-        industries            = profile.get("industries", [])
-        relationship_statuses = profile.get("relationship_statuses", [])
-        advantage_plus        = profile.get("advantage_plus", True)  # default on; profiles can opt out
+    profile = clientele_profile(clientele_type) if clientele_type else {}
+    income_clusters       = profile.get("income_clusters", [])
+    industries            = profile.get("industries", [])
+    relationship_statuses = profile.get("relationship_statuses", [])
+    advantage_plus        = profile.get("advantage_plus", True)  # default on; profiles can opt out
+
+    if llm_selection:
+        interests  = llm_selection.get("interests", [])
+        behaviours = llm_selection.get("behaviours", [])
+        work_positions = llm_selection.get("work_positions") or profile.get("work_positions", [])
+        age_min, age_max = llm_selection["age_min"], llm_selection["age_max"]
+        _save_cache(cache)  # llm_selection was already resolved+cached by resolve_llm_targeting
     else:
-        interest_names  = DEFAULT_INTERESTS
-        behaviour_names = DEFAULT_BEHAVIOURS
-        age_min, age_max = DEFAULT_AGE_MIN, DEFAULT_AGE_MAX
-        work_positions = income_clusters = industries = []
-        relationship_statuses = []
-        advantage_plus = True
+        if clientele_type:
+            interest_names  = profile["interests"]
+            behaviour_names = profile["behaviours"]
+            age_min, age_max = profile["age_min"], profile["age_max"]
+            work_positions = profile.get("work_positions", [])
+        else:
+            interest_names  = DEFAULT_INTERESTS
+            behaviour_names = DEFAULT_BEHAVIOURS
+            age_min, age_max = DEFAULT_AGE_MIN, DEFAULT_AGE_MAX
+            work_positions = []
 
-    interests = []
-    for nm in interest_names:
-        hit = _best_interest(nm, token, cache)
-        if hit and hit not in interests:
-            interests.append(hit)
+        interests = []
+        for nm in interest_names:
+            hit = _best_interest(nm, token, cache)
+            if hit and hit not in interests:
+                interests.append(hit)
 
-    behaviours = []
-    for nm in behaviour_names:
-        try:
-            hit = _best_behaviour(nm, token, cache)
-        except RuntimeError:
-            hit = None  # behaviours taxonomy is best-effort
-        if hit and hit not in behaviours:
-            behaviours.append(hit)
+        behaviours = []
+        for nm in behaviour_names:
+            try:
+                hit = _best_behaviour(nm, token, cache)
+            except RuntimeError:
+                hit = None  # behaviours taxonomy is best-effort
+            if hit and hit not in behaviours:
+                behaviours.append(hit)
 
-    _save_cache(cache)
+        _save_cache(cache)
 
     nri_countries = parse_nri_countries(nri_geographies) if nri_geographies else []
 
@@ -819,6 +867,207 @@ def build_targeting_spec(audience: dict) -> dict:
         spec["excluded_custom_audiences"] = exc
 
     return spec
+
+
+# ── Per-campaign LLM targeting selection pool ────────────────────────────────
+# Unlike CLIENTELE_TARGETING_MAP (12 fixed baskets keyed by clientele_type), this
+# pool is organised by axis so the AudienceCrew's targeting_researcher agent can
+# mix-and-match per campaign (city/price/property-type specific) instead of being
+# locked into one of the 12 buckets. Every name below was verified live against
+# Meta's Targeting Search API on 2026-07-05 (search_interests/search_behaviours) —
+# do not add a name here without verifying it resolves; a name that returns zero
+# hits is silently dropped by resolve_llm_targeting, which just wastes a pick.
+INTEREST_POOL: dict[str, list[str]] = {
+    "property_investment": [
+        "Property investing (investing)",
+        "Property investment trust (investing)",
+        "Investor (investing)",
+        "Property management (property)",
+        "Gated community (property)",
+        "Villa (lodging)",
+        "penthouse apartment (property)",
+        "Apartment (property)",
+        "Bungalow",
+    ],
+    "luxury_lifestyle": [
+        "Luxury goods (retail)",
+        "Luxury vehicle (vehicles)",
+        "Personal luxury car",
+        "Luxury resorts (lodging)",
+        "Luxury Lifestyle (website)",
+        "luxury (lifestyle content)",
+        "Rolex (watches)",
+        "Yacht (watercraft)",
+        "Wine (alcoholic drinks)",
+        "Golf (sport)",
+    ],
+    "professional_finance": [
+        "Investment (business and finance)",
+        "Investment management (investing)",
+        "Investment banking (banking)",
+        "Wealth management (banking)",
+        "Private banking",
+        "Personal finance (banking)",
+        "mutual fund (investing)",
+        "Stock market (investing)",
+        "Certified Financial Planner",
+        "Entrepreneurship (business and finance)",
+        "Small business (business and finance)",
+    ],
+    "trader_industrialist": [
+        "Textile (craft supplies)",
+        "Manufacturing (industry)",
+        "Export",
+        "International business",
+        "Small and medium enterprises (business and finance)",
+    ],
+    "tech_professional": [
+        "Interior design (design)",
+        "Home improvement (home and garden)",
+    ],
+    "travel_signal": [
+        "First-class travel (travel and tourism business)",
+        "Business class (air travel)",
+    ],
+}
+
+# Flattened set for validation — resolve_llm_targeting drops any name not in here.
+_ALL_POOL_INTERESTS: set[str] = {n for names in INTEREST_POOL.values() for n in names}
+
+BEHAVIOUR_POOL: dict[str, list[str]] = {
+    "travel": [
+        "Frequent international travellers",       # British spelling — verified id 6022788483583
+        "Frequent travellers",                      # verified id 6002714895372
+        "Returned from travelling one week ago",    # verified id 6008261969983
+        "Returned from travelling two weeks ago",   # verified id 6008297697383
+    ],
+    "affluence_proxy": [
+        "Engaged shoppers",                                    # verified id 6071631541183
+        "People in India who prefer high-value goods",         # verified id 6028974370383
+        "People who prefer high-value goods in UAE",            # verified id 6082317210583
+    ],
+    "professional": [
+        "Small business owners",                    # verified id 6002714898572
+    ],
+    "nri_diaspora": [
+        "Lived in India (formerly Expats – India)",  # verified id 6016916298983 (em dash)
+    ],
+}
+_ALL_POOL_BEHAVIOURS: set[str] = {n for names in BEHAVIOUR_POOL.values() for n in names}
+
+# Work-position tiers for the LLM to pick from. Live-account performance data
+# (2026-07-05 audit) shows 1-2 "owner_tier" positions consistently outperform
+# long "csuite_tier" stacks (₹112-187 CPL vs ₹384-557 CPL on the same account) —
+# resolve_llm_targeting enforces this as a hard cap, not just a prompt hint.
+WORK_POSITION_POOL: dict[str, list[dict]] = {
+    "owner_tier": _WORK_POSITIONS_OWNERS,
+    "csuite_tier": _WORK_POSITIONS_CSUITE,
+    "it_tier": [
+        {"id": "1597325863845095", "name": "Information Technology Director"},
+        {"id": "621959927947441",  "name": "Chief Information Officer (CIO)"},
+        {"id": "106236979408167",  "name": "Chief information officer"},
+    ],
+    "specialist_tier": [
+        {"id": "108900439134105", "name": "Property"},
+        {"id": "105525432814378", "name": "Chartered accountant"},
+        {"id": "105563979478424", "name": "Executive director"},
+    ],
+}
+_WORK_POSITION_BY_NAME: dict[str, dict] = {
+    w["name"]: w for tier in WORK_POSITION_POOL.values() for w in tier
+}
+_CSUITE_TIER_NAMES: set[str] = {w["name"] for w in WORK_POSITION_POOL["csuite_tier"]}
+
+MAX_LLM_INTERESTS = 10
+MAX_LLM_BEHAVIOURS = 4
+MAX_CSUITE_WORK_POSITIONS = 2
+MAX_LLM_WORK_POSITIONS = 3
+
+
+def render_targeting_pool_for_prompt() -> str:
+    """Render the pools as plain text for the AudienceCrew's select_targeting task."""
+    lines: list[str] = []
+    lines.append("INTERESTS (choose only from these names, verbatim):")
+    for tag, names in INTEREST_POOL.items():
+        lines.append(f"  [{tag}] " + ", ".join(names))
+    lines.append("")
+    lines.append("BEHAVIOURS (choose only from these names, verbatim):")
+    for tag, names in BEHAVIOUR_POOL.items():
+        lines.append(f"  [{tag}] " + ", ".join(names))
+    lines.append("")
+    lines.append("WORK POSITIONS (choose only from these names, verbatim):")
+    for tag, positions in WORK_POSITION_POOL.items():
+        lines.append(f"  [{tag}] " + ", ".join(p["name"] for p in positions))
+    return "\n".join(lines)
+
+
+def resolve_llm_targeting(selection: dict | None, token: str) -> dict | None:
+    """
+    Validate + resolve the AudienceCrew's structured targeting_selection.json
+    against the verified pools above, then resolve names to Meta {id,name} dicts.
+
+    Returns None if `selection` is missing/empty/unusable — callers should fall
+    back to the static CLIENTELE_TARGETING_MAP profile in that case. Never raises;
+    any single bad field is dropped rather than failing the whole selection.
+    """
+    if not selection:
+        return None
+
+    picked_interests = [n for n in (selection.get("interests") or []) if n in _ALL_POOL_INTERESTS]
+    picked_behaviours = [n for n in (selection.get("behaviours") or []) if n in _ALL_POOL_BEHAVIOURS]
+    picked_positions_raw = [n for n in (selection.get("work_positions") or []) if n in _WORK_POSITION_BY_NAME]
+
+    if not picked_interests and not picked_behaviours and not picked_positions_raw:
+        return None  # nothing usable came back — treat as no selection
+
+    # dedupe, preserving order
+    picked_interests = list(dict.fromkeys(picked_interests))[:MAX_LLM_INTERESTS]
+    picked_behaviours = list(dict.fromkeys(picked_behaviours))[:MAX_LLM_BEHAVIOURS]
+
+    # cap csuite_tier picks at MAX_CSUITE_WORK_POSITIONS, non-csuite picks pass through
+    work_positions: list[dict] = []
+    csuite_count = 0
+    for name in dict.fromkeys(picked_positions_raw):
+        if len(work_positions) >= MAX_LLM_WORK_POSITIONS:
+            break
+        if name in _CSUITE_TIER_NAMES:
+            if csuite_count >= MAX_CSUITE_WORK_POSITIONS:
+                continue
+            csuite_count += 1
+        work_positions.append(_WORK_POSITION_BY_NAME[name])
+
+    try:
+        age_min = int(selection.get("age_min"))
+        age_max = int(selection.get("age_max"))
+        if not (18 <= age_min < age_max <= 75):
+            age_min, age_max = DEFAULT_AGE_MIN, DEFAULT_AGE_MAX
+    except (TypeError, ValueError):
+        age_min, age_max = DEFAULT_AGE_MIN, DEFAULT_AGE_MAX
+
+    cache = _load_cache()
+    interests: list[dict] = []
+    for nm in picked_interests:
+        hit = _best_interest(nm, token, cache)
+        if hit and hit not in interests:
+            interests.append(hit)
+    behaviours: list[dict] = []
+    for nm in picked_behaviours:
+        try:
+            hit = _best_behaviour(nm, token, cache)
+        except RuntimeError:
+            hit = None
+        if hit and hit not in behaviours:
+            behaviours.append(hit)
+    _save_cache(cache)
+
+    return {
+        "interests": interests,
+        "behaviours": behaviours,
+        "work_positions": work_positions,
+        "age_min": age_min,
+        "age_max": age_max,
+        "reasoning": str(selection.get("reasoning", ""))[:600],
+    }
 
 
 # ── CRM-profile → Meta-interest mapping (autooptimiser rung 7) ───────────────────

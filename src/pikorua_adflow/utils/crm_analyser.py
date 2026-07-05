@@ -1,16 +1,24 @@
 """
 CRM lead data analyser.
 
-Reads project_context/crm_export.csv and produces a structured insight summary
-for the audience crew to use as context when building targeting briefs and copy angles.
+Reads CRM leads (Supabase live, or project_context/crm_export.csv fallback, both
+via crm_source.py) and produces a structured insight summary for the audience
+crew to use as context when building targeting briefs and copy angles.
 
 Output: outputs/crm_insights.md
 Graceful: if the file is missing or malformed, returns a no-data string and does not crash.
 
-Handles both:
-- Legacy format with funnel-stage data (lead_stage, source, budget_bracket columns)
-- Pikorua CRM export format (Name, Phone, Email, City, Campaign, Source, Status,
-  Assigned To, Budget, Profession, Company, Received)
+Column resolution is alias-based, matched via a stripped-to-alphanumeric key (see
+_key()) so it's tolerant to header variants across the two sources — e.g. the CSV's
+"Call Status" and Supabase's "CallStatus" both resolve to the same canonical column.
+This mirrors analytics/crm_analytics.py's approach, since both modules read the
+same underlying CRM rows and previously drifted out of sync with each other.
+
+Funnel stages are derived from four real disposition columns — Call Status, Buying
+Status, Site Visit Status, Client Status — not a single generic "status" field.
+Client Status is the CRM's explicit human disposition (hot/warm/cold/broker/lost/
+...); Status (assignment: Assigned/Unassigned/Cold Pool) is sales-routing metadata
+and carries no funnel-progress signal, so it is never used for stage derivation.
 """
 import csv
 import pathlib
@@ -20,56 +28,85 @@ from collections import Counter, defaultdict
 _CRM_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "project_context" / "crm_export.csv"
 _OUT_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "outputs" / "crm_insights.md"
 
-# Stage ordering — higher = further along the funnel
-_STAGE_ORDER = {
-    "contacted": 1,
-    "follow_up": 2,
-    "site_visit": 3,
-    "negotiating": 4,
-    "converted": 5,
-    "dead": 0,
-    "lost": 0,
-}
-
-# Column name aliases — map common CRM variants to canonical names
+# Column name aliases — map common CRM variants to canonical names. Matched via
+# _key() (lowercase, non-alphanumerics stripped) so "Call Status", "CallStatus",
+# and "call_status" all resolve the same way regardless of source formatting.
+# "lead_source" prefers "campaign" over generic "source": in the real export,
+# Source is ~95% the single meaningless value "Migrated" (a data-migration stamp,
+# not a channel), while Campaign carries the actual per-campaign breakdown.
 _ALIASES = {
-    "lead_source": ["lead_source", "source", "ad_source", "campaign", "ad_angle"],
-    "lead_stage": ["lead_stage", "stage", "status", "funnel_stage", "crm_stage"],
-    "budget_bracket": ["budget_bracket", "budget", "price_range", "budget_range"],
-    "property_interest": ["property_interest", "property_type", "interest", "enquiry_type"],
-    "city": ["city", "location", "buyer_city", "current city"],
-    "buyer_type": ["buyer_type", "type", "segment", "nri_hni"],
-    "phone": ["phone", "mobile", "contact", "phone_number"],
-    "email": ["email", "email_address"],
+    "lead_source": ["campaign", "leadsource", "adsource", "source", "adangle"],
+    "call_status": ["callstatus"],
+    "buying_status": ["buyingstatus"],
+    "site_visit_status": ["sitevisitstatus"],
+    "client_status": ["clientstatus"],
+    "budget_bracket": ["budgetbracket", "budget", "pricerange", "budgetrange"],
+    "property_interest": ["propertyinterest", "propertytype", "interest", "enquirytype"],
+    "city": ["city", "location", "buyercity", "currentcity"],
+    "buyer_type": ["buyertype", "type", "segment", "nrihni"],
+    "phone": ["phone", "mobile", "contact", "phonenumber"],
+    "email": ["email", "emailaddress"],
     "profession": ["profession", "job", "occupation", "designation"],
-    "company": ["company", "organisation", "employer", "company name"],
-    "received": ["received", "date", "created", "lead_date"],
-    "name": ["name", "full_name", "lead_name"],
-    "assigned_to": ["assigned to", "assigned_to", "owner", "sales_rep"],
+    "company": ["company", "organisation", "employer", "companyname"],
+    "received": ["received", "date", "created", "leaddate"],
+    "name": ["name", "fullname", "leadname"],
+    "assigned_to": ["assignedto", "owner", "salesrep"],
 }
 
-# Budget strings from real Pikorua CRM export → numeric lower bound (Cr)
-_BUDGET_TO_LOWER_CR = {
-    "2 cr – 3 cr": 2.0,
-    "3 cr – 4 cr": 3.0,
-    "4 cr – 5 cr": 4.0,
-    "5 cr – inr 6 cr+": 5.0,
-    "5 cr – 6 cr": 5.0,
-    "6 cr – 8 cr": 6.0,
-    "7 cr – inr 8 cr+": 7.0,
-    "7 cr – 8 cr": 7.0,
-    "8 cr – inr 9 cr+": 8.0,
-    "9 cr – inr 10 cr+": 9.0,
-    "9 cr – 10 cr": 9.0,
-    "10 cr – inr 11 cr+": 10.0,
-    "11 cr – inr 12 cr+": 11.0,
-    "12 cr & above": 12.0,
-    "12 cr+": 12.0,
-    "15 cr+": 15.0,
-    "15 cr & above": 15.0,
-    "inr 4 cr to 6 cr": 4.0,
-    "inr 7 cr to 10 cr": 7.0,
+
+def _key(s: str) -> str:
+    """Lowercase + strip all non-alphanumerics, for tolerant header matching."""
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+# Real disposition values (Client Status) that end a lead's funnel as dead/lost.
+# "Construction Biz Owner" is a profession tag that ended up in this same enum,
+# not a disposition judgement — excluded here for the same reason it's excluded
+# from analytics/crm_analytics.py's _QUALITY_CLIENT_STATUSES.
+_DEAD_CLIENT_STATUSES = {"broker", "not interested", "cold", "lost", "low budget"}
+_QUALIFIED_CLIENT_STATUSES = {"hot", "warm", "interested", "active"}
+_SITE_VISIT_SCHEDULED = {"yet to visit", "visit date confirmed"}
+_ENGAGED_BUYING_STATUSES = {"interested", "still searching", "postponed", "exploring"}
+_ENGAGED_CALL_STATUSES = {"spoken", "call back later"}
+
+# Real, observed funnel stages, ranked by how far the lead has progressed.
+# Priority on read: client_status (explicit human call) beats site-visit beats
+# buying/call signal — a lead can be "Site Visited" per site_visit_status but
+# already marked "Cold" in client_status, and the human judgement should win.
+_STAGE_RANK = {
+    "Dead / Lost": 0,
+    "New / Uncalled": 1,
+    "Contacted": 2,
+    "Exploring": 3,
+    "Site Visit Scheduled": 4,
+    "Site Visited": 5,
+    "Qualified (Warm/Hot)": 6,
 }
+
+
+def _derive_stage(row: dict, col: dict) -> str:
+    """Return this lead's funnel stage label from its real disposition columns."""
+    client_status = row.get(col.get("client_status", ""), "").strip().lower()
+    if client_status in _DEAD_CLIENT_STATUSES:
+        return "Dead / Lost"
+    if client_status in _QUALIFIED_CLIENT_STATUSES:
+        return "Qualified (Warm/Hot)"
+
+    site_visit = row.get(col.get("site_visit_status", ""), "").strip().lower()
+    if site_visit == "visited":
+        return "Site Visited"
+    if site_visit in _SITE_VISIT_SCHEDULED:
+        return "Site Visit Scheduled"
+
+    buying_status = row.get(col.get("buying_status", ""), "").strip().lower()
+    if buying_status in _ENGAGED_BUYING_STATUSES:
+        return "Exploring"
+
+    call_status = row.get(col.get("call_status", ""), "").strip().lower()
+    if call_status in _ENGAGED_CALL_STATUSES:
+        return "Contacted"
+
+    return "New / Uncalled"
 
 # Junk detection — leads with these values in profession/company are noise
 _JUNK_PROFESSIONS = {"a", "b", "h", "o", "q", "yruery", "qwerty", "buf", "yggd", "yuranus"}
@@ -80,27 +117,28 @@ _NRI_PREFIXES = {"971", "44", "1", "61", "65", "60"}  # UAE, UK, US, AU, SG, MY
 
 
 def _resolve_columns(header: list[str]) -> dict[str, str]:
-    """Map canonical names to actual CSV column names."""
-    header_lower = {h.strip().lower(): h for h in header}
+    """Map canonical names to actual CSV/Supabase column names, tolerant of spacing."""
+    header_keyed = {_key(h): h for h in header}
     resolved = {}
     for canonical, aliases in _ALIASES.items():
         for alias in aliases:
-            if alias in header_lower:
-                resolved[canonical] = header_lower[alias]
+            if alias in header_keyed:
+                resolved[canonical] = header_keyed[alias]
                 break
     return resolved
 
 
 def _budget_lower_cr(budget_str: str) -> float | None:
-    """Return numeric lower bound in Cr for a budget string, or None if unrecognised."""
-    key = budget_str.strip().lower()
-    if key in _BUDGET_TO_LOWER_CR:
-        return _BUDGET_TO_LOWER_CR[key]
-    # fallback: extract first number
-    nums = re.findall(r"\d+(?:\.\d+)?", key)
-    if nums:
-        return float(nums[0])
-    return None
+    """
+    Return the numeric lower bound in Cr for a budget string (e.g. "4 Cr – 6 Cr"
+    -> 4.0, "12 Cr & Above" -> 12.0), or None if the string has no number at all
+    (e.g. "Custom"). Real budget strings vary too much in punctuation/wording to
+    maintain an exhaustive lookup table — taking the first number is both simpler
+    and correct for every real bracket format observed (verified 2026-07-06
+    against all distinct values in the live export).
+    """
+    nums = re.findall(r"\d+(?:\.\d+)?", budget_str.strip().lower())
+    return float(nums[0]) if nums else None
 
 
 def _is_junk(row: dict, col: dict) -> bool:
@@ -166,19 +204,20 @@ def _load_csv(path: pathlib.Path) -> list[dict]:
         return [row for row in reader]
 
 
-def _stage_rank(stage_val: str) -> int:
-    return _STAGE_ORDER.get(stage_val.strip().lower().replace(" ", "_"), 0)
-
-
 def _has_funnel_data(rows: list[dict], col: dict) -> bool:
-    """Return True if the CRM data contains meaningful funnel stage values."""
-    if "lead_stage" not in col:
+    """
+    Return True if the CRM data has at least one of the four disposition columns
+    (call/buying/site-visit/client status) with a non-blank value — i.e. there is
+    real funnel signal to derive stages from, as opposed to an export where sales
+    follow-up hasn't started yet.
+    """
+    signal_cols = [col.get(c) for c in
+                   ("call_status", "buying_status", "site_visit_status", "client_status")]
+    signal_cols = [c for c in signal_cols if c]
+    if not signal_cols:
         return False
-    stage_col = col["lead_stage"]
-    meaningful = {s for s in _STAGE_ORDER if s not in ("dead", "lost")}
-    for row in rows[:20]:
-        val = row.get(stage_col, "").strip().lower().replace(" ", "_")
-        if val in meaningful:
+    for row in rows[:50]:
+        if any(row.get(c, "").strip() for c in signal_cols):
             return True
     return False
 
@@ -187,9 +226,7 @@ def _build_insights(rows: list[dict], col: dict) -> dict:
     source_col = col.get("lead_source")
     budget_col = col.get("budget_bracket")
     city_col = col.get("city")
-    buyer_col = col.get("buyer_type")
     prof_col = col.get("profession")
-    stage_col = col.get("lead_stage")
 
     has_funnel = _has_funnel_data(rows, col)
 
@@ -248,7 +285,8 @@ def _build_insights(rows: list[dict], col: dict) -> dict:
             if p and p.lower() not in _JUNK_PROFESSIONS:
                 prof_counts[p.title()] += 1
 
-    # Stage data (if available)
+    # Stage data (if available) — derived per-row from call/buying/site-visit/
+    # client status, not a single generic column (see _derive_stage).
     stage_breakdown = []
     best_sources = []
     best_budget = []
@@ -258,8 +296,8 @@ def _build_insights(rows: list[dict], col: dict) -> dict:
         budget_to_stages: dict[str, list[int]] = defaultdict(list)
 
         for row in clean_rows:
-            stage = row.get(stage_col, "").strip()
-            rank = _stage_rank(stage)
+            stage = _derive_stage(row, col)
+            rank = _STAGE_RANK[stage]
             stage_counts[stage] += 1
 
             if source_col:
@@ -269,7 +307,7 @@ def _build_insights(rows: list[dict], col: dict) -> dict:
                 bkt = row.get(budget_col, "").strip() or "Unknown"
                 budget_to_stages[bkt].append(rank)
 
-        stage_breakdown = sorted(stage_counts.items(), key=lambda x: _stage_rank(x[0]), reverse=True)
+        stage_breakdown = sorted(stage_counts.items(), key=lambda x: _STAGE_RANK[x[0]], reverse=True)
         source_avg = {s: sum(r) / len(r) for s, r in source_to_stages.items() if r}
         best_sources = sorted(source_avg.items(), key=lambda x: x[1], reverse=True)[:3]
         budget_avg = {b: sum(r) / len(r) for b, r in budget_to_stages.items() if r}
@@ -353,19 +391,19 @@ def _format_markdown(insights: dict, total: int, col: dict, source_label: str = 
         if insights["best_sources"]:
             lines += ["", "## Best-Performing Lead Sources", ""]
             for src, avg in insights["best_sources"]:
-                lines.append(f"- **{src}** — avg funnel depth {avg:.1f}/5")
+                lines.append(f"- **{src}** — avg funnel depth {avg:.1f}/6")
 
         if insights["best_budget"]:
             lines += ["", "## Budget Brackets That Progress Furthest", ""]
             for bkt, avg in insights["best_budget"]:
-                lines.append(f"- **{bkt}** — avg funnel depth {avg:.1f}/5")
+                lines.append(f"- **{bkt}** — avg funnel depth {avg:.1f}/6")
     else:
         lines += [
             "",
             "## Funnel Status",
             "",
-            "No funnel-stage data in this export — all leads show as Unassigned/Migrated.",
-            "Follow-up tracking not yet active in the CRM.",
+            "No call/buying/site-visit/client status data in this export — "
+            "follow-up tracking has not started on these leads yet.",
         ]
 
     # Actionable summary

@@ -118,10 +118,16 @@ class AudienceSave(BaseModel):
     age_max: int = 65
     interests: list[dict] = Field(default_factory=list)
     behaviours: list[dict] = Field(default_factory=list)
+    work_positions: list[dict] = Field(default_factory=list)
+    income_clusters: list[dict] = Field(default_factory=list)
+    industries: list[dict] = Field(default_factory=list)
+    relationship_statuses: list[int] = Field(default_factory=list)
+    advantage_plus: bool = True
     nri_countries: list[str] = Field(default_factory=list)
     end_time: str = ""
     included_custom_audiences: list[dict] = Field(default_factory=list)
     excluded_custom_audiences: list[dict] = Field(default_factory=list)
+    clientele_type: str = ""
 
 
 class MetaOptimizeReq(BaseModel):
@@ -148,6 +154,15 @@ class RetargetCampaignReq(BaseModel):
     campaign_id: str
     clientele_type: str
     dry_run: bool = False
+
+
+class CreativeModeReq(BaseModel):
+    mode: str = Field(
+        "curated",
+        description="'curated' (default, one image+headline+body per variant) or "
+                    "'dynamic' (Meta Dynamic Creative — pools all variants' assets "
+                    "into one ad and lets Meta pick combinations).",
+    )
 
 
 class GenerateRefVariantPayload(BaseModel):

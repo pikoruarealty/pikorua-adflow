@@ -8,6 +8,12 @@ dependencies = [
     "crewai[tools]==1.14.5a2",
     "qdrant-client[fastembed]>=1.18.0",
     "apscheduler>=3.10.4",
+    "litellm==1.87.1",
+    "fastapi==0.136.3",
+    "uvicorn[standard]==0.49.0",
+    "pillow==12.2.0",
+    "python-multipart==0.0.32",
+    "requests==2.34.2",
 ]
 
 [project.scripts]

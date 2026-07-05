@@ -15,8 +15,8 @@ Each lead dict may use any reasonable spelling of these fields (matching is
 case- and punctuation-insensitive, so "Buying Status", "buying_status" and
 "BuyingStatus" are all accepted):
 
-    Name, Phone, Email, City, Campaign, Source, Status, Assigned To,
-    Call Status, HWC, Buying Status, Budget, Profession, Company,
+    Name, Phone, Email, City, Campaign, Source, Status, Client Status,
+    Assigned To, Call Status, HWC, Buying Status, Budget, Profession, Company,
     Current City, Current Area, Configuration, Follow-up, Received
 
 Every function takes the raw list of lead dicts and returns a JSON-serialisable
@@ -47,6 +47,7 @@ _CANON: dict[str, list[str]] = {
     "campaign": ["campaign", "campaignname", "adcampaign"],
     "source": ["source", "leadsource", "adsource"],
     "status": ["status", "leadstatus"],
+    "clientstatus": ["clientstatus"],
     "assignedto": ["assignedto", "owner", "salesrep"],
     "callstatus": ["callstatus"],
     "hwc": ["hwc"],
@@ -93,19 +94,25 @@ _QUALITY_BUYING_STATUSES = {"exploring", "hot", "warm", "interested", "postponed
 # Keep old name as alias so existing callers (autooptimiser) don't break.
 _QUALITY_STATUSES = _QUALITY_BUYING_STATUSES
 
-# client_status values (meta_leads.status) that confirm a quality lead.
-# Takes priority over buying_status — it represents an explicit human call.
-_QUALITY_CLIENT_STATUSES = {"warm", "interested", "construction biz owner"}
+# client_status values (from the CRM's `clients.status` field — an explicit human
+# call, distinct from meta_leads.status which is only assignment routing) that
+# confirm a quality lead. Takes priority over buying_status.
+# "construction biz owner" is a profession/segment tag that ended up in this same
+# enum, not a disposition judgement — excluded, it says nothing about lead quality.
+# "broker", "not_interested", "cold", "lost", "low_budget" are explicit bad-lead
+# dispositions — never quality. "active" (engagement/assignment state) is kept
+# for now, unconfirmed either way.
+_QUALITY_CLIENT_STATUSES = {"hot", "warm", "interested", "active"}
 
 
 def _is_quality(norm_row: dict) -> bool:
     """
     A lead is 'quality' when either:
-    - client_status (meta_leads.status) is warm/interested/construction biz owner, OR
+    - client_status is hot/warm/interested/active, OR
     - buying_status is exploring/warm/hot/interested/postponed/still searching.
     client_status is checked first (explicit human judgement > CRM buying field).
     """
-    cs = norm_row.get("status", "").strip().lower()
+    cs = norm_row.get("clientstatus", "").strip().lower()
     if cs and any(q in cs for q in _QUALITY_CLIENT_STATUSES):
         return True
     bs = norm_row.get("buyingstatus", "").strip().lower()
@@ -616,11 +623,38 @@ def _config_matches_campaign(config_raw: str, campaign_key: str) -> bool:
     return False
 
 
+# Live Meta campaign name -> CRM webhook campaign_name label(s) it actually
+# corresponds to. The two were entered independently (Meta by whoever launched
+# the campaign, CRM by the lead webhook/importer) and often don't share enough
+# characters for the fuzzy substring match below to find them — typos ("LAARGE"),
+# rebrands ("Nim Sg222" vs "Nirma Anamika"), or abbreviations ("NN" vs "Nehru
+# Nagar"). Verified 2026-07-06 against the live ad account's currently-ACTIVE
+# campaigns. Without this, ~1,000 CRM leads are invisible to quality scoring,
+# geo intelligence, and campaign verdicts. Extend this map whenever a new
+# campaign's CRM label doesn't visibly resemble its Meta name.
+_CAMPAIGN_ALIASES_RAW: dict[str, list[str]] = {
+    "bungalow ahmd general – quality lead": ["Bungalows"],
+    "bungalow ahmd general": ["Bungalows"],
+    "NN New Leads campaign": ["Nehru Nagar", "IVR NN"],
+    "LAARGE Apts campaign 07/07/2024 Campaign – Copy 2 - Copy": ["Large Apartments"],
+    "Nirma Anamika leads campaign 08/12/2023 Campaign – Copy 3": [
+        "Nim Sg222 leads campaign 08/12/2023 Campaign – Copy"
+    ],
+    "GODREJ VASTRAPUR Leads campaign": ["Godrej"],
+}
+_CAMPAIGN_ALIASES: dict[str, set[str]] = {
+    _key(meta_name): {_key(v) for v in variants}
+    for meta_name, variants in _CAMPAIGN_ALIASES_RAW.items()
+}
+
+
 def match_meta_leads(leads: list[dict], campaign_name: str) -> list[dict]:
     """
     Return the CRM rows attributed to a given Meta campaign.
 
-    Primary match: lead webhook stamps every inbound lead with campaign_name (preferred).
+    Primary match: lead webhook stamps every inbound lead with campaign_name
+      (preferred), tried as a fuzzy substring match and against the explicit
+      _CAMPAIGN_ALIASES map for known CRM/Meta label mismatches.
     Secondary match: leads with a blank campaign field are attributed to a campaign
       when their `configuration` preference (e.g. "Bungalow") matches keywords in
       the campaign name. Partial fix for the attribution gap while the webhook
@@ -631,13 +665,14 @@ def match_meta_leads(leads: list[dict], campaign_name: str) -> list[dict]:
     needle = _key(campaign_name)
     if not needle:
         return []
+    alias_keys = _CAMPAIGN_ALIASES.get(needle, set())
     out = []
     already_ids: set[int] = set()
 
     for row in leads or []:
         norm = _normalize([row])[0]
         hay = _key(norm.get("campaign", ""))
-        if hay and (needle in hay or hay in needle):
+        if hay and (needle in hay or hay in needle or hay in alias_keys):
             out.append(row)
             already_ids.add(id(row))
 

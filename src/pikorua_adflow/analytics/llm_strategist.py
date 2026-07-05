@@ -22,8 +22,8 @@ Uses litellm — the same library already wired in main.py — routed through
 OpenRouter with the existing OPENROUTER_API_KEY.  No new API key required.
 
 Models (OpenRouter prefixed):
-  Daily pass  : openrouter/anthropic/claude-sonnet-4-5   (strong structured reasoning)
-  Weekly deep : openrouter/anthropic/claude-opus-4-5     (reserved for new-rule generation)
+  Daily pass  : openrouter/anthropic/claude-sonnet-4.5   (strong structured reasoning)
+  Weekly deep : openrouter/anthropic/claude-opus-4.5     (reserved for new-rule generation)
 
 Override either via AO_STRATEGIST_DAILY_MODEL / AO_STRATEGIST_WEEKLY_MODEL env vars.
 Fallback to openrouter/openai/gpt-4o if the Claude models are unavailable.
@@ -56,9 +56,9 @@ logger = logging.getLogger(__name__)
 
 # ── Model constants ───────────────────────────────────────────────────────────
 _DAILY_MODEL  = os.getenv("AO_STRATEGIST_DAILY_MODEL",
-                           "openrouter/anthropic/claude-sonnet-4-5")
+                           "openrouter/anthropic/claude-sonnet-4.5")
 _WEEKLY_MODEL = os.getenv("AO_STRATEGIST_WEEKLY_MODEL",
-                           "openrouter/anthropic/claude-opus-4-5")
+                           "openrouter/anthropic/claude-opus-4.5")
 _MAX_TOKENS   = int(os.getenv("AO_STRATEGIST_MAX_TOKENS", "2048"))
 
 # ── State path ────────────────────────────────────────────────────────────────

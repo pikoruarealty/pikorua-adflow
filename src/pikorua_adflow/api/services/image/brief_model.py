@@ -8,6 +8,7 @@ present — they are never fabricated (§1, §3).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -46,11 +47,79 @@ class BriefModel:
     # ── Derived display helpers ──────────────────────────────────────────────
     @property
     def price_display(self) -> str:
-        return f"₹{self.price_cr} Cr" if self.price_cr else ""
+        """Format price_cr as a clean ad string regardless of how the user entered it.
+
+        Handles: "3", "3.5", "3-6", "3 to 6", "3 for 4 bhk and 4.5 for 5 bhk onwards",
+                 "starting at 3 crore", "3 Cr onwards", "₹3–4.5 Cr", etc.
+        Strategy: extract ALL decimal numbers, remove any that immediately precede 'bhk'
+        (those are configuration counts, not prices). A single explicit numeric range
+        ("3-6") is rendered as-is, but multiple per-config starting prices (e.g. one
+        price per BHK type) are not a real min-max band — they're each a floor, so we
+        show the lowest one with "onwards" rather than implying the top number is a cap.
+        """
+        raw = (self.price_cr or "").strip()
+        if not raw:
+            return ""
+        # Strip leading ₹ if the user included it
+        raw_clean = raw.lstrip("₹").strip()
+        # Simple case: already just numbers/range with no text
+        if re.fullmatch(r'[\d.,\-–/ ]+', raw_clean):
+            nums = re.findall(r'\d+(?:\.\d+)?', raw_clean)
+            if len(nums) == 1:
+                return f"₹{nums[0]} Cr"
+            return f"₹{nums[0]} – {nums[-1]} Cr"
+        # Complex free-text: separate price numbers from BHK config numbers.
+        # Numbers immediately before "bhk"/"BHK" are configuration counts, not prices.
+        all_nums = re.findall(r'\d+(?:\.\d+)?', raw_clean)
+        bhk_counts = set(re.findall(r'(\d+(?:\.\d+)?)\s*bhk', raw_clean, re.IGNORECASE))
+        prices = [n for n in all_nums if n not in bhk_counts]
+        if not prices:
+            prices = all_nums  # everything labelled bhk — use all as fallback
+        if not prices:
+            return ""
+        if len(prices) == 1:
+            return f"₹{prices[0]} Cr"
+        # Multiple per-config prices found in free text: each is a starting price for
+        # its own configuration, not a min-max band, so lead with the lowest + "onwards".
+        lowest = min(prices, key=float)
+        return f"₹{lowest} Cr onwards"
+
+    # Common Indian place-name suffixes — used to find the natural split point.
+    _LOCALITY_SUFFIXES = (
+        "nagar", "pur", "pura", "bad", "abad", "ganj", "wadi", "wada",
+        "palli", "puram", "pete", "halli", "patnam", "kota", "garh",
+        "dabad", "kheda", "chowk", "gunj",
+    )
 
     @property
     def locality_display(self) -> str:
         return self.locality.upper()
+
+    @property
+    def locality_split_hint(self) -> str:
+        """
+        For long locality names in vertical rail layouts: return a natural two-part
+        split hint (e.g. "NEHRU / NAGAR") so the LLM and Ideogram split at the correct
+        word boundary — not a random syllable boundary.  Returns "" for short names.
+        """
+        loc = self.locality
+        if len(loc) <= 7:
+            return ""
+        low = loc.lower()
+        for suffix in self._LOCALITY_SUFFIXES:
+            if low.endswith(suffix) and len(loc) - len(suffix) >= 3:
+                p1 = loc[:len(loc) - len(suffix)].strip().upper()
+                p2 = loc[len(loc) - len(suffix):].strip().upper()
+                return f"{p1} / {p2}"
+        # Fallback: split at the nearest vowel→consonant boundary around the midpoint.
+        mid = len(loc) // 2
+        vowels = "aeiouAEIOU"
+        for offset in range(0, min(mid, 4)):
+            for pos in [mid + offset, mid - offset]:
+                if 2 <= pos <= len(loc) - 2:
+                    if loc[pos - 1] in vowels and loc[pos] not in vowels:
+                        return f"{loc[:pos].upper()} / {loc[pos:].upper()}"
+        return ""
 
     @property
     def city_display(self) -> str:
@@ -59,23 +128,56 @@ class BriefModel:
 
     @property
     def config_display(self) -> str:
-        """Config plus the (pluralised) property type, e.g. '4 & 5 BHK APARTMENTS'."""
+        """Config BHK string, e.g. '4 & 5 BHK APARTMENTS'.
+
+        When `config` is empty, falls back to extracting BHK numbers from property_type
+        so campaigns created with property_type = '4 bhk and 5 bhk apartments' still
+        get a readable config pill.
+        """
         cfg = self.config.strip()
         if not cfg:
-            return ""
+            # Try to extract BHK numbers from property_type as fallback
+            bhk_nums = re.findall(r'(\d+)\s*bhk', self.property_type, re.IGNORECASE)
+            if bhk_nums:
+                cfg = " & ".join(bhk_nums) + " BHK"
+            else:
+                return ""
         pt = self.property_type.strip()
-        plural = {
+        # Determine a clean property type label (strip sqft/bhk noise from property_type)
+        # Use known singular labels; fall back to Apartments if nothing matches.
+        _PT_MAP = {
             "apartment": "Apartments", "flat": "Apartments", "bungalow": "Bungalows",
             "villa": "Villas", "penthouse": "Penthouses", "duplex": "Duplexes",
             "plot": "Plots", "residence": "Residences",
-        }.get(pt.lower(), (pt + "s") if pt and not pt.lower().endswith("s") else pt)
-        return f"{cfg} {plural}".strip().upper() if plural else cfg.upper()
+        }
+        pt_label = ""
+        for key, label in _PT_MAP.items():
+            if key in pt.lower():
+                pt_label = label
+                break
+        if not pt_label and pt and not any(
+            kw in pt.lower() for kw in ("sqft", "sq ft", "bhk", "bedroom")
+        ):
+            # Clean property_type — use it directly (pluralise if needed)
+            pt_label = (pt + "s") if not pt.lower().endswith("s") else pt
+        return f"{cfg} {pt_label}".strip().upper() if pt_label else cfg.upper()
 
     @property
     def cta_text(self) -> str:
         """Badge wording when sample_ready; explicit cta otherwise."""
         if self.sample_ready:
-            return (self.cta or f"Sample {self.property_type} Ready").strip().upper()
+            if self.cta:
+                return self.cta.strip().upper()
+            # Build a clean fallback from a known property-type label, not the raw
+            # property_type field which may contain sqft/bhk noise.
+            _PT_LABELS = {
+                "apartment": "Apartment", "flat": "Apartment", "bungalow": "Bungalow",
+                "villa": "Villa", "penthouse": "Penthouse", "duplex": "Duplex",
+                "plot": "Plot", "residence": "Residence",
+            }
+            pt_raw = self.property_type.lower()
+            pt_label = next((lbl for key, lbl in _PT_LABELS.items() if key in pt_raw), "Home")
+            return f"SAMPLE {pt_label.upper()} READY"
         return self.cta.strip().upper()
 
     def footer_items(self) -> list[str]:
@@ -113,11 +215,32 @@ class BriefModel:
             bool(brief.get("sample_ready", False))
             if sample_ready_override is None else bool(sample_ready_override)
         )
+        raw_config = _clean(brief.get("config") or brief.get("configuration"))
+        raw_property_type = _clean(brief.get("property_type")) or "Apartment"
+
+        if not raw_config:
+            # Extract BHK config from property_type when not provided as a separate field.
+            # Handles "luxury apartments 4&5 bhk", "4 BHK flat", "4-5 BHK villa", etc.
+            bhk_m = re.search(r'(\d+\s*[&,\-–]\s*\d+|\d+)\s*BHK', raw_property_type, re.IGNORECASE)
+            if bhk_m:
+                raw_config = bhk_m.group(0).strip()
+                # Normalise separator: "4&5" or "4-5" → "4 & 5"; uppercase BHK
+                raw_config = re.sub(r'(\d+)\s*[&,\-–]\s*(\d+)', r'\1 & \2', raw_config)
+                raw_config = re.sub(r'\bBHK\b', 'BHK', raw_config, flags=re.IGNORECASE)
+                # Strip the extracted BHK part from property_type so it doesn't duplicate
+                raw_property_type = re.sub(
+                    r'\d+\s*[&,\-–]\s*\d+\s*BHK|\d+\s*BHK', '',
+                    raw_property_type, flags=re.IGNORECASE,
+                ).strip()
+
+        # Normalise property_type to a clean noun (strip leading adjectives like "luxury")
+        clean_pt = re.sub(r'^(luxury|premium|ultra\s+luxury|affordable)\s+', '', raw_property_type, flags=re.IGNORECASE).strip()
+
         return cls(
             locality=_clean(brief.get("locality") or brief.get("city")),
             city=_clean(brief.get("city")),
             price_cr=_clean(brief.get("price_cr")),
-            config=_clean(brief.get("config") or brief.get("configuration")),
+            config=raw_config,
             headline=_clean(headline),
             eyebrow=_clean(eyebrow),
             cta=_clean(cta or brief.get("sample_ready_cta")),
@@ -126,7 +249,7 @@ class BriefModel:
             sample_ready=sample_ready,
             cheque_only=bool(brief.get("cheque_only", False)),
             property_name=_clean(brief.get("property_name")),
-            property_type=_clean(brief.get("property_type")) or "Apartment",
+            property_type=clean_pt or "Apartment",
         )
 
     def sanitizer_brief(self) -> dict:

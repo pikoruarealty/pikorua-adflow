@@ -73,6 +73,10 @@ class AudienceCrew:
         return Task(config=self.tasks_config["build_targeting_brief"])
 
     @task
+    def select_targeting(self) -> Task:
+        return Task(config=self.tasks_config["select_targeting"])
+
+    @task
     def analyse_trends(self) -> Task:
         return Task(config=self.tasks_config["analyse_trends"])
 
@@ -83,6 +87,7 @@ class AudienceCrew:
             self.scout_competitors(),
             self.analyse_crm_leads(),
             self.build_targeting_brief(),
+            self.select_targeting(),
         ]
         if not self._skip_trends:
             tasks.append(self.analyse_trends())

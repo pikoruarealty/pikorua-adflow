@@ -34,6 +34,7 @@ BRAND_LOGO_PATH = OUTPUT_DIR / "brand_logo.png"
 REFERENCE_IMAGES_DIR = OUTPUT_DIR / "reference_images"
 AUDIENCES_REGISTRY_PATH = OUTPUT_DIR / "meta_audiences_registry.json"
 INSIGHTS_PATH = OUTPUT_DIR / "crm_strategic_insights.json"
+AUTOOPTIMISER_CACHE_PATH = OUTPUT_DIR / "autooptimiser_data_cache.json"
 
 # Per-run crew artifacts (written relative to CWD by the crews, read from here)
 TREND_HOOKS_PATH = OUTPUT_DIR / "trend_hooks.md"
@@ -58,6 +59,7 @@ IST = timezone(timedelta(hours=5, minutes=30), name="IST")
 CRM_CACHE_TTL_SECS = 4 * 60 * 60        # CRM report cache
 INSIGHTS_TTL_SECS = 4 * 60 * 60         # strategic insights cache
 TREND_TTL_SECONDS = 8 * 60 * 60         # trend-hook reuse window in the pipeline
+AUTOOPTIMISER_CACHE_TTL_SECS = 30 * 60   # AutoOptimiser evaluation pass cache
 
 # ── AutoOptimiser — Tunables ──────────────────────────────────────────────────
 # Seeded from hand-tuned values (2026-06-22 account snapshot).

@@ -13,14 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# ── dependency layer (cached until pyproject.toml changes) ──────────────────
-COPY pyproject.toml ./
+# ── dependency layer (cached until requirements.txt/pyproject.toml change) ───
+COPY requirements.txt pyproject.toml ./
 # Minimal stub so pip can resolve the package before the real src lands
 RUN mkdir -p src/pikorua_adflow && touch src/pikorua_adflow/__init__.py
 
 RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir -e ".[all]" 2>/dev/null \
- || pip install --no-cache-dir -e .
+ && pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the fastembed embedding model (~67 MB) so first run is instant.
 # Model lands in /root/.cache/fastembed/ — persisted via a named volume in prod.

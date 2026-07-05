@@ -182,6 +182,100 @@ def _rollback(created: dict, token: str, skip_campaign: bool = False) -> list[st
     return removed
 
 
+def _create_adset(
+    *,
+    ad_account_id: str,
+    campaign_id: str,
+    name: str,
+    targeting_spec: dict[str, Any] | None,
+    age_min: int,
+    age_max: int,
+    daily_budget_inr: int,
+    page_id: str,
+    end_time: str,
+    token: str,
+) -> tuple[str, list[str]]:
+    """
+    Create one PAUSED ad set. Shared by deploy_ad (one ad set per variant) and
+    deploy_dynamic_ad (one ad set for the whole asset pool) so the hard-won
+    required fields (is_adset_budget_sharing_enabled at campaign level,
+    bid_strategy, targeting_automation, promoted_object, destination_type) and
+    the regulated-country retry/drop logic aren't duplicated.
+    Returns (adset_id, dropped_locations_iso_codes).
+    """
+    if targeting_spec:
+        adset_targeting = dict(targeting_spec)
+        adset_targeting.setdefault("targeting_automation", {"advantage_audience": 0})
+    else:
+        adset_targeting = {
+            "geo_locations": {"countries": ["IN"]},
+            "age_min": age_min,
+            "age_max": age_max,
+            "targeting_automation": {"advantage_audience": 0},
+        }
+
+    _geo = adset_targeting.get("geo_locations", {})
+    _sg_via_country = "SG" in _geo.get("countries", [])
+    _sg_via_city = any(c.get("country") == "SG" for c in _geo.get("cities", []))
+    _regional_cats: list[str] = []
+    if _sg_via_country or _sg_via_city:
+        _regional_cats.append("SINGAPORE_UNIVERSAL")
+
+    adset_payload: dict[str, Any] = {
+        "name": name,
+        "campaign_id": campaign_id,
+        "optimization_goal": "LEAD_GENERATION",
+        "billing_event": "IMPRESSIONS",
+        "destination_type": "ON_AD",
+        "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+        "daily_budget": daily_budget_inr * 100,
+        "promoted_object": {"page_id": page_id},
+        "targeting": adset_targeting,
+        "status": "PAUSED",
+    }
+    if _regional_cats:
+        adset_payload["regional_regulated_categories"] = _regional_cats
+    if end_time:
+        adset_payload["end_time"] = end_time
+
+    dropped_locations: list[str] = []
+    _compliance_retried = False
+    while True:
+        ok, adset = _do_post(f"act_{ad_account_id}/adsets", adset_payload, token)
+        if ok:
+            return adset["id"], dropped_locations
+        err = adset.get("error", adset)
+        err_msg = (
+            f"{err.get('error_user_title', '')} "
+            f"{err.get('error_user_msg', '')} "
+            f"{err.get('message', '')}".lower()
+        )
+        subcode = err.get("error_subcode")
+        if (subcode == 3858550 or "singapore_universal" in err_msg) and not _compliance_retried:
+            cats = adset_payload.get("regional_regulated_categories", [])
+            if "SINGAPORE_UNIVERSAL" not in cats:
+                adset_payload["regional_regulated_categories"] = cats + ["SINGAPORE_UNIVERSAL"]
+            _compliance_retried = True
+            continue
+        countries = adset_targeting.get("geo_locations", {}).get("countries", [])
+        iso = _regulated_country_to_drop(adset, countries)
+        if not iso:
+            err_detail = json.dumps(err)
+            raise RuntimeError(f"POST act_{ad_account_id}/adsets failed: {err_detail}")
+        countries.remove(iso)
+        dropped_locations.append(iso)
+        if countries:
+            adset_targeting["geo_locations"]["countries"] = countries
+        else:
+            adset_targeting["geo_locations"].pop("countries", None)
+        if not adset_targeting["geo_locations"]:
+            raise RuntimeError(
+                "All targeted locations require regulatory declarations that must be "
+                "made in Meta Ads Manager. Nothing left to target after removing: "
+                + ", ".join(_ISO_NAMES.get(c, c) for c in dropped_locations)
+            )
+
+
 def create_campaign(*, campaign_name: str, token: str, ad_account_id: str) -> str:
     """Create one PAUSED OUTCOME_LEADS campaign and return its ID."""
     campaign = _post(
@@ -361,78 +455,19 @@ def deploy_ad(
         if not adset_id:
             # Targeting: a resolved spec (city geo + interests/behaviours from the audience
             # panel) is used when provided. Without one we fall back to country-level India.
-            if targeting_spec:
-                adset_targeting = dict(targeting_spec)
-                adset_targeting.setdefault("targeting_automation", {"advantage_audience": 0})
-            else:
-                adset_targeting = {
-                    "geo_locations": {"countries": ["IN"]},
-                    "age_min": age_min,
-                    "age_max": age_max,
-                    "targeting_automation": {"advantage_audience": 0},
-                }
-
-            # Proactively add compliance declarations required by the targeted locations.
-            _geo = adset_targeting.get("geo_locations", {})
-            _sg_via_country = "SG" in _geo.get("countries", [])
-            _sg_via_city = any(c.get("country") == "SG" for c in _geo.get("cities", []))
-            _regional_cats: list[str] = []
-            if _sg_via_country or _sg_via_city:
-                _regional_cats.append("SINGAPORE_UNIVERSAL")
-
-            adset_payload: dict[str, Any] = {
-                "name": f"{campaign_name} — V{variant} — Ad Set",
-                "campaign_id": created["campaign"],
-                "optimization_goal": "LEAD_GENERATION",
-                "billing_event": "IMPRESSIONS",
-                "destination_type": "ON_AD",
-                "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
-                "daily_budget": daily_budget_inr * 100,
-                "promoted_object": {"page_id": page_id},
-                "targeting": adset_targeting,
-                "status": "PAUSED",
-            }
-            if _regional_cats:
-                adset_payload["regional_regulated_categories"] = _regional_cats
-            if end_time:
-                adset_payload["end_time"] = end_time
-
-            _compliance_retried = False
-            while True:
-                ok, adset = _do_post(f"act_{ad_account_id}/adsets", adset_payload, token)
-                if ok:
-                    break
-                err = adset.get("error", adset)
-                err_msg = (
-                    f"{err.get('error_user_title', '')} "
-                    f"{err.get('error_user_msg', '')} "
-                    f"{err.get('message', '')}".lower()
-                )
-                subcode = err.get("error_subcode")
-                if (subcode == 3858550 or "singapore_universal" in err_msg) and not _compliance_retried:
-                    cats = adset_payload.get("regional_regulated_categories", [])
-                    if "SINGAPORE_UNIVERSAL" not in cats:
-                        adset_payload["regional_regulated_categories"] = cats + ["SINGAPORE_UNIVERSAL"]
-                    _compliance_retried = True
-                    continue
-                countries = adset_targeting.get("geo_locations", {}).get("countries", [])
-                iso = _regulated_country_to_drop(adset, countries)
-                if not iso:
-                    err_detail = json.dumps(err)
-                    raise RuntimeError(f"POST act_{ad_account_id}/adsets failed: {err_detail}")
-                countries.remove(iso)
-                dropped_locations.append(iso)
-                if countries:
-                    adset_targeting["geo_locations"]["countries"] = countries
-                else:
-                    adset_targeting["geo_locations"].pop("countries", None)
-                if not adset_targeting["geo_locations"]:
-                    raise RuntimeError(
-                        "All targeted locations require regulatory declarations that must be "
-                        "made in Meta Ads Manager. Nothing left to target after removing: "
-                        + ", ".join(_ISO_NAMES.get(c, c) for c in dropped_locations)
-                    )
-            created["adset"] = adset["id"]
+            adset_id_new, dropped_locations = _create_adset(
+                ad_account_id=ad_account_id,
+                campaign_id=created["campaign"],
+                name=f"{campaign_name} — V{variant} — Ad Set",
+                targeting_spec=targeting_spec,
+                age_min=age_min,
+                age_max=age_max,
+                daily_budget_inr=daily_budget_inr,
+                page_id=page_id,
+                end_time=end_time,
+                token=token,
+            )
+            created["adset"] = adset_id_new
 
         # Step 4 — create ad creative
         # `link` is required by Meta even for Lead Gen creatives; the form opens on
@@ -492,6 +527,175 @@ def deploy_ad(
         "creative_id": created["creative"],
         "ad_id": created["ad"],
         "image_hash": image_hash,
+        "dropped_locations": [_ISO_NAMES.get(c, c) for c in dropped_locations],
+        "dry_run": False,
+    }
+
+
+def deploy_dynamic_ad(
+    *,
+    headlines: list[str],
+    bodies: list[str],
+    image_paths: list[pathlib.Path],
+    campaign_name: str,
+    city: str = "India",
+    age_min: int = 28,
+    age_max: int = 65,
+    landing_page_url: str = "https://pikorua.in/",
+    daily_budget_inr: int = 1000,
+    cta: str = "GET_QUOTE",
+    targeting_spec: dict[str, Any] | None = None,
+    audience_label: str = "",
+    instagram_actor_id: str = "",
+    end_time: str = "",
+    campaign_id: str = "",
+) -> dict[str, Any]:
+    """
+    Create ONE Meta Dynamic Creative ad (asset_feed_spec) that pools every supplied
+    image/headline/body and lets Meta's algorithm pick winning combinations per
+    viewer, instead of the fixed 1:1:1 pairing `deploy_ad` creates per variant.
+    Opt-in only — the curated per-variant path in deploy_ad remains the default.
+
+    Steps: upload all images → (campaign if no campaign_id) → one ad set →
+           one creative (asset_feed_spec) → one ad (all PAUSED).
+
+    DRY_RUN=true: returns a preview dict without calling the API.
+    On failure: raises RuntimeError with API error details.
+    """
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    ad_account_id = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+    page_id = os.getenv("META_PAGE_ID", "")
+    lead_form_id = os.getenv("META_LEAD_FORM_ID", "")
+    instagram_actor_id = instagram_actor_id or os.getenv("META_INSTAGRAM_ACTOR_ID", "")
+    if not instagram_actor_id and page_id and token and not dry_run:
+        instagram_actor_id = _fetch_instagram_actor_id(page_id, token)
+
+    if dry_run:
+        return {
+            "mode": "dynamic",
+            "dry_run": True,
+            "would_create": {
+                "images": [str(p) for p in image_paths],
+                "headlines": headlines,
+                "bodies": bodies,
+                "campaign": campaign_id or f"(would create) {campaign_name}",
+                "adset": {
+                    "optimization_goal": "LEAD_GENERATION",
+                    "billing_event": "IMPRESSIONS",
+                    "daily_budget_inr": daily_budget_inr,
+                    "daily_budget_paise": daily_budget_inr * 100,
+                    "geo": audience_label or "India (country-level)",
+                    "age_min": (targeting_spec or {}).get("age_min", age_min),
+                    "age_max": (targeting_spec or {}).get("age_max", age_max),
+                    "targeting": targeting_spec,
+                    "instagram_actor_id": instagram_actor_id or "(none)",
+                    "end_time": end_time or "(no end date)",
+                },
+                "creative": {
+                    "cta": cta,
+                    "lead_gen_form_id": lead_form_id or "(META_LEAD_FORM_ID not set)",
+                    "thank_you_url": landing_page_url,
+                },
+                "ad": {"status": "PAUSED"},
+            },
+        }
+
+    missing = [k for k, v in [
+        ("META_ACCESS_TOKEN", token),
+        ("META_AD_ACCOUNT_ID", ad_account_id),
+        ("META_PAGE_ID", page_id),
+        ("META_LEAD_FORM_ID", lead_form_id),
+    ] if not v]
+    if missing:
+        raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")
+    if not headlines or not bodies or not image_paths:
+        raise RuntimeError("deploy_dynamic_ad requires at least one headline, body, and image.")
+
+    # Step 1 — upload every image in the pool
+    image_hashes = [_upload_image(ad_account_id, p, token) for p in image_paths if p.exists()]
+    if not image_hashes:
+        raise RuntimeError("deploy_dynamic_ad: none of the supplied image_paths exist.")
+
+    _shared_campaign = bool(campaign_id)
+    created: dict[str, str | None] = {"campaign": None, "adset": None, "creative": None, "ad": None}
+    dropped_locations: list[str] = []
+    try:
+        # Step 2 — create campaign (skipped when campaign_id provided)
+        if campaign_id:
+            created["campaign"] = campaign_id
+        else:
+            created["campaign"] = create_campaign(
+                campaign_name=campaign_name, token=token, ad_account_id=ad_account_id,
+            )
+
+        # Step 3 — create the single shared ad set for the asset pool
+        adset_id_new, dropped_locations = _create_adset(
+            ad_account_id=ad_account_id,
+            campaign_id=created["campaign"],
+            name=f"{campaign_name} — Dynamic — Ad Set",
+            targeting_spec=targeting_spec,
+            age_min=age_min,
+            age_max=age_max,
+            daily_budget_inr=daily_budget_inr,
+            page_id=page_id,
+            end_time=end_time,
+            token=token,
+        )
+        created["adset"] = adset_id_new
+
+        # Step 4 — create the dynamic creative (asset_feed_spec pools every asset;
+        # Meta mixes image × headline × body per viewer instead of a fixed pairing).
+        # NOTE: the lead-gen-form wiring under asset_feed_spec has not been verified
+        # against a live account yet — confirm against Meta's current Marketing API
+        # docs / a supervised live PAUSED test before treating this as production-ready.
+        asset_feed_spec: dict[str, Any] = {
+            "images": [{"hash": h} for h in image_hashes],
+            "bodies": [{"text": b} for b in bodies],
+            "titles": [{"text": h} for h in headlines],
+            "link_urls": [{"website_url": landing_page_url}],
+            "call_to_action_types": [cta],
+            "ad_formats": ["SINGLE_IMAGE"],
+        }
+        object_story_spec: dict[str, Any] = {"page_id": page_id}
+        if instagram_actor_id:
+            object_story_spec["instagram_actor_id"] = instagram_actor_id
+
+        creative = _post(
+            f"act_{ad_account_id}/adcreatives",
+            {
+                "name": f"{campaign_name} — Dynamic — Creative",
+                "object_story_spec": object_story_spec,
+                "asset_feed_spec": asset_feed_spec,
+            },
+            token,
+        )
+        created["creative"] = creative["id"]
+
+        # Step 5 — create ad
+        ad = _post(
+            f"act_{ad_account_id}/ads",
+            {
+                "name": f"{campaign_name} — Dynamic — Ad",
+                "adset_id": created["adset"],
+                "creative": {"creative_id": created["creative"]},
+                "status": "PAUSED",
+            },
+            token,
+        )
+        created["ad"] = ad["id"]
+    except Exception:
+        _rollback(created, token, skip_campaign=_shared_campaign)
+        raise
+
+    return {
+        "mode": "dynamic",
+        "variant": "dynamic",
+        "campaign_id": created["campaign"],
+        "adset_id": created["adset"],
+        "creative_id": created["creative"],
+        "ad_id": created["ad"],
+        "image_hashes": image_hashes,
         "dropped_locations": [_ISO_NAMES.get(c, c) for c in dropped_locations],
         "dry_run": False,
     }

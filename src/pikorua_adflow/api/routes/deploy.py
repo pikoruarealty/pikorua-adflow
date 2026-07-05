@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, Response
 
 from ..config import REFERENCE_IMAGES_DIR
 from ..models import (AdvantageToggleReq, ApplyRecommendationReq, CboToggleReq,
-                      MetaOptimizeReq, RetargetCampaignReq)
+                      CreativeModeReq, MetaOptimizeReq, RetargetCampaignReq)
 from ..services import campaign_service as cs
 from ..services import crm_service
 from ..services import deploy_service as ds
@@ -20,6 +20,18 @@ from ..services import image_service as imgs
 from ..state import RUNS, RUNS_LOCK, save_runs
 
 router = APIRouter()
+
+
+@router.post("/creative-mode/{run_id}")
+def set_creative_mode(run_id: str, req: CreativeModeReq):
+    """Set the deploy creative mode for a run: 'curated' (default) or 'dynamic'
+    (Meta Dynamic Creative — pools all variants' assets, Meta picks combinations)."""
+    run = cs.require_complete(run_id)
+    if req.mode not in ("curated", "dynamic"):
+        raise HTTPException(status_code=400, detail="mode must be 'curated' or 'dynamic'")
+    review_folder = Path(run["review_folder"])
+    cs.set_creative_mode(review_folder, req.mode)
+    return {"run_id": run_id, "creative_mode": req.mode}
 
 
 @router.post("/deploy-to-meta/{run_id}")
@@ -35,7 +47,9 @@ def deploy_to_meta(run_id: str):
     if not selected:
         raise HTTPException(status_code=400, detail="No ad copy variants found in review folder.")
 
-    from pikorua_adflow.tools.meta_tool import create_campaign, deploy_ad
+    creative_mode = cs.get_creative_mode(review_folder)
+
+    from pikorua_adflow.tools.meta_tool import create_campaign, deploy_ad, deploy_dynamic_ad
 
     campaign_name = brief.get("property_name", "Pikorua Campaign")
     city = brief.get("city", "India")
@@ -63,42 +77,79 @@ def deploy_to_meta(run_id: str):
                     "errors": [{"variant": None, "error": friendly["message"], "fixable": friendly["fixable"]}],
                     "dropped_locations": []}
 
-    results = []
-    errors = []
-    for variant_num in selected:
-        copy = meta_copy.get(variant_num, {})
-        headline = copy.get("headline", "")
-        body_text = copy.get("body", "")
+    def _resolve_image_path(variant_num: int) -> Path | None:
         _v_edits = cs.load_edits(review_folder).get("meta", {}).get(str(variant_num), {})
         _assigned = _v_edits.get("image_num")
         if _assigned and (review_folder / "images" / f"image_{_assigned}.png").exists():
-            image_path = review_folder / "images" / f"image_{_assigned}.png"
-        elif (review_folder / "images" / f"image_{variant_num}.png").exists():
-            image_path = review_folder / "images" / f"image_{variant_num}.png"
-        else:
-            image_path = None
+            return review_folder / "images" / f"image_{_assigned}.png"
+        if (review_folder / "images" / f"image_{variant_num}.png").exists():
+            return review_folder / "images" / f"image_{variant_num}.png"
+        return None
+
+    results = []
+    errors = []
+
+    if creative_mode == "dynamic":
+        headlines, bodies, image_paths = [], [], []
+        for variant_num in selected:
+            copy = meta_copy.get(variant_num, {})
+            if copy.get("headline"):
+                headlines.append(copy["headline"])
+            if copy.get("body"):
+                bodies.append(copy["body"])
+            p = _resolve_image_path(variant_num)
+            if p:
+                image_paths.append(p)
         try:
-            result = deploy_ad(
-                variant=variant_num, headline=headline, body=body_text, image_path=image_path,
+            result = deploy_dynamic_ad(
+                headlines=headlines, bodies=bodies, image_paths=image_paths,
                 campaign_name=campaign_name, city=city, landing_page_url=landing_page_url,
                 daily_budget_inr=daily_budget_inr, cta=cta, targeting_spec=targeting_spec,
                 audience_label=audience_label, end_time=end_time, campaign_id=shared_campaign_id,
-                adset_id=brief.get("target_adset_id", ""),
             )
             results.append(result)
-            if not dry_run and image_path and image_path.exists():
-                try:
-                    import shutil as _shutil
-                    REFERENCE_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-                    dest = REFERENCE_IMAGES_DIR / f"published_{run_id}_v{variant_num}.png"
-                    _shutil.copy2(image_path, dest)
-                    imgs.analyze_reference_image(dest)
-                except Exception:
-                    pass
+            if not dry_run:
+                for i, image_path in enumerate(image_paths):
+                    try:
+                        import shutil as _shutil
+                        REFERENCE_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+                        dest = REFERENCE_IMAGES_DIR / f"published_{run_id}_dynamic_{i}.png"
+                        _shutil.copy2(image_path, dest)
+                        imgs.analyze_reference_image(dest)
+                    except Exception:
+                        pass
         except Exception as exc:
             from pikorua_adflow.tools.errors import explain_and_log
-            friendly = explain_and_log(f"Meta deploy — variant {variant_num}", exc)
-            errors.append({"variant": variant_num, "error": friendly["message"], "fixable": friendly["fixable"]})
+            friendly = explain_and_log("Meta deploy — dynamic creative", exc)
+            errors.append({"variant": "dynamic", "error": friendly["message"], "fixable": friendly["fixable"]})
+    else:
+        for variant_num in selected:
+            copy = meta_copy.get(variant_num, {})
+            headline = copy.get("headline", "")
+            body_text = copy.get("body", "")
+            image_path = _resolve_image_path(variant_num)
+            try:
+                result = deploy_ad(
+                    variant=variant_num, headline=headline, body=body_text, image_path=image_path,
+                    campaign_name=campaign_name, city=city, landing_page_url=landing_page_url,
+                    daily_budget_inr=daily_budget_inr, cta=cta, targeting_spec=targeting_spec,
+                    audience_label=audience_label, end_time=end_time, campaign_id=shared_campaign_id,
+                    adset_id=brief.get("target_adset_id", ""),
+                )
+                results.append(result)
+                if not dry_run and image_path and image_path.exists():
+                    try:
+                        import shutil as _shutil
+                        REFERENCE_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+                        dest = REFERENCE_IMAGES_DIR / f"published_{run_id}_v{variant_num}.png"
+                        _shutil.copy2(image_path, dest)
+                        imgs.analyze_reference_image(dest)
+                    except Exception:
+                        pass
+            except Exception as exc:
+                from pikorua_adflow.tools.errors import explain_and_log
+                friendly = explain_and_log(f"Meta deploy — variant {variant_num}", exc)
+                errors.append({"variant": variant_num, "error": friendly["message"], "fixable": friendly["fixable"]})
 
     if shared_campaign_id and not results:
         from pikorua_adflow.tools.meta_tool import _delete
@@ -109,6 +160,7 @@ def deploy_to_meta(run_id: str):
     with RUNS_LOCK:
         if results:
             RUNS[run_id]["meta_ads"] = results
+            RUNS[run_id]["creative_mode"] = creative_mode
         if errors:
             RUNS[run_id]["meta_deploy_errors"] = errors
         if dropped:
@@ -139,6 +191,12 @@ def refresh_creatives(run_id: str, ab: bool = False):
     from pikorua_adflow.api.services import autooptimiser as _autooptimiser_svc
 
     run = cs.require_complete(run_id)
+    if run.get("creative_mode") == "dynamic":
+        raise HTTPException(
+            status_code=400,
+            detail="Refresh-creatives isn't supported yet for Dynamic Creative runs — "
+                   "edit the asset pool directly in Ads Manager.",
+        )
     review_folder = Path(run["review_folder"])
     brief = run.get("brief", {})
     ads = ds.real_meta_ads(run)
@@ -310,6 +368,12 @@ def meta_performance(run_id: str):
     ads = ds.real_meta_ads(run)
     if not ads:
         return {"variants": [], "crm_signals": [], "note": "Publish live ads first to see performance."}
+    dynamic_note = (
+        "This run used Dynamic Creative — Meta mixes your uploaded images/headlines/"
+        "bodies internally, so per-variant comparison isn't available here. Check "
+        "Asset Performance in Ads Manager instead."
+        if run.get("creative_mode") == "dynamic" else None
+    )
 
     from pikorua_adflow.tools import meta_targeting as _mt
     from pikorua_adflow.tools.meta_tool import (fetch_insights, fetch_reach_estimate,
@@ -463,7 +527,8 @@ def meta_performance(run_id: str):
 
     return {"variants": variants_out, "campaign_recs": campaign_recs,
             "crm_signals": crm_service.crm_optimisation_signals(),
-            "reach_mau": reach_mau, "learning": _tracker.history(run_id)}
+            "reach_mau": reach_mau, "learning": _tracker.history(run_id),
+            "note": dynamic_note}
 
 
 @router.post("/meta-optimize/{run_id}")

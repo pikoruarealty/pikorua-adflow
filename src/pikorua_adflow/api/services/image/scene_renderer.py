@@ -44,7 +44,7 @@ def build_scene_prompt(spec: AdSpec, brief: BriefModel) -> str:
     return sanitizer.sanitize(raw, brief.sanitizer_brief(), strip_tech_noise=True)
 
 
-def render(spec: AdSpec, brief: BriefModel, key: str, speed: str = "DEFAULT",
+def render(spec: AdSpec, brief: BriefModel, key: str, speed: str = "QUALITY",
            aspect: str = "4x5") -> bytes:
     """Build the scene-only prompt and call Ideogram v4. Returns raw scene image bytes."""
     prompt = build_scene_prompt(spec, brief)

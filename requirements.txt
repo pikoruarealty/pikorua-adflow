@@ -1,0 +1,19 @@
+# Pinned runtime dependencies for pikorua-adflow.
+# This is the layer Docker installs first (cached until this file changes).
+# Source of truth for the dependency *set* is pyproject.toml; this file pins
+# exact versions proven working, for reproducible Docker builds.
+#
+# Regenerate after adding a new import: pip freeze | grep -f <(python -c "...")
+# or simply add the new package + its currently-installed version here by hand.
+
+crewai[tools]==1.14.5a2
+qdrant-client[fastembed]==1.18.0
+apscheduler==3.11.2
+litellm==1.87.1
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+pillow==12.2.0
+python-multipart==0.0.32
+requests==2.34.2
+openpyxl==3.1.5
+python-dotenv==1.2.2

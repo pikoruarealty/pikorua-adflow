@@ -28,12 +28,15 @@ _CSV_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "project_contex
 
 # PostgREST embed: meta_leads holds the contact/campaign columns; lead_crm_details
 # (FK lead_id -> meta_leads.id) holds budget/profession/company. One joined query.
-# client_status is fetched from lead_crm_details if the column exists there;
-# meta_leads.status already carries the same disposition value in the live DB.
+# lead_crm_details has no client_status column (verified against the live schema) —
+# meta_leads.status is assignment routing only (assigned/unassigned/cold_pool), not
+# disposition. meta_leads.client_id is the FK into `clients`, which holds one row
+# per enquiry/lead for that client — status there (warm/hot/cold/broker/lost/...)
+# is the real per-lead disposition and is joined in separately below.
 _SELECT = (
-    "full_name,phone,email,city,campaign_name,source,status,received_at,assigned_to,"
+    "full_name,phone,email,city,campaign_name,source,status,received_at,assigned_to,client_id,"
     "lead_crm_details(budget_range,profession,company_name,current_city,current_area,"
-    "configuration,call_status,buying_status,client_status,hwc,remarks,site_visit_status)"
+    "configuration,call_status,buying_status,hwc,remarks,site_visit_status)"
 )
 
 
@@ -49,11 +52,42 @@ def _supabase_creds() -> tuple[str, str] | None:
     return None
 
 
+def _fetch_clients_by_id(base_url: str, headers: dict) -> dict[str, dict]:
+    """
+    `clients` holds one row per enquiry/lead for a given person — status there
+    (warm/hot/cold/broker/lost/postponed/...) is the real per-lead disposition,
+    keyed by clients.id which meta_leads.client_id references directly.
+    """
+    import requests
+
+    lookup: dict[str, dict] = {}
+    page_size = 1000
+    offset = 0
+    while True:
+        resp = requests.get(
+            f"{base_url}/rest/v1/clients",
+            params={"select": "id,status,status_note", "deleted_at": "is.null"},
+            headers={**headers, "Range-Unit": "items", "Range": f"{offset}-{offset + page_size - 1}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        batch = resp.json()
+        if not batch:
+            break
+        for c in batch:
+            lookup[c["id"]] = c
+        if len(batch) < page_size:
+            break
+        offset += page_size
+    return lookup
+
+
 def _fetch_supabase(base_url: str, key: str) -> list[dict]:
     """Fetch all CRM leads from Supabase and normalise to CSV-style header keys."""
     import requests
 
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+    clients_by_id = _fetch_clients_by_id(base_url, headers)
     rows: list[dict] = []
     page_size = 1000
     offset = 0
@@ -73,13 +107,7 @@ def _fetch_supabase(base_url: str, key: str) -> list[dict]:
             crm = r.get("lead_crm_details") or {}
             if isinstance(crm, list):  # PostgREST may return a list for the embed
                 crm = crm[0] if crm else {}
-            # client_status: prefer lead_crm_details.client_status if present,
-            # fall back to meta_leads.status (same disposition value in live DB).
-            client_status = (
-                crm.get("client_status")
-                or r.get("status")
-                or ""
-            )
+            client = clients_by_id.get(r.get("client_id") or "", {})
             rows.append({
                 "Name": r.get("full_name") or "",
                 "Phone": r.get("phone") or "",
@@ -87,7 +115,9 @@ def _fetch_supabase(base_url: str, key: str) -> list[dict]:
                 "City": r.get("city") or crm.get("current_city") or "",
                 "Campaign": r.get("campaign_name") or "",
                 "Source": r.get("source") or "",
-                "Status": client_status,
+                "Status": r.get("status") or "",
+                "Client Status": client.get("status") or "",
+                "Client Status Note": client.get("status_note") or "",
                 "Received": r.get("received_at") or "",
                 "Budget": crm.get("budget_range") or "",
                 "Profession": crm.get("profession") or "",

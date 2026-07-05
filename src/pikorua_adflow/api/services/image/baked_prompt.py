@@ -60,63 +60,77 @@ def _logo_zone_instruction(brief: BriefModel, skeleton: str) -> str:
 
 
 def _text_strings(brief: BriefModel) -> str:
+    # Each string carries only its identity + one compact role line. All sizing and
+    # hierarchy detail lives ONCE in _design_rules(); all placement/creative detail
+    # lives in the AD COMPOSITION — never duplicated here, so the composition keeps
+    # its prompt budget and no two sections can contradict each other.
     lines = [
-        f'Locality name — THE DOMINANT ELEMENT: "{brief.locality_display}". '
-        f'This must be physically the largest text on the entire ad — fill most of the '
-        f'text zone width. If it spans two lines, split ONLY at a natural word boundary '
-        f'(e.g. NEHRU / NAGAR); each line fills the same full width at maximum scale. '
-        f'NEVER hyphenate mid-word. If the name fits on one line it still fills the full '
-        f'zone width at a scale that dominates everything else below it.'
+        f'Locality name — THE DOMINANT ELEMENT, the single largest text on the ad, '
+        f'filling the text zone width: "{brief.locality_display}". If it needs two '
+        f'lines, split only at a natural word boundary (e.g. NEHRU / NAGAR), each line '
+        f'at the same full width; never hyphenate mid-word.'
     ]
     if brief.city_display:
         lines.append(
-            f'City, beneath the locality: "{brief.city_display}" — tracked small-caps, '
-            f'roughly 40–50% of the locality cap-height. Must be clearly legible and '
-            f'dignified — NOT a micro-label. Never shrink it below comfortable reading '
-            f'size just to create contrast with the locality.'
+            f'City, beneath the locality: "{brief.city_display}" — tracked small-caps '
+            f'at 40–50% of the locality cap-height; clearly legible, never a micro-label.'
         )
     if brief.config_display:
         lines.append(
-            f'Configuration tag — THE SECOND-MOST-PROMINENT TEXT ON THE AD, directly below '
-            f'the locality. ABSOLUTE SIZE FLOOR: must read effortlessly at arm\'s length — '
-            f'a BOLD/BLACK-weight display serif or bold tracked sans, clearly HEAVIER '
-            f'in stroke weight than the city name. Roughly co-equal with the price numeral '
-            f'in visual weight and clearly BIGGER than the tagline. Strongly prefer '
-            f'enclosing it in a thin gold-bordered pill/tag; if in a pill, the text inside '
-            f'must be BOLD weight — never regular/light inside the pill. If any sizing '
-            f'rule would make this thin or small, ignore it and make it bigger — err on '
-            f'the side of TOO large. Never a caption: "{brief.config_display}"'
+            f'Configuration tag — the second-most-prominent text, directly below the '
+            f'city: "{brief.config_display}". BOLD/BLACK weight, co-equal with the '
+            f'price in visual weight and clearly bigger than the tagline; prefer a thin '
+            f'gold-bordered pill with BOLD text inside. Err on the side of too large.'
         )
     # ONE tagline only — never headline AND eyebrow competing as two messages.
     tagline = brief.headline or brief.eyebrow
     if tagline:
         lines.append(
-            f'Tagline — italic serif, placed in the main text zone (NOT in the spec '
-            f'strip, NOT in the footer band, NO icon above it). '
-            f'RENDER EXACTLY THIS TEXT AND NO OTHER: "{tagline}". '
-            f'No additions, no extensions, no second clause invented. '
-            f'SIZE RULE: if the tagline fits comfortably on ONE LINE in the available '
-            f'width, render it as a SINGLE LINE at a larger, bolder size — this is '
-            f'always preferred over splitting into two smaller lines. Only split at a '
-            f'natural break (period or dash) when the text is genuinely too long for '
-            f'one line, or when a two-line split creates a clearly stronger visual '
-            f'rhythm. When in doubt, keep it one line and make it bigger. '
-            f'If split, style as: first clause cream/ivory roman, second clause gold '
-            f'italic — but only split if the single-line version would be cramped. '
-            f'It is a caption, not a spec item.'
+            f'Tagline — RENDER EXACTLY THIS TEXT AND NO OTHER: "{tagline}". No '
+            f'additions, no invented clauses. It sits in the main text zone (never in '
+            f'the spec strip or footer band, no icon above it). The AD COMPOSITION '
+            f'section defines its creative type treatment (scale-cut, weight/colour '
+            f'contrast, or line-break drama) — follow that treatment exactly; if the '
+            f'composition gives none, DEFAULT to weight/colour contrast: the first '
+            f'clause in cream roman, the strongest word or closing clause in heavier '
+            f'gold-accent weight — never a single flat weight/colour italic line, '
+            f'which is a typographic failure. Whatever backing it sits on (frosted '
+            f'pill, scrim, dark panel), its text colour is chosen to contrast THAT '
+            f'backing\'s actual tone, not assumed cream or white — a light frosted '
+            f'pill needs dark espresso text, a dark scrim or panel needs cream/gold '
+            f'text.'
         )
     if brief.price_display:
+        # Pick a price qualifier — varies across properties for natural variety.
+        # "onwards" reads naturally trailing the number, so it sits BELOW/AFTER the
+        # numeral; "starting from"/"starting at" read as a lead-in phrase, so they sit
+        # ABOVE/BEFORE it instead — never squeezed after the numeral like "onwards".
+        _QUALIFIERS = ["onwards", "starting from", "starting at"]
+        qualifier = _QUALIFIERS[hash(brief.locality) % len(_QUALIFIERS)]
+        qualifier_line = (
+            f'the qualifier "{qualifier}" beneath the numeral at ~30% cap-height in '
+            f'small tracked caps'
+            if qualifier == "onwards" else
+            f'the qualifier "{qualifier}" ABOVE the numeral (a small lead-in line, '
+            f'~30% cap-height, tracked caps) — never after or below it'
+        )
         lines.append(
-            f'Price — CONVERSION ANCHOR, second scroll-stop element: "{brief.price_display}". '
-            f'The numeral (e.g. "3") must be readable from across a room — the single '
-            f'largest character in the lower half of the ad. Size the bordered container '
-            f'around a LARGE numeral, never the reverse. The ₹ symbol and "Cr"/"onwards" '
-            f'labels are 40–50% of the numeral cap-height. If the numeral looks small '
-            f'inside its container, the container is too big — shrink the container or '
-            f'enlarge the numeral until it dominates the conversion zone.'
+            f'Price — CONVERSION ANCHOR: "{brief.price_display}". The numeral is the '
+            f'single largest character in the lower half of the ad, readable from '
+            f'across a room; "₹" and "Cr" at 40–50% of its cap-height; {qualifier_line}. '
+            f'Size the bordered container around a LARGE numeral, never the reverse.'
         )
     if brief.cta_text:
-        lines.append(f'CTA badge (solid filled, high contrast, grouped with the price): "{brief.cta_text}"')
+        lines.append(
+            f'CTA badge — SOLID FILLED (gold-filled on dark, dark-filled on light), '
+            f'visually grouped with the price, never scattered far from it: '
+            f'"{brief.cta_text}"'
+        )
+    else:
+        lines.append(
+            "NO CTA BADGE — do not render any call-to-action badge, button, pill, or "
+            "action label anywhere in the ad."
+        )
     footer = brief.footer_items()
     if footer:
         def _icon_hint(label: str) -> str:
@@ -137,17 +151,25 @@ def _text_strings(brief: BriefModel) -> str:
         annotated = [f'"{f.upper()}" (above it: a single thin-line {_icon_hint(f)})' for f in footer]
         n = len(footer)
         lines.append(
-            f"Spec strip — EXACTLY {n} column{'s' if n != 1 else ''}, no more, no fewer. "
-            f"Render ONLY these {n} item{'s' if n != 1 else ''} and absolutely nothing else — "
-            f"do not invent, add, or repeat any other text in the spec strip. "
-            "Each item: BOLD UPPERCASE geometric sans, WIDE LETTER-SPACING (generous "
-            "tracking, never cramped — luxury print spacing so every character breathes), "
-            "clearly readable at arm's length. "
-            "CONTRAST: if a spec label sits over a light photo zone or light background, "
-            "use DARK text (deep charcoal or navy) — never light text on a light surface. "
-            "If over a dark zone, use light cream or gold text. "
-            "Above each label draw ONE matching thin-line icon as described "
-            "(no random icons, no text inside icons): " + ", ".join(annotated)
+            f"Spec strip — EXACTLY {n} column{'s' if n != 1 else ''}: render ONLY "
+            f"{'these items' if n != 1 else 'this item'}, nothing invented or repeated. "
+            "BOLD UPPERCASE geometric sans, wide luxury letter-spacing, readable at "
+            "arm's length; dark text over light zones, cream/gold over dark. Above each "
+            "label ONE matching thin-line icon (no text inside icons): "
+            + ", ".join(annotated)
+        )
+    # Cheque guard — always outside the footer block.
+    # When cheque_only=True the spec strip already carries it; an "exactly once" guard
+    # prevents the composition prose from triggering a second render of the same string.
+    if not brief.cheque_only:
+        lines.append(
+            "NO CHEQUE PAYMENT text — do not render '100% Cheque Payment', "
+            "'Cheque Only', or any payment-method wording anywhere in the ad."
+        )
+    else:
+        lines.append(
+            "EXACTLY-ONCE GUARD — '100% Cheque Payment' renders ONLY in the spec strip "
+            "above, exactly once; ignore any other mention of it in this prompt."
         )
     return "\n".join(lines)
 
@@ -173,67 +195,202 @@ def _composition_block(spec: AdSpec, brief: BriefModel | None = None) -> str:
     return design or "Design a clean, structured luxury property advertisement."
 
 
+def _strip_footer_dupes(composition: str, footer_items: list[str]) -> str:
+    """Remove explicit footer item text values from composition prose.
+
+    Root cause: when the art-director LLM quotes a footer item (e.g. '100% Cheque Payment')
+    verbatim inside the composition description, that same string also appears in the
+    _text_strings() spec strip block — giving Ideogram two separate rendering instructions
+    for the same text, which causes a visible duplicate in the image.
+
+    This function is the defence-in-depth layer: strip any quoted occurrence of a footer
+    item from the composition prose so only the text-strings block defines it.
+    This is generic — it applies to any footer item, not just cheque payment.
+    """
+    import re as _re
+    result = composition
+    for item in footer_items:
+        # Match the item text inside any quote type, optionally preceded by a dash/colon
+        pattern = _re.compile(
+            r"""(?:—\s*|:\s*)?['""“‘]?""" + _re.escape(item) + r"""['""”’]?\s*—?""",
+            _re.IGNORECASE,
+        )
+        result = pattern.sub("", result)
+        # Also strip possessive references: "the single spec item from the brief — '100% …'"
+        ref_pattern = _re.compile(
+            r"""(?:spec item[s]? from the brief\s*—\s*)['""“‘]?""" + _re.escape(item) + r"""['""”’]?""",
+            _re.IGNORECASE,
+        )
+        result = ref_pattern.sub("spec item from the brief", result)
+    return result
+
+
+# Prompt budget: Ideogram's hard prompt limit is 10k characters — anything past it is
+# silently truncated, so the WHOLE prompt must land under 10k with margin. Within that,
+# the AD COMPOSITION is the creative payload (art-directed placement, scale, tagline
+# treatment, spec-strip position) — a too-tight composition allowance was itself a
+# failure mode: it got clipped to a stub and renders came out templated and samey,
+# ignoring every structure rule. So the Python boilerplate is kept lean, the
+# composition gets a high protected floor (_COMP_FLOOR), and overshoot is reclaimed
+# first from the composition down to that floor, then from the scene prose.
+_MAX_PROMPT_CHARS = 9800
+_SCENE_CLIP = 1200
+_COMP_CLIP = 3400
+_COMP_FLOOR = 2400
+_SCENE_FLOOR = 700
+
+
+def _clip(text: str, limit: int) -> str:
+    """Trim prose to `limit` chars at the last sentence boundary (fallback: word)."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    dot = cut.rfind(". ")
+    if dot > limit // 2:
+        return cut[: dot + 1]
+    sp = cut.rfind(" ")
+    return (cut[:sp] if sp > 0 else cut).rstrip() + "."
+
+
+def _design_rules(has_cta: bool) -> str:
+    """Distilled, Python-authored design rules — the non-negotiables from the design
+    grammar compressed to fit the prompt budget. The FULL ad_craft/typography lists
+    still feed the art-director LLM, whose composition prose carries the detail."""
+    rules = (
+        "DESIGN RULES:\n"
+        "- Typography: luxury register only — high-contrast display serif (Didot/"
+        "Cormorant style) for locality and price, tracked small-caps or geometric "
+        "luxury sans for labels; generous letter-spacing; mixed scale between tiers; "
+        "NO system/UI fonts, no bevels, 3D or glossy text effects.\n"
+        "- Hierarchy (buyer scan order): locality largest (~1.3-1.5x the config line); "
+        "config/BHK second — bold, co-equal with the price in visual weight, never a "
+        "thin caption; price numeral largest character in the lower half, its labels "
+        "at ~a third of its size; tagline tier 3 — styled, clearly smaller; spec strip "
+        "bold uppercase tracked sans, readable at arm's length.\n"
+        "- Every text element fills at least 75% of its zone width — scale up, never "
+        "shrink to fit; prefer 2-3 lines at large scale over one small cramped line.\n"
+        "- Render every string exactly once, horizontal and upright; never repeat or "
+        "echo any word as decoration or filler.\n"
+        "- Surfaces: no flat solid panels except a slim bottom strip — use gradients, "
+        "frosted glassmorphism, or a photo vignette behind any large text zone; any "
+        "photo-to-panel boundary dissolves as a soft gradient, never a hard edge.\n"
+        "- Ornaments are DRAWN shapes only (a thin gold hairline rule, a botanical "
+        "sprig, a single wave, at most one small diamond) — never typed characters.\n"
+        "- Conversion elements stay SEPARATE: the price's bordered box contains ONLY "
+        "the price lockup; CTA badge, tagline, and spec items are freestanding — "
+        "never merged with the price into one shared card.\n"
+        "- The spec strip is its own horizontal strip at the very bottom edge of the "
+        "ad — never attached to, beside, or inside the price container.\n"
+        "- BUSY-BACKGROUND BACKING: any text element sitting over glass, window "
+        "mullions, reflections, foliage, or a textured surface must get its own "
+        "backing (a small frosted pill, soft scrim, or tinted shape sized to it) — "
+        "never bare text floating on a busy surface, even if another element nearby "
+        "already has a panel. The text colour is then chosen to contrast THAT "
+        "backing's own tone, not a default cream/white — a light frosted pill takes "
+        "dark text, a dark scrim or panel takes cream/gold text. A backing that "
+        "doesn't flip the text colour to match is not solving the legibility "
+        "problem, only decorating it.\n"
+        "- SCALE BALANCE: a large locality lockup must never leave the price/CTA/"
+        "tagline looking small or under-supported by comparison — give that lower "
+        "conversion cluster its own strong backing so it reads as the second "
+        "unmissable moment, not an afterthought.\n"
+    )
+    if has_cta:
+        rules += (
+            "- The CTA is ONE solid-filled, maximum-contrast badge grouped directly "
+            "with the price — never a pale outline pill.\n"
+        )
+    else:
+        rules += (
+            "- This ad has NO call-to-action: render no badge, pill, button, banner, "
+            "or imperative phrase anywhere.\n"
+        )
+    return rules
+
+
 def build(spec: AdSpec, brief: BriefModel) -> str:
     """Assemble the single BAKED-mode Ideogram prompt.
 
-    Only the LLM-authored fields (scene_prose, composition) are sanitized; the
-    Python-authored instruction lines are assembled verbatim so that guard phrases
-    (e.g. 'STRICT RULE — NO COMPANY NAME: … PIKORUA …') are never mangled.
+    Structure is deliberate: TEXT STRINGS come FIRST (they are the payload — if the
+    model reads nothing else, it must read these), followed by the scene/composition
+    creative direction, then a compact rules block. Total length is hard-budgeted to
+    _MAX_PROMPT_CHARS. Only the LLM-authored fields (scene_prose, composition) are
+    sanitized; Python-authored instruction lines are assembled verbatim.
     """
     palette = lib.get_palette(spec.palette_id)
-    grammar = lib.design_grammar()
-    brand = (grammar.get("brand_essence") or "").strip()
-    sd = grammar.get("scene_direction") or {}
-    scene_dir = " ".join(
-        str(sd.get(k, "")).strip() for k in ("lighting", "styling", "mood")
-    ).strip()
-    craft = " ".join(lib.ad_craft())
-    typography = " ".join(lib.typography_rules())
     logo_clause = _logo_zone_instruction(brief, spec.skeleton)
     text_strings = _text_strings(brief)
     brief_dict = brief.sanitizer_brief()
 
-    # Sanitize only the LLM-generated prose fields — not the surrounding instructions.
-    clean_scene = sanitizer.sanitize_llm_field(spec.scene_prose.strip(), brief_dict)
-    clean_comp = sanitizer.sanitize_llm_field(_composition_block(spec, brief), brief_dict)
-
-    prompt = (
-        "A finished, professionally designed luxury real-estate advertisement (4:5 poster). "
-        "It must instantly read as an ADVERTISEMENT — designed type, hierarchy and ad "
-        "furniture — not a bare photograph with a caption.\n\n"
-        f"BRAND FEELING: {brand}\n\n"
-        "STRICT RULE — NO COMPANY NAME: Do NOT render the words 'PIKORUA', 'Pikorua', or "
-        "any company / advisory name as visible text anywhere in the ad.\n\n"
-        f"{logo_clause}"
-        f"PHOTOGRAPH (luxury scene — {scene_dir}):\n{clean_scene}\n\n"
-        f"AD COMPOSITION:\n{clean_comp}\n\n"
-        f"TYPOGRAPHY: {typography}\n\n"
-        f"DESIGN CRAFT: {craft}\n\n"
-        "TEXT STRINGS — render ALL of the following EXACTLY ONCE, exact spelling, "
-        "no substitutions, no invented alternatives. Each string appears ONCE total "
-        "in the finished ad — never duplicate any element. The spec strip items below "
-        "are the ONLY footer/strip labels; ignore any label text in the composition:\n"
-        f"{text_strings}\n\n"
-        f"{_palette_line(palette)}\n"
-        "PER-ELEMENT TEXT CONTRAST (non-negotiable): each text element must contrast "
-        "with whatever surface is directly behind it. Light text (cream, ivory, warm "
-        "white) belongs on dark zones; dark text belongs on light or frosted surfaces. "
-        "The palette colours above are targets, but if applying a palette colour would "
-        "create a tonal match with its local background, shift it to high contrast — "
-        "legibility always overrides palette fidelity. CTA badge: the fill and its text "
-        "must always be maximum-contrast pairs (gold fill → dark text; dark fill → cream "
-        "or gold text). Price numeral: always maximum contrast against its container "
-        "background. Never place any text in a near-match with its immediate background "
-        "at any size or weight.\n"
-        "FINAL RENDERING PRIORITY — MOBILE SCROLL TEST: this ad is viewed for 2 seconds "
-        "while scrolling. THREE elements must be so large and high-contrast that they are "
-        "readable at a glance before anything else: (1) the locality name — the single "
-        "largest text on the ad, no exception; (2) the price numeral — largest text in "
-        "the lower half, clearly visible in its bordered container; (3) the CTA badge — "
-        "solid filled, grouped directly with the price, impossible to miss. Every other "
-        "element (tagline, city name, 'onwards' label, spec strip items) is secondary — "
-        "sized for the viewer who pauses, not the one scrolling past. If the locality, "
-        "price, or CTA cannot be read in under 2 seconds the image has failed. "
-        "Photography is rich, text is confident and designed. Aspect ratio 4:5."
+    # Sanitize + budget the LLM-generated prose fields (the only unbounded parts).
+    clean_scene = _clip(
+        sanitizer.sanitize_llm_field(spec.scene_prose.strip(), brief_dict), _SCENE_CLIP
     )
+    footer = brief.footer_items()
+    raw_comp = _composition_block(spec, brief)
+    # Strip any footer item text values from the composition prose before it reaches Ideogram.
+    # The text-strings block already defines them — a second mention in composition prose
+    # causes Ideogram to render the same text twice (root cause of duplicate cheque text).
+    if footer:
+        raw_comp = _strip_footer_dupes(raw_comp, footer)
+    clean_comp = _clip(
+        sanitizer.sanitize_llm_field(raw_comp, brief_dict), _COMP_CLIP
+    )
+
+    def _assemble(comp: str) -> str:
+        return (
+            "A finished, professionally designed luxury real-estate advertisement "
+            "(4:5 poster) — designed type, hierarchy and ad furniture, not a bare "
+            "photograph with a caption. Register: quiet confidence — understated, "
+            "refined, expensive; Sotheby's, not a billboard.\n\n"
+            "TEXT STRINGS — render ALL of the following EXACTLY ONCE, exact spelling, "
+            "no substitutions, no invented alternatives. Each string appears ONCE total "
+            "in the finished ad — never duplicate any element:\n"
+            f"{text_strings}\n\n"
+            "TEXT SOURCE LOCK (critical): the TEXT STRINGS above are the COMPLETE and "
+            "ONLY words permitted to appear as visible text anywhere in the image. "
+            "Every other section of this prompt is creative direction — mood, "
+            "materials, lighting, layout — NOT copy to typeset. Never promote a room "
+            "name, amenity, or descriptive term from the photograph or composition "
+            "into visible ad text. If a string is not listed above verbatim, it must "
+            "not appear anywhere on the ad. NUMERALS, NEVER WORDS: every number in the "
+            "TEXT STRINGS — the BHK/configuration count, the price, any figure in the "
+            "spec strip — is set as a digit exactly as given ('4 & 5 BHK', not 'Four "
+            "& Five BHK' or 'Four and Five'; '3 Cr', not 'Three Cr'). Never spell out "
+            "a number as a word anywhere on the ad.\n\n"
+            "STRICT RULE — NO COMPANY NAME: Do NOT render the words 'PIKORUA', "
+            "'Pikorua', or any company / advisory name as visible text anywhere.\n\n"
+            f"{logo_clause}"
+            f"PHOTOGRAPH (photorealistic luxury real estate scene):\n{clean_scene}\n\n"
+            f"AD COMPOSITION:\n{comp}\n\n"
+            f"{_palette_line(palette)}\n"
+            "PER-ELEMENT CONTRAST (non-negotiable): every text element must strongly "
+            "contrast the surface directly behind it — legibility overrides palette "
+            "fidelity. Never place text over a busy photo area without a gradient "
+            "scrim or frosted panel behind it.\n\n"
+            f"{_design_rules(bool(brief.cta_text))}\n"
+            + (
+                "MOBILE SCROLL TEST: at a 2-second glance the locality, the price "
+                "numeral, and the solid CTA badge must read instantly; everything "
+                "else is secondary. "
+                if brief.cta_text else
+                "MOBILE SCROLL TEST: at a 2-second glance the locality and the price "
+                "numeral must read instantly; everything else is secondary. "
+            )
+            + "Photography is rich, text is confident and designed. Aspect ratio 4:5."
+        )
+
+    budget = _MAX_PROMPT_CHARS - len(sanitizer._ANTI_LOGO_GUARD)
+    prompt = _assemble(clean_comp)
+    if len(prompt) > budget:
+        # Reclaim the excess from the composition, but never below its floor — the
+        # composition is the creative payload, not the first casualty.
+        overshoot = len(prompt) - budget
+        clean_comp = _clip(clean_comp, max(_COMP_FLOOR, len(clean_comp) - overshoot))
+        prompt = _assemble(clean_comp)
+    if len(prompt) > budget:
+        # Still over: reclaim the remainder from the scene prose down to its floor.
+        overshoot = len(prompt) - budget
+        clean_scene = _clip(clean_scene, max(_SCENE_FLOOR, len(clean_scene) - overshoot))
+        prompt = _assemble(clean_comp)
     return prompt + sanitizer._ANTI_LOGO_GUARD

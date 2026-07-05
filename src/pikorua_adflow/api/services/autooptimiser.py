@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -222,11 +223,37 @@ def _registry() -> dict:
     return out
 
 
+# Legacy campaigns created outside the tool (Meta name -> clientele_type), so they
+# have no RUNS entry / property_name to match on below. Verified against the live
+# account's currently-ACTIVE campaigns (2026-07-06) — same 6 names aliased in
+# crm_analytics._CAMPAIGN_ALIASES_RAW for CRM attribution. Without this, Rung 12
+# skips these campaigns ("no clientele_type in brief") and Rung 7 falls back to
+# the generic "hni" profile instead of the property's real segment.
+_LEGACY_CAMPAIGN_CLIENTELE_RAW: dict[str, str] = {
+    "bungalow ahmd general – quality lead": "luxury_bungalow",
+    "bungalow ahmd general": "luxury_bungalow",
+    "NN New Leads campaign": "premium_apartment",
+    "Nirma Anamika leads campaign 08/12/2023 Campaign – Copy 3": "premium_apartment",
+    "LAARGE Apts campaign 07/07/2024 Campaign – Copy 2 - Copy": "premium_apartment",
+    "GODREJ VASTRAPUR Leads campaign": "premium_apartment",
+}
+
+
+def _legacy_key(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+_LEGACY_CAMPAIGN_CLIENTELE: dict[str, str] = {
+    _legacy_key(k): v for k, v in _LEGACY_CAMPAIGN_CLIENTELE_RAW.items()
+}
+
+
 # ── Brief / clientele lookup ──────────────────────────────────────────────────
 def _run_for_campaign(campaign_name: str) -> tuple[str | None, dict | None]:
     """Find the (run_id, brief) of the tool-created run whose property_name matches
-    this Meta campaign. Prefers the most recent match. (None, None) if no match —
-    e.g. a legacy campaign created outside the tool."""
+    this Meta campaign. Prefers the most recent match. Falls back to the static
+    legacy clientele map (brief with only clientele_type set, run_id None) for
+    campaigns created outside the tool; (None, None) only if neither matches."""
     with RUNS_LOCK:
         runs = list(RUNS.items())
     cn = (campaign_name or "").strip().lower()
@@ -237,7 +264,12 @@ def _run_for_campaign(campaign_name: str) -> tuple[str | None, dict | None]:
         if pn and (pn in cn or cn in pn):
             if best is None or (run.get("created_at", "") > best[0]):
                 best = (run.get("created_at", ""), rid, b)
-    return (best[1], best[2]) if best else (None, None)
+    if best:
+        return best[1], best[2]
+    clientele_type = _LEGACY_CAMPAIGN_CLIENTELE.get(_legacy_key(campaign_name))
+    if clientele_type:
+        return None, {"clientele_type": clientele_type}
+    return None, None
 
 
 def _brief_for_campaign(campaign_name: str) -> dict | None:
@@ -463,7 +495,8 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
     # Per-ad cooldowns are tracked separately under camp_state["ad_cooldowns"].
     from pikorua_adflow.analytics import creative_performance as _cp
     from pikorua_adflow.tools.meta_tool import fetch_ads_with_age as _fads
-    # Only meaningful when there's more than one ad in the campaign.
+    # Only meaningful when there's more than one ad in the campaign — this also
+    # makes the rung a no-op for Dynamic Creative runs, which deploy a single ad.
     if not _in_cooldown(camp_state, "winner_loser"):
         try:
             live_ads_full = [a for a in ads if (a.get("effective_status") or "") in ("ACTIVE", "")]
@@ -839,14 +872,14 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
                 return {"ok": False, "error": result["error"]}
             # Stamp built_at + seed_size in the registry.
             try:
-                rows = json.loads(AUDIENCES_REGISTRY_PATH.read_text()) if AUDIENCES_REGISTRY_PATH.exists() else []
+                rows = json.loads(AUDIENCES_REGISTRY_PATH.read_text(encoding="utf-8")) if AUDIENCES_REGISTRY_PATH.exists() else []
                 now_iso = _now().isoformat()
                 seed_size = result.get("total_leads") or result.get("leads_uploaded") or 0
                 for row in rows:
                     if row.get("role") == "lookalike":
                         row["built_at"] = now_iso
                         row["seed_size"] = int(seed_size)
-                AUDIENCES_REGISTRY_PATH.write_text(json.dumps(rows, indent=2, ensure_ascii=False))
+                AUDIENCES_REGISTRY_PATH.write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
             except Exception:
                 pass
             undo = {}  # upload cannot be meaningfully undone

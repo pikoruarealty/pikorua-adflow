@@ -11,6 +11,7 @@ POST /autooptimiser-strategist-approve → approve a risky LLM strategist sugges
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timezone
 
@@ -19,15 +20,50 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from ..config import TEMPLATES_DIR
+from ..config import AUTOOPTIMISER_CACHE_PATH, AUTOOPTIMISER_CACHE_TTL_SECS, TEMPLATES_DIR
 from ..services import autooptimiser
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# Short in-process cache so opening the tab doesn't re-hit the Graph API every time.
+# In-process cache so opening the tab doesn't re-hit the Graph API every time.
+# Also mirrored to disk (AUTOOPTIMISER_CACHE_PATH) so a server restart — including
+# uvicorn --reload restarting because run_autooptimiser() wrote to outputs/ — doesn't
+# force a full re-evaluation on the very next tab open.
 _CACHE: dict = {"data": None, "at": None}
-_CACHE_TTL_SECS = 30 * 60
+_CACHE_TTL_SECS = AUTOOPTIMISER_CACHE_TTL_SECS
+
+
+def _load_disk_cache() -> None:
+    """Warm the in-process cache from disk on first use after a fresh process start."""
+    if _CACHE["data"] is not None or not AUTOOPTIMISER_CACHE_PATH.exists():
+        return
+    try:
+        raw = json.loads(AUTOOPTIMISER_CACHE_PATH.read_text(encoding="utf-8"))
+        at = datetime.fromisoformat(raw["at"])
+        _CACHE.update({"data": raw["data"], "at": at})
+    except Exception:
+        pass  # corrupt/missing cache file — next call just re-evaluates
+
+
+def _save_disk_cache() -> None:
+    try:
+        AUTOOPTIMISER_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        AUTOOPTIMISER_CACHE_PATH.write_text(
+            json.dumps({"data": _CACHE["data"], "at": _CACHE["at"].isoformat()}),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass  # disk cache is a resilience nicety, never block the response on it
+
+
+def _invalidate_cache() -> None:
+    """Drop both the in-process and disk cache after a write (apply/undo/approve)."""
+    _CACHE.update({"data": None, "at": None})
+    try:
+        AUTOOPTIMISER_CACHE_PATH.unlink(missing_ok=True)
+    except Exception:
+        pass
 
 
 class ApplyFixReq(BaseModel):
@@ -48,6 +84,7 @@ def autooptimiser_page(request: Request):
 @router.get("/autooptimiser-data")
 def autooptimiser_data(force: bool = False):
     """The 3-zone payload. Auto-applies safe fixes on each pass (unless DRY_RUN)."""
+    _load_disk_cache()
     now = datetime.now(timezone.utc)
     cached = _CACHE.get("data")
     at = _CACHE.get("at")
@@ -56,6 +93,7 @@ def autooptimiser_data(force: bool = False):
     if not fresh:
         cached = autooptimiser.run_autooptimiser(apply_safe=True)
         _CACHE.update({"data": cached, "at": now})
+        _save_disk_cache()
     # The applied log is cheap + always-fresh (read from disk).
     cached = {**cached, "applied_log": autooptimiser.get_applied_log()}
     return cached
@@ -67,6 +105,7 @@ def autooptimiser_apply(req: ApplyFixReq):
     token = os.getenv("META_ACCESS_TOKEN", "")
     if not token:
         raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
+    _load_disk_cache()
     data = _CACHE.get("data") or autooptimiser.run_autooptimiser(apply_safe=False)
     # Search per-campaign decisions AND account-level actions
     all_fixes = list(data.get("all_decisions", [])) + list(data.get("account_actions", []))
@@ -77,7 +116,7 @@ def autooptimiser_apply(req: ApplyFixReq):
     res = autooptimiser.apply_fix(fix, auto=False)
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error", "Apply failed."))
-    _CACHE["data"] = None  # invalidate so the next load reflects the change
+    _invalidate_cache()  # next load reflects the change
     return res
 
 
@@ -86,7 +125,7 @@ def autooptimiser_undo(req: UndoFixReq):
     res = autooptimiser.undo_fix(req.campaign_id, req.fix_type)
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error", "Undo failed."))
-    _CACHE["data"] = None
+    _invalidate_cache()
     return res
 
 
@@ -95,6 +134,7 @@ def autooptimiser_run():
     """Force a full pass (auto-applies safe fixes). Used by the daily cron."""
     data = autooptimiser.run_autooptimiser(apply_safe=True)
     _CACHE.update({"data": data, "at": datetime.now(timezone.utc)})
+    _save_disk_cache()
     return {"ok": True, "auto_applied": len(data.get("auto_applied", [])),
             "decisions": len(data.get("all_decisions", []))}
 
@@ -129,6 +169,7 @@ def autooptimiser_strategist_approve(req: StrategistApproveReq):
     if not token:
         raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
 
+    _load_disk_cache()
     cached = _CACHE.get("data") or {}
     suggestions = (cached.get("strategist") or {}).get("suggestions", [])
 
@@ -152,6 +193,6 @@ def autooptimiser_strategist_approve(req: StrategistApproveReq):
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error", "Apply failed."))
 
-    _CACHE["data"] = None  # invalidate so the next load reflects the change
+    _invalidate_cache()  # next load reflects the change
     return {**res, "suggestion_title": suggestion.get("title", "")}
 

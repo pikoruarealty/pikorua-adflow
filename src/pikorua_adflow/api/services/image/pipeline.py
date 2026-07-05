@@ -32,7 +32,7 @@ def ensure_spec(entry: dict, brief: BriefModel) -> AdSpec:
 
 def generate_one(
     spec: AdSpec, brief: BriefModel, key: str,
-    speed: str = "DEFAULT", aspect: str = "4x5", mode: str | None = None,
+    speed: str = "QUALITY", aspect: str = "4x5", mode: str | None = None,
 ) -> bytes:
     """Run RENDER (scene + compositor) or BAKED (single prompt) and return PNG bytes."""
     mode = image_mode(mode)

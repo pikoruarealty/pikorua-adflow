@@ -381,12 +381,25 @@ def effective_audience(review_folder, brief: dict) -> dict:
     from pikorua_adflow.tools import meta_targeting as _mt
     token = os.getenv("META_ACCESS_TOKEN", "")
     city = brief.get("city", "") or ""
+
+    llm_selection = None
+    selection_path = Path(review_folder) / "targeting_selection.json"
+    if selection_path.exists():
+        try:
+            raw_text = selection_path.read_text(encoding="utf-8")
+            raw_text = re.sub(r"```(?:json)?", "", raw_text).strip("`").strip()
+            raw_selection = json.loads(raw_text)
+            llm_selection = _mt.resolve_llm_targeting(raw_selection, token)
+        except Exception:
+            llm_selection = None
+
     try:
         audience = _mt.build_default_audience(
             city, token,
             locality=brief.get("locality", ""),
             nri_geographies=brief.get("nri_geographies", ""),
             clientele_type=brief.get("clientele_type", ""),
+            llm_selection=llm_selection,
         )
     except Exception as exc:
         audience = {
@@ -397,6 +410,34 @@ def effective_audience(review_folder, brief: dict) -> dict:
         }
     save_audience(review_folder, audience)
     return audience
+
+
+# ── Creative mode overlay (deploy_settings.json) ─────────────────────────────
+# Opt-in toggle: "curated" (default, one image+headline+body per variant) or
+# "dynamic" (pools every variant's assets into one Meta Dynamic Creative ad and
+# lets Meta pick combinations). See deploy_dynamic_ad() in tools/meta_tool.py.
+
+def deploy_settings_path(review_folder) -> Path:
+    return Path(review_folder) / "deploy_settings.json"
+
+
+def get_creative_mode(review_folder) -> str:
+    p = deploy_settings_path(review_folder)
+    if not p.exists():
+        return "curated"
+    try:
+        mode = json.loads(p.read_text(encoding="utf-8")).get("creative_mode", "curated")
+        return mode if mode in ("curated", "dynamic") else "curated"
+    except Exception:
+        return "curated"
+
+
+def set_creative_mode(review_folder, mode: str) -> None:
+    if mode not in ("curated", "dynamic"):
+        raise ValueError(f"Invalid creative_mode: {mode!r}")
+    deploy_settings_path(review_folder).write_text(
+        json.dumps({"creative_mode": mode}, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 # ── Effective (overlay-applied) copy ─────────────────────────────────────────
@@ -558,6 +599,26 @@ def get_run_detail(run_id: str) -> dict:
             vk = entry.get("variant_key", "")
             title = _VP_LABELS.get(vk, f"Prompt {i}")
             ptext = entry.get("ideogram_prompt", "")
+            if not ptext and entry.get("scene_prose"):
+                # New-pipeline entries don't store raw prompt text — rebuild it
+                # deterministically from the persisted AdSpec so the edit view shows
+                # the actual prompt used, without needing a fresh "AI rewrite" call.
+                try:
+                    from .image.brief_model import BriefModel
+                    from .image.art_director import AdSpec
+                    from .image import baked_prompt as _baked_prompt
+                    sample_ready = bool(brief.get("sample_ready", False))
+                    default_cta = "Sample Flat Ready" if sample_ready else ""
+                    headline = (eff_meta.get(i) or {}).get("headline", "")
+                    bm = BriefModel.from_brief(
+                        brief, headline=headline, cta=default_cta,
+                        sample_ready_override=sample_ready,
+                    )
+                    bm.has_logo = image_service.BRAND_LOGO_PATH.exists()
+                    spec = AdSpec.from_entry({**entry, "variant_key": vk, "prompt_num": i})
+                    ptext = _baked_prompt.build(spec, bm)
+                except Exception:
+                    ptext = entry.get("scene_prose", "")
             has_prompt = bool(entry.get("scene_prose") or ptext)
             image_prompts.append({
                 "num": i, "title": title,
@@ -678,12 +739,15 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
     for stale in (
         "copy_scorecard.md", "copy_rewrites.md", "targeting_brief.md",
         "render_prompts.md", "visual_brief.md", "visual_prompts.json",
+        "targeting_selection.json",
     ):
         p = outputs_dir / stale
         if p.exists():
             p.unlink()
 
     crm_insights = crm_analyse()
+
+    from pikorua_adflow.tools import meta_targeting as _mt
 
     locality_str = f", {brief.locality}" if brief.locality else ""
     nri_str = f" NRI target geographies: {brief.nri_geographies}." if brief.nri_geographies else ""
@@ -704,6 +768,7 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
         "property_type": brief.property_type,
         "city": brief.city,
         "locality": brief.locality,
+        "locality_suffix": locality_str,
         "price_cr": brief.price_cr,
         "goal": brief.goal,
         "buyer_type": brief.buyer_type,
@@ -720,6 +785,7 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
         "trends": "No trend data — audience crew has not run yet.",
         "targeting": "No targeting data — audience crew has not run yet.",
         "crm_insights": crm_insights,
+        "targeting_pool": _mt.render_targeting_pool_for_prompt(),
         "today": date.today().strftime("%B %d, %Y"),
         "reference_images": image_service.build_reference_images_context(),
     }

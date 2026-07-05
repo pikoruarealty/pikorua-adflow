@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -36,6 +37,56 @@ _VARIANT_LABELS = {
 }
 
 _OPT_IN_VARIANTS = {"exterior_establishing_shot"}
+
+# New-pipeline baked prompts always open with this string. Used to detect stale old-style
+# prose in prompt_overrides so we can ignore it and run the new pipeline instead.
+_BAKED_MARKER = "A finished, professionally designed luxury real-estate advertisement"
+
+# Brief fields whose change should invalidate a saved AI-rewrite prompt override —
+# these are exactly the facts baked as literal text into the Ideogram prompt (CTA
+# presence, cheque flag, price/config, spec-strip source data). A saved override
+# is only replayed as-is when its fingerprint still matches the run's current brief;
+# otherwise it's stale (e.g. saved before sample_ready/cheque_only was set correctly,
+# or before a spec/price edit) and the fresh pipeline is run instead.
+_FINGERPRINT_FIELDS = [
+    "price_cr", "config", "property_type", "locality", "city",
+    "sample_ready", "cheque_only", "rera_verified", "verified_awards",
+    "verified_certifications", "verified_landmarks", "standout_feature",
+    "buyer_type", "cta",
+]
+
+# Any code/library change to the baked-prompt pipeline itself should also invalidate
+# previously-trusted overrides — otherwise a bug fix here never reaches images whose
+# override happens to still match the brief. Hash the source of the pipeline files
+# that shape the actual prompt text; this changes whenever any of them is edited and
+# the server restarts, so old overrides fall through to a fresh pipeline run again.
+_PIPELINE_FILES = [
+    Path(__file__).resolve().parent.parent / "services" / "image" / "baked_prompt.py",
+    Path(__file__).resolve().parent.parent / "services" / "image" / "art_director.py",
+    Path(__file__).resolve().parent.parent / "services" / "image" / "libraries.py",
+    Path(__file__).resolve().parent.parent / "services" / "image" / "sanitizer.py",
+    Path(__file__).resolve().parent.parent / "services" / "image" / "libraries" / "design_grammar.yaml",
+]
+
+
+def _pipeline_version() -> str:
+    h = hashlib.sha1()
+    for p in _PIPELINE_FILES:
+        try:
+            h.update(p.read_bytes())
+        except OSError:
+            pass
+    return h.hexdigest()[:12]
+
+
+_PIPELINE_VERSION = _pipeline_version()
+
+
+def _brief_fingerprint(brief: dict) -> str:
+    sig = {k: brief.get(k) for k in _FINGERPRINT_FIELDS}
+    sig["_pipeline_version"] = _PIPELINE_VERSION
+    return hashlib.sha1(json.dumps(sig, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
 
 _LEGACY_VARIANT_KEYS = [
     "lifestyle_private_retreat",
@@ -125,9 +176,10 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
 
     alongside_set = {p for p in (payload.alongside or []) if 1 <= p <= len(visual_entries)}
     selected = {p for p in (payload.prompts or []) if 1 <= p <= len(visual_entries)}
-    explicit = bool(selected)
-    if not explicit:
-        # Generate all — exclude opt_in variants unless the user explicitly chose them
+    explicit = bool(selected) or bool(alongside_set)
+    if not selected and not alongside_set:
+        # Neither prompts nor alongside given — generate all, excluding opt_in variants
+        # unless the user explicitly chose them.
         selected = {
             e["prompt_num"]
             for e in visual_entries
@@ -178,76 +230,153 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
         aspect = payload.ratios.get(i) or payload.ratio
         backend = "ideogram"
 
-        # Prefer custom prompt override → user-saved edit → AI-generated prompt
-        custom_or_saved = (
-            payload.custom_prompts.get(i)
-            or saved_edits.get("prompt_overrides", {}).get(str(i))
-        )
         entry_brief = dict(sanitizer_brief)
         variant_key = entry.get("variant_key", "")
         if variant_key:
             try:
                 vm = _get_variant_meta(variant_key)
-                cta = vm.get("sample_ready_cta")
-                if cta:
-                    entry_brief["sample_ready_cta"] = cta
+                cta_hint = vm.get("sample_ready_cta")
+                # Only inject the variant-specific CTA text when sample_ready is
+                # actually checked — same gate as the cheque_only flag.
+                if cta_hint and sample_ready:
+                    entry_brief["sample_ready_cta"] = cta_hint
             except Exception:
                 pass
 
-        if custom_or_saved:
-            # User provided an explicit prompt — sanitize it fully (legacy path)
-            raw_prompt = custom_or_saved
-            sanitized = imgs.sanitize_image_prompt(raw_prompt, entry_brief)
-        elif entry.get("scene_prose"):
-            # New format: assemble the structured ad brief from the LLM's creative choices.
-            # For the exterior variant, prepend any user-supplied building description so
-            # the prompt references actual building details rather than inventing them.
-            gen_entry = dict(entry)
-            if variant_key == "exterior_establishing_shot" and payload.exterior_brief:
-                gen_entry["scene_prose"] = (
-                    payload.exterior_brief.strip() + " " + gen_entry.get("scene_prose", "")
-                ).strip()
-            raw_prompt = imgs.build_ad_prompt(gen_entry, entry_brief, variant_key)
-            sanitized = imgs.sanitize_image_prompt(raw_prompt, entry_brief, assembled=True)
+        custom_from_payload = payload.custom_prompts.get(i)
+        saved_override = saved_edits.get("prompt_overrides", {}).get(str(i))
+        override_meta = saved_edits.get("prompt_override_meta", {}).get(str(i), {})
+        # A saved override is only trusted as-is when it's either an explicit manual
+        # edit (user typed/saved it — always honoured), or an AI-rewrite override whose
+        # fingerprint still matches the run's current brief. Anything else — including
+        # overrides saved before this fingerprinting existed — is treated as stale and
+        # falls through to a fresh pipeline run instead of being resent verbatim.
+        is_trusted_override = override_meta.get("source") == "manual" or (
+            override_meta.get("source") == "ai_rewrite"
+            and override_meta.get("fingerprint") == _brief_fingerprint(brief)
+        )
+        use_baked_override = bool(
+            saved_override and saved_override.startswith(_BAKED_MARKER) and is_trusted_override
+        )
+
+        v4_speed = speed if speed in ("TURBO", "DEFAULT", "QUALITY") else "QUALITY"
+
+        if custom_from_payload or use_baked_override:
+            # User-typed custom prompt OR a new-pipeline baked prompt saved by
+            # /regenerate-prompt — send straight to Ideogram, no further processing.
+            direct_prompt = custom_from_payload or saved_override
+            from ..services.image.ideogram_client import call as _ideo_call
+            try:
+                img_bytes = _ideo_call(direct_prompt, ideogram_key, speed=v4_speed, aspect=aspect)
+            except Exception as exc:
+                from pikorua_adflow.tools.errors import explain_and_log
+                friendly = explain_and_log(f"Image generation — prompt {i} (direct)", exc)
+                errors.append({
+                    "prompt": i, "backend": backend,
+                    "error": friendly["message"], "fixable": friendly["fixable"],
+                })
+                continue
+
         else:
-            # Legacy format: prose ideogram_prompt stored in visual_prompts.json
-            raw_prompt = entry.get("ideogram_prompt", "")
-            sanitized = imgs.sanitize_image_prompt(raw_prompt, entry_brief)
+            # New baked-prompt pipeline: BriefModel → ArtDirector → AdSpec → baked_prompt → Ideogram.
+            # Runs when there is no override, or when the saved override is stale old-style prose.
+            from ..services.image.brief_model import BriefModel
+            from ..services.image.art_director import build_ad_spec, plan_batch_diversity
+            from ..services.image import pipeline as _pipeline
+
+            eff_copy = gen_eff_meta.get(i) or {}
+            headline = eff_copy.get("headline", "")
+            default_cta = "Sample Flat Ready" if sample_ready else ""
+            cta = entry_brief.get("sample_ready_cta") or default_cta
+
+            brief_model = BriefModel.from_brief(
+                brief,
+                headline=headline,
+                cta=cta,
+                sample_ready_override=sample_ready,
+            )
+            brief_model.has_logo = BRAND_LOGO_PATH.exists()
+
+            exterior_note = ""
+            if variant_key == "exterior_establishing_shot" and payload.exterior_brief:
+                exterior_note = payload.exterior_brief.strip()
+
+            # Sibling-aware diversity: look at every OTHER slot's already-committed
+            # (skeleton, palette) — whether from an earlier session or an earlier
+            # iteration of this same batch — so no more than 2 variants ever share a
+            # skeleton, and if they do, they get different palettes.
+            sibling_pairs = [
+                (e.get("skeleton", ""), e.get("palette_id", ""))
+                for e in visual_entries
+                if e.get("prompt_num") != i and e.get("skeleton")
+            ]
+            diversity = plan_batch_diversity(1, existing=sibling_pairs)[0]
+
+            spec = build_ad_spec(
+                variant_key=variant_key or "lifestyle_private_retreat",
+                prompt_num=i,
+                brief=brief_model,
+                extra_scene_note=exterior_note,
+                force_skeleton=diversity["skeleton"],
+                force_palette=diversity["palette"],
+            )
+
+            # Persist the AdSpec that is actually about to be rendered so the
+            # edit-prompt view reflects the real prompt (no need to re-run "AI
+            # rewrite" after generating, and it survives image deletion).
+            new_entry = spec.to_entry()
+            new_entry["variant_key"] = variant_key
+            new_entry["prompt_num"] = i
+            existing_idx = next(
+                (j for j, e in enumerate(visual_entries) if e.get("prompt_num") == i), None
+            )
+            if existing_idx is not None:
+                visual_entries[existing_idx] = new_entry
+            else:
+                visual_entries.append(new_entry)
+            vp_path = review_folder / "visual_prompts.json"
+            vp_path.write_text(
+                json.dumps(visual_entries, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+
+            try:
+                img_bytes = _pipeline.generate_one(
+                    spec, brief_model, ideogram_key,
+                    speed=v4_speed, aspect=aspect, mode="baked",
+                )
+            except Exception as exc:
+                from pikorua_adflow.tools.errors import explain_and_log
+                friendly = explain_and_log(f"Image generation — prompt {i} ({backend})", exc)
+                errors.append({
+                    "prompt": i, "backend": backend,
+                    "error": friendly["message"], "fixable": friendly["fixable"],
+                })
+                continue
 
         logo_corner = entry.get("logo_corner", "bottom-right")
 
-        try:
-            v4_speed = speed if speed in ("TURBO", "DEFAULT") else "DEFAULT"
-            img_bytes = imgs.call_ideogram(
-                sanitized, ideogram_key, v4_speed, aspect, recipe_tag=entry.get("recipe_tag", "")
-            )
-            out_path.write_bytes(img_bytes)
-            if BRAND_LOGO_PATH.exists():
-                try:
-                    logo_backup_dir = out_path.parent / ".logo_backup"
-                    logo_backup_dir.mkdir(exist_ok=True)
-                    import shutil as _shutil
-                    _shutil.copy2(out_path, logo_backup_dir / out_path.name)
-                    imgs.composite_logo(out_path, BRAND_LOGO_PATH, corner=logo_corner)
-                except Exception:
-                    pass
-            results.append({
-                "prompt": i, "status": "generated", "backend": backend,
-                "file": str(out_path),
-            })
-        except Exception as exc:
-            from pikorua_adflow.tools.errors import explain_and_log
-            friendly = explain_and_log(f"Image generation — prompt {i} ({backend})", exc)
-            errors.append({
-                "prompt": i, "backend": backend,
-                "error": friendly["message"], "fixable": friendly["fixable"],
-            })
+        out_path.write_bytes(img_bytes)
+        if BRAND_LOGO_PATH.exists():
+            try:
+                import shutil as _shutil
+                logo_backup_dir = out_path.parent / ".logo_backup"
+                logo_backup_dir.mkdir(exist_ok=True)
+                _shutil.copy2(out_path, logo_backup_dir / out_path.name)
+                imgs.composite_logo(out_path, BRAND_LOGO_PATH, corner=logo_corner)
+            except Exception:
+                pass
+        results.append({
+            "prompt": i, "status": "generated", "backend": backend,
+            "file": str(out_path),
+        })
 
     if payload.custom_prompts:
         edits = cs.load_edits(review_folder)
         overrides = edits.setdefault("prompt_overrides", {})
+        meta = edits.setdefault("prompt_override_meta", {})
         for k, v in payload.custom_prompts.items():
             overrides[str(k)] = v
+            meta[str(k)] = {"source": "manual"}
         cs.save_edits(review_folder, edits)
 
     return {"run_id": run_id, "generated": results, "errors": errors}
@@ -261,6 +390,7 @@ def save_prompt(run_id: str, prompt_num: int, payload: SavePromptPayload):
     rf = Path(run["review_folder"])
     edits = cs.load_edits(rf)
     edits.setdefault("prompt_overrides", {})[str(prompt_num)] = payload.text
+    edits.setdefault("prompt_override_meta", {})[str(prompt_num)] = {"source": "manual"}
     cs.save_edits(rf, edits)
     return {"ok": True}
 
@@ -278,13 +408,23 @@ def revert_prompt(run_id: str, prompt_num: int):
         edits["prompt_overrides"] = overrides
     else:
         edits.pop("prompt_overrides", None)
+    meta = edits.get("prompt_override_meta", {})
+    meta.pop(str(prompt_num), None)
+    if meta:
+        edits["prompt_override_meta"] = meta
+    else:
+        edits.pop("prompt_override_meta", None)
     cs.save_edits(rf, edits)
     return {"ok": True}
 
 
 @router.post("/regenerate-prompt/{run_id}")
 async def regenerate_prompt(run_id: str, payload: RegeneratePromptPayload):
-    """Rewrite one image-prompt description using the campaign's ad copy and brand rules."""
+    """Regenerate one image prompt using the new baked-prompt pipeline (fresh art direction)."""
+    from ..services.image.brief_model import BriefModel
+    from ..services.image.art_director import build_ad_spec
+    from ..services.image import baked_prompt as _baked_prompt
+
     run = RUNS.get(run_id)
     if not run or run.get("status") != "complete" or not run.get("review_folder"):
         raise HTTPException(status_code=400, detail="Run not complete or not found.")
@@ -296,164 +436,40 @@ async def regenerate_prompt(run_id: str, payload: RegeneratePromptPayload):
     if entry is None:
         raise HTTPException(status_code=400, detail=f"prompt_num {n} out of range.")
 
-    saved_edits = cs.load_edits(review_folder)
-    original_prompt = entry.get("ideogram_prompt", "")
-    current_prompt = (
-        saved_edits.get("prompt_overrides", {}).get(str(n)) or original_prompt
-    )
-
-    variant_key = entry.get("variant_key", "")
-    variant_label = _VARIANT_LABELS.get(variant_key, f"Prompt {n}")
-    prompt_type = "Social ad creative with text overlay"
-
     brief = run.get("brief", {})
-    property_name = brief.get("property_name", "")
-    property_type = brief.get("property_type", "")
-    city = brief.get("city", "")
-    locality = brief.get("locality", "")
-    price_cr = brief.get("price_cr", "")
-    standout = brief.get("standout_feature", "")
+    variant_key = entry.get("variant_key", "") or "lifestyle_private_retreat"
+    sample_ready = bool(brief.get("sample_ready", False))
 
-    eff = cs.effective_meta(review_folder)
-    copy_lines = []
-    for num in sorted(eff)[:5]:
-        c = eff[num]
-        copy_lines.append(f'  Variant {num}: headline="{c["headline"]}" / body="{c["body"]}"')
-    copy_block = "\n".join(copy_lines) if copy_lines else "  (no copy variants available)"
-
-    # Scene-type rules per prompt number — define WHAT the image shows, not WHERE text goes.
-    # Text placement is determined by the composition; the scene rule just enforces the
-    # correct visual character for each slot so regenerated prompts don't drift to the
-    # wrong shot type (e.g. exterior when interior is expected).
-    _zone_rules = {
-        1: (
-            "SCENE TYPE: Architectural Perspective — camera INSIDE the building. "
-            "Interior architecture is the subject: corridor vanishing point, high lobby "
-            "ceiling, balcony seen from inside the apartment, glass curtain wall from "
-            "the interior side, or staircase geometry. No exterior facade views. "
-            "No people, or at most one unidentifiable silhouette for scale. "
-            "Mood: precise, confident, editorial. Text anchors wherever the composition "
-            "creates a naturally dark or clean area — do not force it to a fixed zone."
-        ),
-        2: (
-            "SCENE TYPE: Lifestyle Moment — one or two people inside the home, candid, "
-            "never facing camera, mid one small believable action. No exterior views. "
-            "The action and headline must thematically rhyme. Mood: warm aspiration, "
-            "a real moment in an exceptional home. Text anchors wherever the composition "
-            "creates space — above, beside, or below the figure."
-        ),
-        3: (
-            "SCENE TYPE: Iconic Detail — one hero object or architectural detail, "
-            "art-directed like a luxury product ad. Maximum negative space. No people, "
-            "no full-room shots. Could be a material macro, a tabletop vignette, or a "
-            "signature architectural element. Fewest text elements of the five variants. "
-            "Text uses whatever breathing room the composition naturally provides."
-        ),
-        4: (
-            "SCENE TYPE: Exterior Establishing Shot — full building in its urban context, "
-            "three-quarter angle (never head-on). Favour blue-hour or twilight: deep indigo "
-            "sky, warm interior lights glowing from units, motion-blurred street light trails. "
-            "This is the only variant showing the building facade from outside. "
-            "Full information stack (location, headline, price, trust badges) distributed "
-            "naturally across the composition's dark areas."
-        ),
-        5: (
-            "SCENE TYPE: Interior Signature Moment — empty room, no people. Light quality "
-            "and material do the emotional work: dramatic diagonal light across a marble floor, "
-            "a dusk cityscape through full-height glazing, one styled object as the only human "
-            "touch. The shadow the light creates is the text surface — push it to near-black. "
-            "Mood: quiet luxury, the feeling of entering a room that knows it is exceptional."
-        ),
-    }
-    zone_rule = _zone_rules.get(n, _zone_rules[1]).replace("{locality}", locality)
-
-    ref_block = ""
-    if REFERENCE_IMAGES_DIR.exists():
-        ref_descs = []
-        for rp in sorted(REFERENCE_IMAGES_DIR.glob("*")):
-            if rp.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp"):
-                continue
-            dp = imgs.ref_description_path(rp)
-            if dp.exists():
-                ref_descs.append(f"  • [{rp.name}] {dp.read_text(encoding='utf-8').strip()}")
-        if ref_descs:
-            ref_block = (
-                "\n\nREFERENCE CREATIVE INSPIRATION:\n"
-                "Study these for the visual language of premium advertising — how text "
-                "zones relate to photography, typographic container quality, ornamental "
-                "detail.  Let them inspire the approach; the actual structure should "
-                "emerge from the image's natural composition and campaign data.\n"
-                + "\n".join(ref_descs)
-            )
-
-    first_headline = next((c["headline"] for c in eff.values() if c.get("headline")), "")
-
-    system_prompt = f"""You are a luxury real-estate ad art director writing image prompts for PIKORUA.
-You write prompts that are sent directly to an AI image generator (gpt-image-1).
-The prompt must read like a cinematographer's shot brief: scene, light, materials, mood,
-and text elements — described as if you are painting the image, not filling a template.
-
-Campaign context:
-- Property: {property_name} ({property_type})
-- Location: {locality + ", " if locality else ""}{city}
-- Price: ₹{price_cr} Cr
-- Standout feature: {standout or "not specified"}
-
-Ad copy variants (pick a headline from these):
-{copy_block}{ref_block}
-
-VARIANT RULES — slot {n} ({variant_label}):
-{zone_rule}
-
-TEXT ELEMENTS (always required — quote the exact strings):
-- Location name "{locality}" — largest text, warm gold (#C9A84C), ALL CAPS tracked serif.
-  Must read at 300px thumbnail. Anchors wherever the composition creates a dark surface.
-- Price "₹{price_cr} Cr" — inside a clearly bounded dark container (rectangle with gold
-  border, frosted card, or natural shadow dark enough for 7:1 contrast). Never floating.
-- Headline (pick from copy variants above) — elegant serif or fine sans, smaller than location.
-- One or two supporting lines (tagline, CTA badge) if the variant allows them — each must
-  rest on a dark surface; add a scrim if the photo is not dark enough.
-Scale contrast between text tiers is mandatory: location name is 5–8× the size of subtext.
-
-PHOTOREALISM: camera body + lens + ISO, aperture for depth of field, named light colour
-temperature and direction, exact material finishes, one natural imperfection (lens flare,
-grain, chromatic aberration), asymmetric off-axis composition.
-
-PALETTE: deep navy / charcoal in backing areas, warm gold for dominant text, warm white
-for supporting copy. No neon, no cold blues, no pure white panels.
-
-HARD RULES:
-· No phone numbers, URLs, sq ft, possession dates, floor counts, RERA numbers.
-· No brand names, logos, or wordmarks.
-· One corner must be left clean — a logo is composited after generation.
-· Do not invent property facts.
-
-Write a single flowing-prose prompt (200–400 words).
-No preamble, no labels, no surrounding quotes."""
-
-    user_msg = f"""Rewrite image prompt slot {n} ("{variant_label}" — {prompt_type}).
-
-Current prompt:
-{current_prompt}
-
-Rewrite it following all style rules above."""
-
-    model = os.getenv("CREATIVE_MODEL", "gemini/gemini-2.5-flash")
     try:
-        resp = litellm.completion(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_msg},
-            ],
-            temperature=0.85, max_tokens=600,
-        )
-        new_prompt = resp.choices[0].message.content.strip().strip('"')
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}")
+        gen_eff_meta = cs.effective_meta(review_folder)
+    except Exception:
+        gen_eff_meta = {}
 
+    eff_copy = gen_eff_meta.get(n) or {}
+    headline = eff_copy.get("headline", "")
+    default_cta = "Sample Flat Ready" if sample_ready else ""
+    cta = default_cta
+
+    brief_model = BriefModel.from_brief(
+        brief, headline=headline, cta=cta, sample_ready_override=sample_ready
+    )
+    brief_model.has_logo = BRAND_LOGO_PATH.exists()
+
+    try:
+        spec = build_ad_spec(
+            variant_key=variant_key,
+            prompt_num=n,
+            brief=brief_model,
+        )
+        new_prompt = _baked_prompt.build(spec, brief_model)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Art director call failed: {exc}")
+
+    saved_edits = cs.load_edits(review_folder)
     overrides = saved_edits.setdefault("prompt_overrides", {})
     overrides[str(n)] = new_prompt
+    meta = saved_edits.setdefault("prompt_override_meta", {})
+    meta[str(n)] = {"source": "ai_rewrite", "fingerprint": _brief_fingerprint(brief)}
     cs.save_edits(review_folder, saved_edits)
 
     return {"prompt_num": n, "prompt": new_prompt}
@@ -478,10 +494,12 @@ def serve_image(run_id: str, filename: str):
 
 @router.delete("/image/{run_id}/{fname}")
 def delete_generated_image(run_id: str, fname: str):
-    if not re.fullmatch(r'image_(?:\d+|r\d+)(?:_v\d+)?\.png', fname):
+    m = re.fullmatch(r'image_(\d+|r\d+)(?:_v\d+)?\.png', fname)
+    if not m:
         raise HTTPException(status_code=400, detail="Invalid filename.")
     run = cs.require_complete(run_id)
-    images = Path(run["review_folder"]) / "images"
+    review_folder = Path(run["review_folder"])
+    images = review_folder / "images"
     target = images / fname
     if not target.exists():
         raise HTTPException(status_code=404, detail="Image not found.")
@@ -489,6 +507,44 @@ def delete_generated_image(run_id: str, fname: str):
     backup = images / ".logo_backup" / fname
     if backup.exists():
         backup.unlink()
+
+    # Reference-variant images (image_r{n}...) aren't tied to a visual_prompts.json
+    # slot — nothing to reset there.
+    slot = m.group(1)
+    if slot.isdigit():
+        prompt_num = int(slot)
+        remaining = list(images.glob(f"image_{prompt_num}.png")) + \
+            list(images.glob(f"image_{prompt_num}_v*.png"))
+        if not remaining:
+            visual_entries = _load_visual_prompts(review_folder)
+            idx = next(
+                (j for j, e in enumerate(visual_entries) if e.get("prompt_num") == prompt_num),
+                None,
+            )
+            if idx is not None:
+                visual_entries[idx] = {
+                    "variant_key": visual_entries[idx].get("variant_key", ""),
+                    "prompt_num": prompt_num,
+                }
+                vp_path = review_folder / "visual_prompts.json"
+                vp_path.write_text(
+                    json.dumps(visual_entries, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+
+            edits = cs.load_edits(review_folder)
+            overrides = edits.get("prompt_overrides", {})
+            meta = edits.get("prompt_override_meta", {})
+            if overrides.pop(str(prompt_num), None) is not None or meta.pop(str(prompt_num), None) is not None:
+                if overrides:
+                    edits["prompt_overrides"] = overrides
+                else:
+                    edits.pop("prompt_overrides", None)
+                if meta:
+                    edits["prompt_override_meta"] = meta
+                else:
+                    edits.pop("prompt_override_meta", None)
+                cs.save_edits(review_folder, edits)
+
     return {"ok": True}
 
 
@@ -696,6 +752,10 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
             prompt = payload.custom_prompt.strip()
             ref_layout = ""
         else:
+            from ..services.image.brief_model import BriefModel
+            from ..services.image.art_director import build_ad_spec
+            from ..services.image import baked_prompt as _baked_prompt
+
             # Extract WHERE text elements sit in the reference ad (cached)
             ref_layout = imgs.extract_reference_ad_layout(ref_path)
             if not ref_layout:
@@ -706,32 +766,29 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
             # Extract the photographic scene/mood of the reference (cached)
             ref_scene = imgs.analyze_reference_image(ref_path)
 
-            entry = {
-                "scene_prose": ref_scene,
-                "headline": first_headline,
-                "eyebrow": "",
-                "palette_tag": "charcoal_gold",
-                "tone_tag": "dark_luxury",
-                "recipe_tag": "",
-                "logo_corner": "bottom-right",
-                "composition_notes": ref_layout,
-            }
-            sanitizer_brief = {
-                "locality": brief.get("locality", ""),
-                "city": brief.get("city", ""),
-                "property_type": brief.get("property_type", ""),
-                "price_cr": str(brief.get("price_cr", "")),
-                "sample_ready": bool(brief.get("sample_ready", False)),
-                "rera_verified": bool(brief.get("rera_verified", False)),
-                "verified_awards": bool(brief.get("verified_awards", False)),
-                "verified_certifications": bool(brief.get("verified_certifications", False)),
-                "verified_landmarks": bool(brief.get("verified_landmarks", False)),
-                "config": brief.get("config", ""),
-                "usps": brief.get("usps", []),
-                "property_name": brief.get("property_name", ""),
-            }
-            raw_prompt = imgs.build_ad_prompt(entry, sanitizer_brief, "interior")
-            prompt = imgs.sanitize_image_prompt(raw_prompt, sanitizer_brief, assembled=True)
+            sample_ready = bool(brief.get("sample_ready", False))
+            default_cta = "Sample Flat Ready" if sample_ready else ""
+            brief_model = BriefModel.from_brief(
+                brief,
+                headline=first_headline,
+                cta=default_cta,
+                sample_ready_override=sample_ready,
+            )
+            brief_model.has_logo = BRAND_LOGO_PATH.exists()
+
+            # Use the art director to produce an AdSpec, then override the composition
+            # with the reference layout so the new image mirrors the reference's element
+            # positions while getting fresh photography and correct brief text.
+            spec = build_ad_spec(
+                variant_key="interior_signature_moment",
+                prompt_num=k,
+                brief=brief_model,
+            )
+            spec.composition = (
+                f"{ref_scene}\n\nAD ELEMENT LAYOUT (mirror this reference ad layout "
+                f"exactly — same positions for all text zones):\n{ref_layout}"
+            )
+            prompt = _baked_prompt.build(spec, brief_model)
 
         if os.getenv("REMIX_MOCK") == "1":
             return {
@@ -806,6 +863,10 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
             scene_prose = payload.custom_prompt.strip()
             prompt = payload.custom_prompt.strip()
         else:
+            from ..services.image.brief_model import BriefModel
+            from ..services.image.art_director import build_ad_spec
+            from ..services.image import baked_prompt as _baked_prompt
+
             model = os.getenv("CREATIVE_MODEL", "gemini/gemini-2.5-flash")
             try:
                 resp = litellm.completion(
@@ -820,33 +881,31 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
             except Exception as exc:
                 raise HTTPException(status_code=502, detail=f"Scene LLM call failed: {exc}")
 
-            # Build the full Ideogram prompt via build_ad_prompt using reference layout
-            entry = {
-                "scene_prose": scene_prose,
-                "headline": first_headline,
-                "eyebrow": "",
-                "palette_tag": palette_tag,
-                "tone_tag": tone_tag,
-                "recipe_tag": "",
-                "logo_corner": "bottom-right",
-                "composition_notes": ref_layout,
-            }
-            sanitizer_brief = {
-                "locality": brief.get("locality", ""),
-                "city": brief.get("city", ""),
-                "property_type": brief.get("property_type", ""),
-                "price_cr": str(brief.get("price_cr", "")),
-                "sample_ready": bool(brief.get("sample_ready", False)),
-                "rera_verified": bool(brief.get("rera_verified", False)),
-                "verified_awards": bool(brief.get("verified_awards", False)),
-                "verified_certifications": bool(brief.get("verified_certifications", False)),
-                "verified_landmarks": bool(brief.get("verified_landmarks", False)),
-                "config": brief.get("config", ""),
-                "usps": brief.get("usps", []),
-                "property_name": brief.get("property_name", ""),
-            }
-            raw_prompt = imgs.build_ad_prompt(entry, sanitizer_brief, payload.scene_variant)
-            prompt = imgs.sanitize_image_prompt(raw_prompt, sanitizer_brief, assembled=True)
+            sample_ready = bool(brief.get("sample_ready", False))
+            default_cta = "Sample Flat Ready" if sample_ready else ""
+            brief_model = BriefModel.from_brief(
+                brief,
+                headline=first_headline,
+                cta=default_cta,
+                sample_ready_override=sample_ready,
+            )
+            brief_model.has_logo = BRAND_LOGO_PATH.exists()
+
+            # Build an AdSpec for the requested scene_variant, then inject:
+            # - the LLM-generated scene prose for the fresh photography
+            # - the reference image's element layout as the composition notes
+            # This gives brand-new photography with the same text element positions.
+            spec = build_ad_spec(
+                variant_key=payload.scene_variant,
+                prompt_num=k,
+                brief=brief_model,
+            )
+            spec.scene_prose = scene_prose
+            spec.composition = (
+                f"{scene_prose}\n\nAD ELEMENT LAYOUT (mirror this reference ad layout "
+                f"exactly — same positions for all text zones):\n{ref_layout}"
+            )
+            prompt = _baked_prompt.build(spec, brief_model)
 
         if os.getenv("REMIX_MOCK") == "1":
             return {
@@ -923,9 +982,6 @@ def generate_prompt_on_demand(run_id: str, prompt_num: int):
     If the entry already has scene_prose it is returned as-is (idempotent).
     Returns the assembled Ideogram prompt text so the UI can show it before generating.
     """
-    from ...crews.content_crew.task_composer import (
-        VisualPromptOutput, compose_description, list_variants,
-    )
 
     run = RUNS.get(run_id)
     if not run or run.get("status") != "complete" or not run.get("review_folder"):
@@ -943,12 +999,26 @@ def generate_prompt_on_demand(run_id: str, prompt_num: int):
     else:
         entries = []
 
-    # Check if the entry already has scene_prose (idempotent)
+    # Check if the entry already has scene_prose (idempotent) — return baked prompt preview
     entry = next((e for e in entries if e.get("prompt_num") == prompt_num), None)
     if entry and entry.get("scene_prose"):
         brief = run.get("brief", {})
-        sanitizer_brief = _brief_for_sanitizer(brief)
-        existing_prompt = imgs.build_ad_prompt(entry, sanitizer_brief, entry.get("variant_key", ""))
+        sample_ready = bool(brief.get("sample_ready", False))
+        default_cta = "Sample Flat Ready" if sample_ready else ""
+        try:
+            from ..services.image.brief_model import BriefModel
+            from ..services.image.art_director import AdSpec
+            from ..services.image import baked_prompt as _baked_prompt
+            eff = cs.effective_meta(review_folder)
+            headline = (eff.get(prompt_num) or {}).get("headline", "")
+            bm = BriefModel.from_brief(brief, headline=headline, cta=default_cta,
+                                       sample_ready_override=sample_ready)
+            bm.has_logo = BRAND_LOGO_PATH.exists()
+            spec = AdSpec.from_entry({**entry, "variant_key": entry.get("variant_key", ""),
+                                       "prompt_num": prompt_num})
+            existing_prompt = _baked_prompt.build(spec, bm)
+        except Exception:
+            existing_prompt = entry.get("scene_prose", "")
         return {"prompt_num": prompt_num, "prompt": existing_prompt, "already_existed": True}
 
     # Determine the variant_key for this slot
@@ -960,81 +1030,35 @@ def generate_prompt_on_demand(run_id: str, prompt_num: int):
         raise HTTPException(status_code=400, detail=f"prompt_num {prompt_num} out of range.")
 
     brief = run.get("brief", {})
-    locality = brief.get("locality", "")
-    city = brief.get("city", "")
-    price_cr = brief.get("price_cr", "")
-    prop_type = brief.get("property_type", "")
-    sample_ready = str(bool(brief.get("sample_ready", False))).lower()
+    sample_ready = bool(brief.get("sample_ready", False))
 
-    # Load copy context for visual_prompter
+    # Use the new art-director pipeline to produce a fully baked AdSpec for this slot.
+    # This replaces the old LLM → VisualPromptOutput → build_ad_prompt() flow.
     eff = cs.effective_meta(review_folder)
-    copy_lines = []
-    for num in sorted(eff)[:5]:
-        c = eff[num]
-        copy_lines.append(f'  Variant {num}: headline="{c["headline"]}" / body="{c["body"]}"')
-    copy_block = "\n".join(copy_lines) if copy_lines else "  (no copy variants yet)"
+    headline = (eff.get(prompt_num) or {}).get("headline", "")
+    default_cta = "Sample Flat Ready" if sample_ready else ""
 
-    # Get the variant's task description (same logic as content_crew._visual_task)
-    task_desc = compose_description(variant_key)
-    # Substitute crew kickoff placeholders
-    for k, v in {
-        "{product}": brief.get("property_name", ""),
-        "{city}": city,
-        "{locality}": locality,
-        "{price_cr}": price_cr,
-        "{sample_ready}": sample_ready,
-        "{property_type}": prop_type,
-        "{reference_images}": "",
-    }.items():
-        task_desc = task_desc.replace(k, v)
+    from ..services.image.brief_model import BriefModel
+    from ..services.image.art_director import build_ad_spec, AdSpec
+    from ..services.image import baked_prompt as _baked_prompt
 
-    system_prompt = (
-        "You are a luxury real-estate ad art director writing structured visual briefs for PIKORUA. "
-        "You output ONLY valid JSON with no preamble or markdown fences.\n\n"
-        f"Ad copy context (pick a headline from these):\n{copy_block}"
+    brief_model = BriefModel.from_brief(
+        brief, headline=headline, cta=default_cta, sample_ready_override=sample_ready
     )
-    user_msg = task_desc + (
-        f"\n\nOutput valid JSON with exactly these keys: "
-        '{"scene_prose": "...", "headline": "...", "eyebrow": "...", '
-        '"palette_tag": "...", "scene_tag": "...", "tone_tag": "...", '
-        '"recipe_tag": "...", "logo_corner": "...", "composition_notes": "..."}'
-    )
+    brief_model.has_logo = BRAND_LOGO_PATH.exists()
 
-    model = os.getenv("CREATIVE_MODEL", "gemini/gemini-2.5-flash")
     try:
-        resp = litellm.completion(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_msg},
-            ],
-            temperature=0.85,
-            max_tokens=1200,
-        )
-        raw = resp.choices[0].message.content.strip()
+        spec = build_ad_spec(variant_key=variant_key, prompt_num=prompt_num, brief=brief_model)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}")
+        raise HTTPException(status_code=502, detail=f"Art director call failed: {exc}")
 
-    # Parse the JSON
-    raw_clean = re.sub(r"```(?:json)?\s*", "", raw).strip("`").strip()
-    m = re.search(r"\{[\s\S]*\}", raw_clean)
-    if not m:
-        raise HTTPException(status_code=502, detail="LLM returned no parseable JSON.")
-    try:
-        parsed = json.loads(m.group(0))
-    except Exception:
-        raise HTTPException(status_code=502, detail="LLM JSON parse error.")
+    baked_preview = _baked_prompt.build(spec, brief_model)
 
-    # Validate with the pydantic model
-    try:
-        vpo = VisualPromptOutput(**parsed)
-        entry_data = vpo.model_dump()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Visual prompt schema error: {exc}")
-
-    # Upsert into visual_prompts.json
-    new_entry = {"variant_key": variant_key, "prompt_num": prompt_num}
-    new_entry.update(entry_data)
+    # Upsert the AdSpec entry into visual_prompts.json so subsequent /generate-images
+    # calls can load it directly via pipeline.ensure_spec().
+    new_entry = spec.to_entry()  # full AdSpec fields
+    new_entry["variant_key"] = variant_key
+    new_entry["prompt_num"] = prompt_num
 
     existing_idx = next((i for i, e in enumerate(entries) if e.get("prompt_num") == prompt_num), None)
     if existing_idx is not None:
@@ -1045,7 +1069,4 @@ def generate_prompt_on_demand(run_id: str, prompt_num: int):
 
     vp_path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # Return the assembled prompt so the UI can preview it
-    sanitizer_brief = _brief_for_sanitizer(brief)
-    assembled = imgs.build_ad_prompt(new_entry, sanitizer_brief, variant_key)
-    return {"prompt_num": prompt_num, "prompt": assembled, "already_existed": False}
+    return {"prompt_num": prompt_num, "prompt": baked_preview, "already_existed": False}

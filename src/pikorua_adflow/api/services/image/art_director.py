@@ -90,7 +90,7 @@ def _mock_spec(variant_key: str, prompt_num: int, anchor: dict) -> dict:
         "composition": (
             f"Build a {skel.get('name', 'structured property ad')} composition. "
             f"{(skel.get('design') or '').strip()} "
-            "Locality is the hero lockup; price in a bordered box; CTA as a defined pill; "
+            "Locality is the hero lockup; price in a bordered box; "
             "small line-icons and a thin rule add craft."
         ),
         "layout_id": rnd.choice(lib.layout_ids()),
@@ -112,7 +112,8 @@ def _skeleton_menu() -> str:
 
 
 def _llm_spec(
-    variant_key: str, anchor: str, brief: "BriefModel", force_skeleton: str = ""
+    variant_key: str, anchor: str, brief: "BriefModel",
+    force_skeleton: str = "", extra_scene_note: str = "", force_palette: str = ""
 ) -> dict:
     """Scene + ad-composition LLM call. Raises on any failure (caller falls back)."""
     import litellm
@@ -215,19 +216,41 @@ def _llm_spec(
             "across a batch — no two variants should share a skeleton. Build EXACTLY "
             "on the skeleton you pick — do not drift.\n"
         ) +
-        "3) composition (70-120 words): design the ad on that skeleton in concrete visual "
-        "terms. Name exact brief values for locality, city, config, price, CTA. "
-        "SPEC STRIP ITEMS: NEVER write their text — refer generically.\n"
-        "  ① SCROLL TEST — READ THIS FIRST, IT OVERRIDES EVERYTHING BELOW: "
-        "this ad appears in a mobile feed for 2 seconds. THREE elements must be "
-        "so physically large and high-contrast they are impossible to miss at a glance: "
-        "(1) LOCALITY — fills most of the text zone width, the single largest element "
-        "on the entire ad, set as large as the zone physically allows; "
-        "(2) PRICE NUMERAL — the largest character in the lower half, large enough to "
-        "read across a room; "
-        "(3) CTA BADGE — solid-filled, grouped with price, impossible to miss. "
-        "Everything else is secondary and exists for viewers who stop scrolling. "
-        "Design these three BIG FIRST. Then fit the rest around them.\n"
+        "3) composition (200-350 words, HARD MAX 350 — the renderer truncates anything "
+        "longer, losing your final instructions): design the ad on that skeleton in concrete visual "
+        "terms. Put the most structural decisions (zone map, stack order, spec strip "
+        "position) EARLY in the prose. Name exact brief values for locality, city, config, price"
+        + (", CTA. " if brief.cta_text else ". There is NO CTA badge for this variant — "
+           "do not design, mention, or reserve space for one. ") +
+        "SPEC STRIP ITEMS: NEVER quote or write any spec strip / footer item text value "
+        "in the composition. They are defined once in the TEXT STRINGS block and render "
+        "from there. In composition prose, refer to them only as 'the spec strip' or "
+        "'the spec strip items' — never by quoting the actual label (e.g. never write "
+        "'100% Cheque Payment' — a quoted value in prose causes Ideogram to render it "
+        "a second time as a duplicate). The same rule applies to all footer items.\n"
+        + (
+            "  ① SCROLL TEST — READ THIS FIRST, IT OVERRIDES EVERYTHING BELOW: "
+            "this ad appears in a mobile feed for 2 seconds. THREE elements must be "
+            "so physically large and high-contrast they are impossible to miss at a glance: "
+            "(1) LOCALITY — fills most of the text zone width, the single largest element "
+            "on the entire ad, set as large as the zone physically allows; "
+            "(2) PRICE NUMERAL — the largest character in the lower half, large enough to "
+            "read across a room; "
+            "(3) CTA BADGE — solid-filled, grouped with price, impossible to miss. "
+            "Everything else is secondary and exists for viewers who stop scrolling. "
+            "Design these three BIG FIRST. Then fit the rest around them.\n"
+            if brief.cta_text else
+            "  ① SCROLL TEST — READ THIS FIRST, IT OVERRIDES EVERYTHING BELOW: "
+            "this ad appears in a mobile feed for 2 seconds. TWO elements must be "
+            "so physically large and high-contrast they are impossible to miss at a glance: "
+            "(1) LOCALITY — fills most of the text zone width, the single largest element "
+            "on the entire ad, set as large as the zone physically allows; "
+            "(2) PRICE NUMERAL — the largest character in the lower half, large enough to "
+            "read across a room. There is NO CTA badge — do not invent one, do not add any "
+            "button, urgency phrase, or 'call to action' text anywhere in the composition. "
+            "Everything else is secondary and exists for viewers who stop scrolling. "
+            "Design these two BIG FIRST. Then fit the rest around them.\n"
+        ) +
         "  ② SIZE FLOOR (after scroll test): config/BHK pill must be bold and "
         "immediately readable — co-equal with price in visual weight. Tagline is "
         "Tier 3: legible but clearly smaller. Err on the side of ALL elements being "
@@ -247,6 +270,25 @@ def _llm_spec(
         "GENEROUS LEADING between groups — NOT by making text smaller to fit. "
         "Text sizes are fixed by ① and ②; leading is what fills remaining space. "
         "Forbidden: sparse top + cramped bottom. Every group visible and spaced.\n"
+        "  ⑤ TAGLINE TREATMENT (MANDATORY — never plain): the tagline MUST use one creative "
+        "type treatment. Plain single-weight same-colour text is a typographic failure and "
+        "FORBIDDEN. Choose one of: (a) SCALE CUT — first clause at full display size, second "
+        "clause at 55-60% of that size, in a noticeably lighter or italic weight; (b) "
+        "WEIGHT/COLOUR CONTRAST — one key word set in heavy display weight or in gold/accent "
+        "colour, the remaining words in cream italic at a lighter weight; (c) LINE-BREAK "
+        "DRAMA — break at a strong natural pause (period, comma, or conjunction), each "
+        "fragment set at slightly different size/weight so the stack reads as designed, not "
+        "typed. NAME the treatment in the composition: 'tagline uses scale-cut treatment' or "
+        "'tagline uses weight-contrast treatment'. A tagline that looks like a word-processor "
+        "line is wrong; it must look DESIGNED.\n"
+        "  ⑥ ZONE-FILL RULE (MANDATORY): every text element must fill at least 75% of its "
+        "available zone width. If an element at your chosen size fills only 40% of the "
+        "zone width, double the font size. Unused horizontal space in a text zone is wasted "
+        "scale — the rule is always 'make it bigger'. When a piece of information is "
+        "naturally short, PREFER setting it across 2-3 lines at larger scale over setting "
+        "it in a single small line: a config string set over 2 generous lines at double the "
+        "size reads stronger than the same string squeezed onto one line. Every element "
+        "should feel LARGE and confident — never small and tidy.\n"
         "  — TAGLINE: if it fits on ONE LINE comfortably at a large size, keep it single "
         "line — larger and bolder is always better than splitting into two smaller lines. "
         "Only split at a period or dash when the tagline is genuinely too long for one "
@@ -286,33 +328,62 @@ def _llm_spec(
         "via a soft gradient with no hard edge.'\n"
         "  — TEXT ZONE: choose a visually CLEAN zone (open wall, sky, blur plane) — "
         "never overlay text on window frames, railings, or complex architectural grids.\n"
+        "  ⑦ BUSY-BACKGROUND BACKING (MANDATORY when the zone isn't perfectly clean): "
+        "if ANY text element — including the price box, CTA badge, or tagline — sits "
+        "over glass, window mullions, reflections, foliage, or any surface with visual "
+        "texture behind it, that element MUST get its own backing treatment: a small "
+        "frosted glass pill, a soft radial scrim, or a tinted rounded shape sized "
+        "exactly to the text — NEVER bare text floating directly on a busy surface. "
+        "This applies per-element, not just to the overall text zone: a locality lockup "
+        "backed by a panel does not exempt the tagline or price sitting elsewhere on "
+        "the photo from needing their own backing too.\n"
+        "  ⑧ SCALE BALANCE (do not let one element swallow the ad): the locality is the "
+        "largest element, but its dominance must never come at the cost of the price, "
+        "config, or tagline losing their OWN clear, legible, backed treatment. If the "
+        "locality lockup is very large, compensate by giving the lower conversion "
+        "cluster (price + CTA + tagline) a stronger backing — bigger pill, deeper "
+        "scrim, or tighter grouping — so it still reads as the second unmissable "
+        "moment, not an afterthought competing with empty visual weight above it.\n"
         "  — CONVERSION ELEMENTS — NEVER MERGE INTO ONE CARD: the price box, CTA badge, "
         "and tagline are THREE SEPARATE ELEMENTS — never enclosed together in one shared "
         "rounded card or container. The price box holds ONLY the price numeral. The CTA "
         "badge is a separate solid-filled button sitting BESIDE the price box in the same "
         "horizontal row. The tagline is a freestanding italic line below the price+CTA "
-        "row, breathing on the panel/background directly — not inside any box. Merging "
-        "them into a single widget makes it look like a booking app, not a luxury ad. "
-        "If you must use a card, it contains ONLY the price (bordered box). CTA and "
-        "tagline always sit outside of it.\n"
+        "row — its OWN element, never squeezed inside the price/CTA card. This does NOT "
+        "mean bare/unbacked: rule ⑦ still applies to it — if its zone isn't perfectly "
+        "clean, give the tagline its own small backing (a soft scrim, frosted sliver, or "
+        "placement on the darker text panel/left column rather than raw over the photo) "
+        "so it reads at full contrast. A tagline that vanishes into a photo is as much a "
+        "failure as one merged into the price card. Merging elements into a single widget "
+        "makes it look like a booking app; letting the tagline fade into the photo makes "
+        "it look unfinished — avoid both. If you must use a card, it contains ONLY the "
+        "price (bordered box). CTA and tagline always sit outside of it, each with their "
+        "own legibility treatment.\n"
         "  — PANEL COLOURS: any text panel must be DEEP and DARK — deep espresso "
         "(near-black brown), charcoal-walnut, dark mahogany, or midnight navy. Never a "
         "bright amber, orange, or warm mid-tone panel. The panel must be dark enough "
         "that cream and gold text reads at maximum contrast. If the scene is warm amber, "
         "the panel should be darker than the scene — not the same tone.\n"
-        "  — PALETTE-SCENE PAIRING (warm-cool tension rule — most common oversight): "
-        "After writing your scene, identify its dominant light temperature. "
-        "COOL scene (blue-hour, overcast, twilight, cool dusk, cool-lit interior): you "
-        "MUST pick a WARM-accented palette — charcoal_gold, warm_espresso, midnight_gold, "
-        "warm_ivory, or emerald_bronze — so the warm editorial tones create visual tension "
-        "against the cool scene. "
-        "WARM scene (amber interior lights, golden hour, candlelit, sunset, warm daylight): "
-        "any palette works — pairing a cool panel (deep_slate, navy_cream, burgundy_silver, "
-        "steel_rose) creates contrast and is encouraged for variety, or a warm palette adds "
-        "richness — both are valid. "
-        "FORBIDDEN COMBINATION: a cool-toned scene + a cool-toned palette. This collapses "
-        "all visual tension and the ad reads flat and corporate instead of luxury. Also vary "
-        "the accent: bronze, silver, rose-copper are luxury accents alongside gold.\n"
+        + (
+            f"  — PALETTE: you MUST set palette_id to '{force_palette}' — this batch already "
+            "used the other palettes and this one keeps the colour theme distinct from its "
+            "sibling variants. Write the scene and panel treatment to suit it, choosing an "
+            "accent (bronze, silver, rose-copper, or gold) that complements it.\n"
+            if force_palette else
+            "  — PALETTE-SCENE PAIRING (warm-cool tension rule — most common oversight): "
+            "After writing your scene, identify its dominant light temperature. "
+            "COOL scene (blue-hour, overcast, twilight, cool dusk, cool-lit interior): you "
+            "MUST pick a WARM-accented palette — charcoal_gold, warm_espresso, midnight_gold, "
+            "warm_ivory, or emerald_bronze — so the warm editorial tones create visual tension "
+            "against the cool scene. "
+            "WARM scene (amber interior lights, golden hour, candlelit, sunset, warm daylight): "
+            "any palette works — pairing a cool panel (deep_slate, navy_cream, burgundy_silver, "
+            "steel_rose) creates contrast and is encouraged for variety, or a warm palette adds "
+            "richness — both are valid. "
+            "FORBIDDEN COMBINATION: a cool-toned scene + a cool-toned palette. This collapses "
+            "all visual tension and the ad reads flat and corporate instead of luxury. Also vary "
+            "the accent: bronze, silver, rose-copper are luxury accents alongside gold.\n"
+        ) +
         "  — FOOTER: spec items from brief only, CTA groups with price, no footer column "
         "for CTA.\n\n"
         f"SKELETON MENU:\n{_skeleton_menu()}\n\n"
@@ -325,18 +396,49 @@ def _llm_spec(
         "tone ∈ [dark_luxury, bright_aspirational]."
     )
     footer_items = " | ".join(brief.footer_items()) or "none"
+    split_hint = brief.locality_split_hint
+    split_note = (
+        f" — VERTICAL RAIL SPLIT: use exactly '{split_hint}' on two lines at this break point; "
+        f"never split arbitrarily or into more than 2 lines"
+        if split_hint else ""
+    )
+    _QUALIFIERS = ["onwards", "starting from", "starting at"]
+    qualifier = _QUALIFIERS[hash(brief.locality) % len(_QUALIFIERS)]
+    # "onwards" reads naturally trailing the number (₹3 Cr onwards) so it sits BELOW/AFTER
+    # the price numeral; "starting from"/"starting at" read as a lead-in, so they sit
+    # ABOVE/BEFORE the numeral instead — this position note is for the composition prose.
+    qualifier_pos = "after/below the numeral" if qualifier == "onwards" else "before/above the numeral"
+    price_onwards = (
+        f"{brief.price_display} ({qualifier} — place {qualifier_pos})"
+        if brief.price_display else ""
+    )
+    cta_line = (
+        f"  cta: {brief.cta_text}"
+        if brief.cta_text else
+        "  cta: NONE — do NOT include a CTA badge, button, or action pill anywhere; "
+        "omit it entirely from the composition"
+    )
+    cheque_line = (
+        "\n  cheque_only: TRUE — '100% Cheque Payment' is already defined in the TEXT "
+        "STRINGS spec strip and will render there ONCE. Do NOT write it in the composition "
+        "prose at all — refer to the spec strip only as 'the spec strip' or 'the spec "
+        "strip item', never by quoting '100% Cheque Payment'. A second mention in the "
+        "composition creates a duplicate render."
+        if brief.cheque_only else
+        "\n  cheque_only: FALSE — do NOT render '100% Cheque Payment' or any payment method text"
+    )
     user = (
         f"PROPERTY FACTS (use these exact values everywhere — never invent alternatives):\n"
-        f"  locality: {brief.locality_display}\n"
+        f"  locality: {brief.locality_display}{split_note}\n"
         f"  city: {brief.city_display}\n"
         f"  config: {brief.config_display}\n"
-        f"  price: {brief.price_display}\n"
+        f"  price: {price_onwards}\n"
         f"  headline: {brief.headline!r}\n"
-        f"  cta: {brief.cta_text}\n"
-        f"  spec strip items (refer to these generically in composition — exact text "
-        f"rendered from the anchor below): {footer_items}\n\n"
+        f"  {cta_line}{cheque_line}\n"
+        f"  spec strip items (footer ONLY — never scene materials like marble/walnut/glazing): {footer_items}\n\n"
         f"Variant creative brief: {anchor}\n"
-        'JSON keys: {"scene_prose","skeleton","composition","palette_id",'
+        + (f"Additional scene context: {extra_scene_note}\n" if extra_scene_note else "")
+        + 'JSON keys: {"scene_prose","skeleton","composition","palette_id",'
         '"type_pairing_id","tone"}'
     )
     model = os.getenv("CREATIVE_MODEL", "openrouter/anthropic/claude-sonnet-4-6")
@@ -354,8 +456,67 @@ def _llm_spec(
     return json.loads(m.group(0))
 
 
+def plan_batch_diversity(
+    n: int, existing: "list[tuple[str, str]] | None" = None, rnd: "random.Random | None" = None
+) -> list[dict]:
+    """Assign a (skeleton, palette) pair per new slot, avoiding repeats already used
+    by sibling slots (whether generated just now or in an earlier session).
+
+    `existing` is the (skeleton, palette_id) pairs already used by OTHER slots of
+    this same campaign (e.g. read back from visual_prompts.json), so a single
+    "generate one more variant" click stays consistent with the rest of the set,
+    not just with itself. Each skeleton is allowed at most twice across all slots
+    (existing + new); a second use of a skeleton always gets a different palette
+    than its first use. Palette choice is also spread GLOBALLY across the whole
+    batch — regardless of skeleton — so two variants never end up looking
+    same-coloured just because they happen to land on different skeletons; the
+    least-used palette overall is always preferred first. With 8 skeletons and
+    9 palettes in the library, a normal 5-variant batch gets fully distinct
+    skeletons AND fully distinct palettes.
+    """
+    rnd = rnd or random.Random()
+    skeletons = lib.skeleton_ids()[:]
+    palettes = lib.palette_ids()[:]
+    rnd.shuffle(skeletons)
+    rnd.shuffle(palettes)
+
+    used_count: dict[str, int] = {}
+    palettes_by_skel: dict[str, list[str]] = {}
+    global_pal_count: dict[str, int] = {}
+    for skel, pal in (existing or []):
+        if skel:
+            used_count[skel] = used_count.get(skel, 0) + 1
+            palettes_by_skel.setdefault(skel, []).append(pal)
+        if pal:
+            global_pal_count[pal] = global_pal_count.get(pal, 0) + 1
+
+    plan: list[dict] = []
+    for i in range(n):
+        unused = [s for s in skeletons if used_count.get(s, 0) == 0]
+        under_cap = [s for s in skeletons if used_count.get(s, 0) < 2]
+        skel = rnd.choice(unused) if unused else (rnd.choice(under_cap) if under_cap else rnd.choice(skeletons))
+        used_count[skel] = used_count.get(skel, 0) + 1
+        used_pals = palettes_by_skel.setdefault(skel, [])
+        # Prefer a palette unused anywhere in the batch yet, and never repeated on
+        # this same skeleton; fall back to least-globally-used, then anything.
+        pal_options = [p for p in palettes if p not in used_pals and global_pal_count.get(p, 0) == 0]
+        if not pal_options:
+            pal_options = [p for p in palettes if global_pal_count.get(p, 0) == 0]
+        if not pal_options:
+            pal_options = [p for p in palettes if p not in used_pals]
+        if not pal_options:
+            min_used = min(global_pal_count.get(p, 0) for p in palettes)
+            pal_options = [p for p in palettes if global_pal_count.get(p, 0) == min_used]
+        pal = rnd.choice(pal_options)
+        used_pals.append(pal)
+        global_pal_count[pal] = global_pal_count.get(pal, 0) + 1
+        plan.append({"skeleton": skel, "palette": pal})
+    return plan
+
+
 def build_ad_spec(
-    variant_key: str, prompt_num: int, brief: BriefModel, force_skeleton: str = ""
+    variant_key: str, prompt_num: int, brief: BriefModel,
+    force_skeleton: str = "", extra_scene_note: str = "", force_palette: str = ""
 ) -> AdSpec:
     """
     Produce a validated AdSpec for one slot. Every selected ID is coerced to a real
@@ -365,6 +526,7 @@ def build_ad_spec(
     anchor = anchor_for(variant_key)
     creative_brief = anchor.get("creative_brief", "premium residential lifestyle")
     force_skeleton = _coerce_id(force_skeleton, lib.skeleton_ids(), "") if force_skeleton else ""
+    force_palette = _coerce_id(force_palette, lib.palette_ids(), "") if force_palette else ""
 
     use_mock = os.getenv("ART_DIRECTOR_MOCK") == "1"
     parsed: dict
@@ -372,9 +534,14 @@ def build_ad_spec(
         parsed = _mock_spec(variant_key, prompt_num, anchor)
         if force_skeleton:
             parsed["skeleton"] = force_skeleton
+        if force_palette:
+            parsed["palette_id"] = force_palette
     else:
         try:
-            parsed = _llm_spec(variant_key, creative_brief, brief, force_skeleton)
+            parsed = _llm_spec(variant_key, creative_brief, brief, force_skeleton,
+                               extra_scene_note=extra_scene_note, force_palette=force_palette)
+            if force_palette:
+                parsed["palette_id"] = force_palette
         except Exception as exc:
             import traceback
             print(f"[art_director] LLM call failed — falling back to mock. Error: {exc}")
@@ -382,6 +549,8 @@ def build_ad_spec(
             parsed = _mock_spec(variant_key, prompt_num, anchor)
             if force_skeleton:
                 parsed["skeleton"] = force_skeleton
+            if force_palette:
+                parsed["palette_id"] = force_palette
 
     layout_id = _coerce_id(parsed.get("layout_id"), lib.layout_ids(), lib.layout_ids()[0])
     palette_id = _coerce_id(parsed.get("palette_id"), lib.palette_ids(), lib.palette_ids()[0])

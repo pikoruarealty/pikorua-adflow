@@ -91,20 +91,20 @@ def _strip_project_name(text: str, brief: dict) -> str:
     return text
 
 
-_SPLIT_MARKER = "Render exactly these text strings"
+_SPLIT_MARKER = "TEXT STRINGS —"
 
-def _strip_fabricated_usps(text: str, brief: dict) -> str:
+def _filter_usp_clusters(text: str, brief: dict) -> str:
     """
-    Remove any quoted USP clusters from the composition block that contain labels
-    not present in brief.usps. Operates only on the composition section (before the
-    text-strings marker) so the actual spec strip items are never touched.
+    Remove any quoted USP clusters that contain labels not present in brief.usps.
+    Works on any prose fragment (no marker required) — used both on individual
+    LLM-authored fields pre-assembly and on the composition section of a fully
+    assembled prompt.
     """
     usps = brief.get("usps") or []
-    if not usps or _SPLIT_MARKER not in text:
+    if not usps:
         return text
 
     valid = {u.strip().upper() for u in usps}
-    comp, strings_tail = text.split(_SPLIT_MARKER, 1)
 
     # Pattern: a single-quoted run of UPPERCASE items joined by · or ,
     # e.g. 'PRELAUNCH ENTRY · CITY VIEWS · GARDEN ENCLAVE'
@@ -119,7 +119,19 @@ def _strip_fabricated_usps(text: str, brief: dict) -> str:
             return ""
         return "'" + " · ".join(kept) + "'"
 
-    comp = re.sub(r"'([A-Z][A-Z\s·,\-]{4,})'", _filter_cluster, comp)
+    return re.sub(r"'([A-Z][A-Z\s·,\-]{4,})'", _filter_cluster, text)
+
+
+def _strip_fabricated_usps(text: str, brief: dict) -> str:
+    """
+    Remove any quoted USP clusters from the composition block that contain labels
+    not present in brief.usps. Operates only on the composition section (before the
+    text-strings marker) so the actual spec strip items are never touched.
+    """
+    if _SPLIT_MARKER not in text:
+        return text
+    comp, strings_tail = text.split(_SPLIT_MARKER, 1)
+    comp = _filter_usp_clusters(comp, brief)
     return comp + _SPLIT_MARKER + strings_tail
 
 
@@ -154,6 +166,7 @@ def sanitize_llm_field(text: str, brief: dict) -> str:
     out = _TECH_NOISE_RE.sub("", out)
     out = _strip_project_name(out, brief)
     out = _strip_brand_name(out)
+    out = _filter_usp_clusters(out, brief)
     return _cleanup(out)
 
 

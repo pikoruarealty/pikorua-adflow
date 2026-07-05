@@ -336,10 +336,11 @@ function renderVisuals() {
       return va - vb;
     });
     const latestFile = sortedVariants.length ? sortedVariants[sortedVariants.length - 1] : (has ? imgName : null);
+    const hasImage = has || sortedVariants.length > 0;
     const isOptIn = !!p.opt_in;
     html += '<div class="border ' + (isOptIn ? 'border-outline border-dashed' : 'border-outline-variant') + ' flex flex-col bg-surface-container-lowest">' +
       '<div id="img-wrap-' + p.num + '" class="aspect-[3/4] bg-surface-container-low overflow-hidden relative">' +
-        (latestFile ? '<img id="main-img-' + p.num + '" src="/image/' + RUN_ID + '/' + latestFile + '?t=' + Date.now() + '" onclick="openLightbox(this.src)" class="w-full h-full object-cover cursor-zoom-in"/>'
+        (latestFile ? '<img id="main-img-' + p.num + '" src="/image/' + RUN_ID + '/' + latestFile + '?t=' + Date.now() + '" onclick="openLightbox(this.src, ' + p.num + ')" class="w-full h-full object-cover cursor-zoom-in"/>'
                     : '<div class="w-full h-full flex flex-col items-center justify-center gap-1.5 label-caps text-outline text-[10px]">' +
                       (isOptIn ? '<span class="material-symbols-outlined text-[20px] text-outline">add_photo_alternate</span><span>Optional — select to generate</span>' : 'No image yet') +
                       '</div>') +
@@ -353,6 +354,8 @@ function renderVisuals() {
       if (has) {
         html += '<div class="relative group w-10 h-12 shrink-0" data-file="' + imgName + '">' +
           '<img src="/image/' + RUN_ID + '/' + imgName + '?t=' + Date.now() + '" onclick="swapMainImg(' + p.num + ',\'' + imgName + '\')" class="w-full h-full object-cover border border-outline-variant cursor-pointer hover:opacity-90 transition-opacity" title="Original"/>' +
+          (sortedVariants.length ? '<button onclick="deleteVariantImage(\'' + imgName + '\')" title="Delete original" ' +
+            'class="absolute -top-1 -right-1 w-4 h-4 bg-surface border border-outline-variant text-error flex items-center justify-center text-[9px] leading-none opacity-0 group-hover:opacity-100 transition-opacity">×</button>' : '') +
         '</div>';
       }
       sortedVariants.forEach(vf => {
@@ -374,28 +377,33 @@ function renderVisuals() {
           'placeholder="e.g. Two 18-storey towers, glass curtain wall with bronze mullions, landscaped podium, rooftop infinity pool…"></textarea>' +
           '<button id="gen-btn-' + p.num + '" disabled onclick="genExterior(' + p.num + ')" ' + (isGen ? 'disabled ' : '') +
           'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
-          (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span> Working…' : (has ? 'REPLACE EXTERIOR' : 'GENERATE EXTERIOR')) +
+          (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span> Working…' : (hasImage ? 'REPLACE EXTERIOR' : 'GENERATE EXTERIOR')) +
           '</button>'
-        : (p.has_prompt === false && !has
-          ? '<button id="gen-btn-' + p.num + '" onclick="writeAndGenImage(' + p.num + ', this)" ' + (isGen ? 'disabled ' : '') +
+        : (p.has_prompt === false && !hasImage
+          ? '<button id="gen-btn-' + p.num + '" onclick="writeAndGenImage(' + p.num + ')" ' + (isGen ? 'disabled ' : '') +
             'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
             (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span> Writing prompt…' : 'WRITE PROMPT &amp; GENERATE') +
             '</button>'
           : '<button id="gen-btn-' + p.num + '" onclick="genImages([' + p.num + '])" ' + (isGen ? 'disabled ' : '') +
             'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
             (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>' : '') +
-            (isGen ? ' Working…' : (has ? 'REPLACE' : 'GENERATE')) +
+            (isGen ? ' Working…' : (hasImage ? 'REPLACE' : 'GENERATE')) +
             '</button>'
         )
       ) +
-      '<div class="flex gap-1">' +
-        (has ? '<button onclick="addVariantImage(' + p.num + ')" ' + (isGen ? 'disabled ' : '') + 'class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center" title="Generate a new variant"><span class="material-symbols-outlined text-[16px]">add_photo_alternate</span></button>' : '') +
-        '<input type="file" id="upl-' + p.num + '" class="hidden" accept="image/png,image/jpeg,image/webp" onchange="uploadImg(' + p.num + ',this)"/>' +
-        '<button onclick="document.getElementById(\'upl-' + p.num + '\').click()" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Upload your own image"><span class="material-symbols-outlined text-[16px]">upload</span></button>' +
-        (has ? '<button onclick="revertImg(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Revert to AI-generated version"><span class="material-symbols-outlined text-[16px]">history</span></button>' : '') +
-        (has ? '<button onclick="revertLogo(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Remove logo composite"><span class="material-symbols-outlined text-[16px]">hide_image</span></button>' : '') +
-        (has ? '<button onclick="openInpaint(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Brush edit — repaint a region"><span class="material-symbols-outlined text-[16px]">brush</span></button>' : '') +
-        '<button onclick="togglePrompt(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Edit prompt"><span class="material-symbols-outlined text-[16px]">edit_note</span></button>' +
+      '<div class="flex flex-col gap-1">' +
+        '<div class="flex gap-1">' +
+          (hasImage ? '<button onclick="addVariantImage(' + p.num + ')" ' + (isGen ? 'disabled ' : '') + 'class="flex-[2] px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center" title="Generate a new variant"><span class="material-symbols-outlined text-[16px]">add_photo_alternate</span></button>' : '') +
+          '<input type="file" id="upl-' + p.num + '" class="hidden" accept="image/png,image/jpeg,image/webp" onchange="uploadImg(' + p.num + ',this)"/>' +
+          '<button onclick="document.getElementById(\'upl-' + p.num + '\').click()" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Upload your own image"><span class="material-symbols-outlined text-[16px]">upload</span></button>' +
+          (hasImage ? '<button onclick="openInpaint(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Brush edit — repaint a region"><span class="material-symbols-outlined text-[16px]">brush</span></button>' : '') +
+          '<button onclick="togglePrompt(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Edit prompt"><span class="material-symbols-outlined text-[16px]">edit_note</span></button>' +
+        '</div>' +
+        (hasImage ? '<div class="flex gap-1">' +
+          (has ? '<button onclick="revertImg(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Revert to AI-generated version"><span class="material-symbols-outlined text-[16px]">history</span></button>' : '') +
+          (has ? '<button onclick="revertLogo(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Remove logo composite"><span class="material-symbols-outlined text-[16px]">hide_image</span></button>' : '') +
+          '<button onclick="deleteMainImage(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-error hover:bg-error hover:text-on-error hover:border-error transition-[background-color,border-color] flex items-center justify-center" title="Delete this image"><span class="material-symbols-outlined text-[16px]">delete</span></button>' +
+        '</div>' : '') +
       '</div>' +
       '<div id="pe-' + p.num + '" class="hidden">' +
         '<textarea id="pr-' + p.num + '" class="w-full text-xs border border-outline-variant rounded bg-surface p-2 h-32 font-body">' + esc(p.prompt_text) + '</textarea>' +
@@ -433,7 +441,7 @@ function renderVisuals() {
             '<button onclick="document.getElementById(\'upl-r' + k + '\').click()" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Upload replacement"><span class="material-symbols-outlined text-[16px]">upload</span></button>' +
             '<button onclick="revertRefVariantLogo(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Remove logo"><span class="material-symbols-outlined text-[16px]">hide_image</span></button>' +
             '<button onclick="openInpaintFile(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Brush edit"><span class="material-symbols-outlined text-[16px]">brush</span></button>' +
-            '<button onclick="deleteRefVariantImage(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-error hover:bg-error hover:text-on-error hover:border-error transition-colors flex items-center justify-center" title="Delete"><span class="material-symbols-outlined text-[16px]">delete</span></button>' +
+            '<button onclick="deleteRefVariantImage(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-error hover:bg-error hover:text-on-error hover:border-error transition-[background-color,border-color] flex items-center justify-center" title="Delete"><span class="material-symbols-outlined text-[16px]">delete</span></button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -648,15 +656,13 @@ function openInpaintFile(fname) {
   document.getElementById('inpaint-status').classList.add('hidden');
   document.getElementById('inpaint-modal').classList.remove('hidden');
 }
-function writeAndGenImage(n, btn) {
-  const origHtml = btn ? btn.innerHTML : '';
-  const spin = '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>';
-  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Writing prompt…'; }
+function writeAndGenImage(n) {
+  generating.add(n);
+  renderVisuals();
   document.getElementById('gen-status').textContent = 'Writing image prompt for slot ' + n + '…';
   api('/generate-prompt/' + RUN_ID + '/' + n, { method: 'POST' })
     .then(d => {
       document.getElementById('gen-status').textContent = 'Prompt written. Generating image…';
-      if (btn) btn.innerHTML = spin + ' Generating image…';
       return api('/generate-images/' + RUN_ID, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -664,13 +670,14 @@ function writeAndGenImage(n, btn) {
       });
     })
     .then(d => {
-      if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      generating.delete(n);
       const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
       const statusMsg = (d.generated || []).length + ' image(s) generated.' + (errs ? ' ' + errs : '');
-      loadDetail().then(() => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg; });
+      loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing([n]); document.getElementById('gen-status').textContent = statusMsg; });
     })
     .catch(e => {
-      if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      generating.delete(n);
+      renderVisuals();
       document.getElementById('gen-status').textContent = 'Error: ' + e.message;
       showError(e.message);
     });
@@ -685,10 +692,22 @@ function addVariantImage(n) {
       generating.delete(n);
       const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
       const statusMsg = (d.generated || []).length + ' variant(s) generated.' + (errs ? ' ' + errs : '');
-      loadDetail().then(() => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg; });
+      loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing([n]); document.getElementById('gen-status').textContent = statusMsg; });
     }).catch(e => { generating.delete(n); renderVisuals(); document.getElementById('gen-status').textContent = 'Error: ' + e.message; });
 }
 function deleteVariantImage(fname) {
+  if (!confirm('Delete this image?')) return;
+  api('/image/' + RUN_ID + '/' + fname, { method: 'DELETE' })
+    .then(() => loadDetail().then(renderVisuals))
+    .catch(e => showError(e.message));
+}
+function deleteMainImage(n) {
+  const mainImg = document.getElementById('main-img-' + n);
+  const src = mainImg ? (mainImg.getAttribute('src') || '') : '';
+  const m = src.match(/\/image\/[^/]+\/([^?]+)/);
+  const fname = m ? m[1] : null;
+  if (!fname) { showError('Cannot identify image file to delete.'); return; }
+  if (!confirm('Delete this image? This cannot be undone.')) return;
   api('/image/' + RUN_ID + '/' + fname, { method: 'DELETE' })
     .then(() => loadDetail().then(renderVisuals))
     .catch(e => showError(e.message));
@@ -706,13 +725,28 @@ function swapMainImg(n, fname) {
     thumb.classList.add('ring-1', 'ring-primary', 'border-primary');
   }
 }
-function openLightbox(src) {
+let lightboxSlot = null;
+function openLightbox(src, slot) {
+  // Don't pop open a full-view of a slot that's mid-regeneration — the src would
+  // just be frozen on the old image while the card behind it keeps working.
+  if (slot !== undefined && generating.has(slot)) return;
+  lightboxSlot = slot !== undefined ? slot : null;
   document.getElementById('lightbox-img').src = src;
   document.getElementById('lightbox').classList.remove('hidden');
 }
 function closeLightbox() {
   document.getElementById('lightbox').classList.add('hidden');
   document.getElementById('lightbox-img').src = '';
+  lightboxSlot = null;
+}
+// If the lightbox is open on a slot whose image just finished (re)generating,
+// refresh it to the new file instead of leaving it frozen on the stale image.
+function refreshLightboxIfShowing(nums) {
+  if (lightboxSlot === null || !nums.includes(lightboxSlot)) return;
+  const mainImg = document.getElementById('main-img-' + lightboxSlot);
+  if (mainImg && !document.getElementById('lightbox').classList.contains('hidden')) {
+    document.getElementById('lightbox-img').src = mainImg.src;
+  }
 }
 function togglePrompt(n) { document.getElementById('pe-' + n).classList.toggle('hidden'); }
 function genImages(prompts, mode, exteriorBrief) {
@@ -764,7 +798,7 @@ function genImages(prompts, mode, exteriorBrief) {
       promptList.forEach(n => generating.delete(n));
       const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
       const statusMsg = (d.generated || []).length + ' image(s) generated.' + (errs ? ' ' + errs : '');
-      loadDetail().then(() => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg; });
+      loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing(promptList); document.getElementById('gen-status').textContent = statusMsg; });
     }).catch(e => {
       promptList.forEach(n => {
         generating.delete(n);
@@ -917,6 +951,9 @@ function rerenderAssignment() {
 }
 
 /* ── Audience & Deploy tab ── */
+let AUD_STATE = null;
+let AUD_POOL = null;
+
 function renderAudience() {
   loaded.audience = true;
   const root = document.getElementById('tab-audience');
@@ -924,8 +961,22 @@ function renderAudience() {
   Promise.all([
     api('/audience/' + RUN_ID),
     api('/meta-saved-audiences').catch(() => ({ audiences: [] })),
-  ]).then(([d, metaD]) => {
+    api('/audience-pool').catch(() => ({ work_positions: {}, income_clusters: [], industries: [] })),
+  ]).then(([d, metaD, pool]) => {
     const a = d.audience || {};
+    AUD_POOL = pool;
+    AUD_STATE = {
+      city: a.city || '', city_key: a.city_key || null, region: a.region || '',
+      interests: (a.interests || []).slice(),
+      behaviours: (a.behaviours || []).slice(),
+      work_positions: (a.work_positions || []).slice(),
+      income_clusters: (a.income_clusters || []).slice(),
+      industries: (a.industries || []).slice(),
+      relationship_statuses: (a.relationship_statuses || []).slice(),
+      nri_countries: (a.nri_countries || []).slice(),
+      advantage_plus: a.advantage_plus !== false,
+      clientele_type: a.clientele_type || '',
+    };
     const metaAudiences = metaD.audiences || [];
     const includedIds = new Set((a.included_custom_audiences || []).map(x => x.id));
     const excludedIds  = new Set((a.excluded_custom_audiences  || []).map(x => x.id));
@@ -940,9 +991,7 @@ function renderAudience() {
       field('Radius (km)', 'aud-radius', a.radius_km || 25, 'number') +
       field('Age min', 'aud-agemin', a.age_min || 28, 'number') +
       field('Age max', 'aud-agemax', a.age_max || 65, 'number') +
-      '<div><p class="label-caps text-outline mb-1">Interests</p><div class="flex flex-wrap gap-2">' +
-        (a.interests || []).map(i => '<span class="label-caps bg-primary-fixed/40 text-on-primary-container px-3 py-1">' + esc(i.name || i) + '</span>').join('') +
-      '</div></div>';
+      '<div id="aud-lists"></div>';
     if (metaAudiences.length) {
       html += '<div><p class="label-caps text-outline mb-2">Custom Meta audiences</p>' +
         '<div class="space-y-1 max-h-48 overflow-y-auto pr-1">';
@@ -970,8 +1019,17 @@ function renderAudience() {
     html +=
       '<p class="text-sm text-on-surface-variant mt-2">' + esc(d.summary || '') + '</p>' +
       '</div></div>';
+    const creativeMode = d.creative_mode || 'curated';
     html += '<div><h2 class="font-headline text-2xl mb-4">Deploy</h2>' +
       '<p class="text-sm text-on-surface-variant mb-4">Publishes the selected copy variants to Meta as PAUSED lead ads. Review in Ads Manager before activating.</p>' +
+      '<div class="mb-4">' +
+        '<p class="label-caps text-outline mb-2">Creative mode</p>' +
+        '<div id="creative-mode-toggle" class="inline-flex rounded border border-outline-variant overflow-hidden" data-mode="' + esc(creativeMode) + '">' +
+          '<button class="cm-btn text-xs label-caps px-3 py-2 transition-colors" data-val="curated" onclick="setCreativeMode(this)">Curated variants</button>' +
+          '<button class="cm-btn text-xs label-caps px-3 py-2 transition-colors border-l border-outline-variant" data-val="dynamic" onclick="setCreativeMode(this)">Let Meta auto-select</button>' +
+        '</div>' +
+        '<p id="creative-mode-hint" class="text-xs text-on-surface-variant mt-2"></p>' +
+      '</div>' +
       '<div class="grid grid-cols-2 gap-4 mb-4">' +
         '<div class="border-l-2 border-primary pl-4"><p class="label-caps text-outline">Budget</p><p class="font-headline text-2xl" id="dep-budget"></p></div>' +
         '<div class="border-l-2 border-primary pl-4"><p class="label-caps text-outline">Duration</p><p class="font-headline text-2xl" id="dep-dur"></p></div>' +
@@ -980,11 +1038,155 @@ function renderAudience() {
       '<div id="deploy-status" class="mt-4 text-sm"></div></div>';
     html += '</div>';
     root.innerHTML = html;
+    renderAudLists();
     const b = (DETAIL && DETAIL.brief) || {};
     document.getElementById('dep-budget').textContent = fmtINR(b.daily_budget_inr) + '/day';
     document.getElementById('dep-dur').textContent = (b.campaign_duration_days || 30) + ' days';
+    refreshCreativeModeUI();
     renderPublished();
   }).catch(e => { root.innerHTML = '<p class="text-error">' + e.message + '</p>'; });
+}
+
+/* ── Structured, editable targeting lists (interests/behaviours/job titles/
+   income & company size/NRI geo/Advantage+) — all backed by AUD_STATE so
+   Save sends the full picture instead of silently dropping anything the
+   old UI didn't render. ── */
+function chip(name, onRemove) {
+  return '<span class="label-caps bg-primary-fixed/40 text-on-primary-container pl-3 pr-1.5 py-1 inline-flex items-center gap-1.5">' +
+    esc(name) +
+    '<button type="button" onclick="' + onRemove + '" class="text-on-primary-container/70 hover:text-error leading-none" aria-label="Remove">✕</button>' +
+  '</span>';
+}
+function removeAudItem(category, idx) {
+  AUD_STATE[category].splice(idx, 1);
+  enableSaveAudience();
+  renderAudLists();
+}
+function addAudItem(category, item) {
+  if (!item || !item.name) return;
+  const exists = AUD_STATE[category].some(x => (x.id && x.id === item.id) || x.name === item.name);
+  if (exists) return;
+  AUD_STATE[category].push(item);
+  enableSaveAudience();
+  renderAudLists();
+}
+function searchSection(label, category, searchType) {
+  const list = AUD_STATE[category];
+  return '<div>' +
+    '<p class="label-caps text-outline mb-1">' + label + ' (' + list.length + ')</p>' +
+    '<div class="flex flex-wrap gap-2 mb-2">' +
+      (list.map((it, i) => chip(it.name || it, "removeAudItem('" + category + "'," + i + ")")).join('') || '<span class="text-sm text-on-surface-variant">None selected</span>') +
+    '</div>' +
+    '<div class="relative">' +
+      '<input type="text" placeholder="Search to add…" oninput="audSearchInput(this,\'' + category + '\',\'' + searchType + '\')" ' +
+        'class="w-full text-sm border-0 border-b border-outline-variant bg-transparent py-1.5 focus:border-primary focus:ring-0"/>' +
+      '<div class="aud-search-results absolute z-10 w-full bg-surface-container border border-outline-variant shadow-lg max-h-48 overflow-y-auto hidden"></div>' +
+    '</div>' +
+  '</div>';
+}
+let AUD_SEARCH_TIMER = null;
+function audSearchInput(input, category, searchType) {
+  const box = input.nextElementSibling;
+  const q = input.value.trim();
+  clearTimeout(AUD_SEARCH_TIMER);
+  if (q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  AUD_SEARCH_TIMER = setTimeout(() => {
+    api('/audience-search?type=' + searchType + '&q=' + encodeURIComponent(q)).then(d => {
+      const results = (d.results || []).slice(0, 8);
+      if (!results.length) { box.innerHTML = '<div class="px-3 py-2 text-sm text-on-surface-variant">No matches</div>'; box.classList.remove('hidden'); return; }
+      box.innerHTML = results.map(r =>
+        '<button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-surface-container-low" ' +
+          'onclick="addAudItem(\'' + category + '\',{id:\'' + esc(r.id) + '\',name:\'' + esc(r.name).replace(/'/g, "\\'") + '\'}); this.closest(\'.aud-search-results\').classList.add(\'hidden\'); this.closest(\'.relative\').querySelector(\'input\').value=\'\';">' +
+          esc(r.name) + '</button>'
+      ).join('');
+      box.classList.remove('hidden');
+    }).catch(() => {});
+  }, 300);
+}
+function workPositionSection() {
+  const list = AUD_STATE.work_positions;
+  const tiers = (AUD_POOL && AUD_POOL.work_positions) || {};
+  const flatKnown = new Set(list.map(w => w.name));
+  let options = '<option value="">Add a job title…</option>';
+  Object.keys(tiers).forEach(tier => {
+    const opts = (tiers[tier] || []).filter(w => !flatKnown.has(w.name));
+    if (!opts.length) return;
+    options += '<optgroup label="' + esc(tier.replace(/_/g, ' ')) + '">' +
+      opts.map(w => '<option value=\'' + JSON.stringify(w).replace(/'/g, "&#39;") + '\'>' + esc(w.name) + '</option>').join('') +
+      '</optgroup>';
+  });
+  return '<div>' +
+    '<p class="label-caps text-outline mb-1">Job titles (' + list.length + ')</p>' +
+    '<div class="flex flex-wrap gap-2 mb-2">' +
+      (list.map((it, i) => chip(it.name, "removeAudItem('work_positions'," + i + ")")).join('') || '<span class="text-sm text-on-surface-variant">None selected</span>') +
+    '</div>' +
+    '<select onchange="if(this.value){addAudItem(\'work_positions\', JSON.parse(this.value.replace(/&#39;/g, String.fromCharCode(39)))); this.value=\'\';}" ' +
+      'class="w-full text-sm border-0 border-b border-outline-variant bg-transparent py-1.5 focus:border-primary focus:ring-0">' +
+      options +
+    '</select>' +
+  '</div>';
+}
+function poolCheckbox(label, category, entry) {
+  const checked = AUD_STATE[category].some(x => x.id === entry.id);
+  return '<label class="flex items-center gap-2 text-sm cursor-pointer">' +
+    '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="if(this.checked){addAudItem(\'' + category + '\',' + JSON.stringify(entry).replace(/'/g, "&#39;").replace(/"/g, '&quot;') + ')}else{removeAudItem(\'' + category + '\',' + AUD_STATE[category].findIndex(x=>x.id===entry.id) + ')}" class="text-primary"/> ' +
+    esc(label) +
+  '</label>';
+}
+function renderAudLists() {
+  const root = document.getElementById('aud-lists');
+  if (!root || !AUD_STATE) return;
+  const incomePool = (AUD_POOL && AUD_POOL.income_clusters) || [];
+  const industryPool = (AUD_POOL && AUD_POOL.industries) || [];
+  let html = '<div class="space-y-4">';
+  html += searchSection('Interests', 'interests', 'interest');
+  html += '<details class="border-t border-outline-variant/40 pt-3"><summary class="label-caps text-outline cursor-pointer select-none">Behaviours (' + AUD_STATE.behaviours.length + ')</summary>' +
+    '<div class="mt-3">' + searchSection('Behaviours', 'behaviours', 'behaviour') + '</div></details>';
+  html += '<details class="border-t border-outline-variant/40 pt-3"><summary class="label-caps text-outline cursor-pointer select-none">Job titles (' + AUD_STATE.work_positions.length + ')</summary>' +
+    '<div class="mt-3">' + workPositionSection() + '</div></details>';
+  html += '<details class="border-t border-outline-variant/40 pt-3"><summary class="label-caps text-outline cursor-pointer select-none">Income &amp; company size</summary>' +
+    '<div class="mt-3 space-y-2">' +
+      incomePool.map(e => poolCheckbox(e.name, 'income_clusters', e)).join('') +
+      industryPool.map(e => poolCheckbox(e.name, 'industries', e)).join('') +
+    '</div></details>';
+  html += '<details class="border-t border-outline-variant/40 pt-3"><summary class="label-caps text-outline cursor-pointer select-none">NRI geography &amp; reach settings</summary>' +
+    '<div class="mt-3 space-y-3">' +
+      '<div><label class="label-caps text-outline block mb-1">NRI countries (comma-separated codes, e.g. US, AE)</label>' +
+        '<input id="aud-nri" type="text" value="' + esc(AUD_STATE.nri_countries.join(', ')) + '" oninput="enableSaveAudience()" ' +
+        'class="w-full text-sm border-0 border-b border-outline-variant bg-transparent py-1.5 focus:border-primary focus:ring-0"/></div>' +
+      '<label class="flex items-center gap-2 text-sm cursor-pointer">' +
+        '<input id="aud-adv" type="checkbox" ' + (AUD_STATE.advantage_plus ? 'checked' : '') + ' onchange="enableSaveAudience()" class="text-primary"/> ' +
+        'Let Meta auto-expand beyond selected targeting (Advantage+)</label>' +
+    '</div></details>';
+  html += '</div>';
+  root.innerHTML = html;
+}
+const CREATIVE_MODE_HINTS = {
+  curated: 'Each variant deploys as its own ad with its own paired image, headline, and body — best for comparing which variant wins.',
+  dynamic: "Meta pools every selected variant's images, headlines, and bodies into one ad and auto-mixes combinations per viewer. Per-variant performance comparison won't be available for this run.",
+};
+function refreshCreativeModeUI() {
+  const toggle = document.getElementById('creative-mode-toggle');
+  if (!toggle) return;
+  const mode = toggle.dataset.mode || 'curated';
+  toggle.querySelectorAll('.cm-btn').forEach(btn => {
+    const active = btn.dataset.val === mode;
+    btn.className = 'cm-btn text-xs label-caps px-3 py-2 transition-colors' +
+      (btn.dataset.val === 'dynamic' ? ' border-l border-outline-variant' : '') +
+      (active ? ' bg-primary text-on-primary' : ' hover:bg-surface-container-low');
+  });
+  document.getElementById('creative-mode-hint').textContent = CREATIVE_MODE_HINTS[mode] || '';
+}
+function setCreativeMode(btn) {
+  const mode = btn.dataset.val;
+  const toggle = document.getElementById('creative-mode-toggle');
+  const prev = toggle.dataset.mode;
+  if (prev === mode) return;
+  toggle.dataset.mode = mode;
+  refreshCreativeModeUI();
+  api('/creative-mode/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) })
+    .then(() => toast('Creative mode set to ' + (mode === 'dynamic' ? 'Dynamic Creative' : 'Curated variants')))
+    .catch(e => { toggle.dataset.mode = prev; refreshCreativeModeUI(); showError(e.message); });
 }
 function field(label, id, val, type) {
   return '<div><label class="label-caps text-outline block mb-1">' + label + '</label>' +
@@ -1017,14 +1219,32 @@ function saveAudience() {
     if (v === 'include') included.push(entry);
     else if (v === 'exclude') excluded.push(entry);
   });
+  const cityVal = document.getElementById('aud-city').value;
+  const cityUnchanged = cityVal.trim().toLowerCase() === (AUD_STATE.city || '').trim().toLowerCase();
+  const nriVal = (document.getElementById('aud-nri') || {}).value || AUD_STATE.nri_countries.join(', ');
+  const advVal = document.getElementById('aud-adv') ? document.getElementById('aud-adv').checked : AUD_STATE.advantage_plus;
   const payload = {
-    city: document.getElementById('aud-city').value,
+    city: cityVal,
+    city_key: cityUnchanged ? AUD_STATE.city_key : null,
+    region: cityUnchanged ? AUD_STATE.region : '',
     radius_km: parseInt(document.getElementById('aud-radius').value, 10) || 25,
     age_min: parseInt(document.getElementById('aud-agemin').value, 10) || 28,
     age_max: parseInt(document.getElementById('aud-agemax').value, 10) || 65,
+    interests: AUD_STATE.interests,
+    behaviours: AUD_STATE.behaviours,
+    work_positions: AUD_STATE.work_positions,
+    income_clusters: AUD_STATE.income_clusters,
+    industries: AUD_STATE.industries,
+    relationship_statuses: AUD_STATE.relationship_statuses,
+    nri_countries: nriVal.split(',').map(s => s.trim().toUpperCase()).filter(s => /^[A-Z]{2}$/.test(s)),
+    advantage_plus: advVal,
+    clientele_type: AUD_STATE.clientele_type,
     included_custom_audiences: included,
     excluded_custom_audiences: excluded,
   };
+  if (!cityUnchanged) {
+    toast('City text changed but not re-matched to a Meta location yet — geo targeting may fall back to country-level. Re-select the city via a fresh campaign if you need a different city.');
+  }
   api('/audience/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     .then(() => { toast('Audience saved'); enableSaveAudience(); document.getElementById('save-aud-btn').disabled = true; })
     .catch(e => showError(e.message));

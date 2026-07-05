@@ -135,6 +135,67 @@ build_targeting_brief:
   agent: targeting_researcher
   output_file: outputs/targeting_brief.md
 
+select_targeting:
+  description: >
+    Choose the actual Meta ad-set targeting for a {property_type} priced at
+    ₹{price_cr} Cr in {city}{locality_suffix}, for buyer type {buyer_type}
+    (goal: {goal}).
+
+    You must choose ONLY from the candidate pool below — every name in it is
+    verified to exist on Meta. Do not invent, rephrase, or abbreviate a name;
+    copy it exactly as listed, or it will be discarded.
+
+    {targeting_pool}
+
+    IMPORTANT — property type does NOT reveal buyer purpose or profession.
+    A bungalow, villa, or apartment can be bought by an owner-occupier, an
+    investor, a trader, or a corporate professional — the property itself
+    tells you almost nothing about which. Do not guess a buyer persona from
+    property_type/price alone.
+
+    The one real signal for who actually buys is CRM history — what past
+    leads for this account looked like:
+
+    {crm_insights}
+
+    - If the CRM signal above names specific profiles, industries, or budget
+      brackets that convert (or that go dead), let that drive your picks —
+      e.g. lean into the industries/interests that match converting profiles,
+      and avoid stacking interests/positions that match profiles CRM shows as
+      historically dead leads.
+    - If the CRM signal is thin or says no historical data is available,
+      do NOT invent a confident persona. Instead select a moderately broad,
+      balanced mix across property_investment and luxury_lifestyle interest
+      tags (buyers are unknown, so don't over-narrow on a guess), while still
+      obeying the work-position and count caps below.
+
+    Hard rules, backed by this account's own live performance data:
+    - Prefer 1-2 "owner_tier" work positions over stacking many "csuite_tier"
+      titles — on this account, narrow owner-tier targeting has produced
+      ₹112-187 CPL, while broad C-suite stacks (5+ titles) produced ₹384-557
+      CPL on otherwise-similar audiences. Only reach for csuite_tier/it_tier/
+      specialist_tier positions when CRM signal actually names that
+      profession among converting leads — never infer it from property type.
+    - Pick 6-10 interests, not the whole pool — a focused set outperforms an
+      exhaustive one.
+    - Pick at most 3-4 behaviours; include an nri_diaspora/expat behaviour only
+      if buyer_type or nri_geographies indicates an NRI audience.
+    - Set age_min/age_max from CRM signal if it indicates an age skew;
+      otherwise use a standard HNI/NRI luxury-buyer range rather than
+      guessing from property type.
+  expected_output: >
+    A single JSON object, nothing else, with keys:
+    interests (list of strings, each copied verbatim from the pool),
+    behaviours (list of strings, verbatim from the pool),
+    work_positions (list of strings, verbatim from the pool),
+    age_min (integer), age_max (integer),
+    reasoning (1-3 sentences: what CRM signal drove these picks, or — if CRM
+    data was thin/absent — a note that this is a balanced default mix rather
+    than a persona-specific one).
+    Save to outputs/targeting_selection.json.
+  agent: targeting_researcher
+  output_file: outputs/targeting_selection.json
+
 analyse_trends:
   description: >
     Today's date is {today}. Search for real estate demand signals, policy changes,

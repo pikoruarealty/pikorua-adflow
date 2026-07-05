@@ -147,7 +147,7 @@ def save_for_review(content_result, audience_result=None) -> pathlib.Path:
     # Copy evaluator + CRM outputs into the review folder if written this run
     for filename in (
         "targeting_brief.md", "copy_scorecard.md", "copy_rewrites.md",
-        "crm_insights.md", "crm_signal.md",
+        "crm_insights.md", "crm_signal.md", "targeting_selection.json",
     ):
         src = outputs_root / filename
         if src.exists():

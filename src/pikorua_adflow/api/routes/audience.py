@@ -25,7 +25,8 @@ def get_audience(run_id: str):
     review_folder = Path(run["review_folder"])
     audience = cs.effective_audience(review_folder, run.get("brief", {}))
     from pikorua_adflow.tools import meta_targeting as _mt
-    return {"run_id": run_id, "audience": audience, "summary": _mt.audience_summary(audience)}
+    return {"run_id": run_id, "audience": audience, "summary": _mt.audience_summary(audience),
+            "creative_mode": cs.get_creative_mode(review_folder)}
 
 
 @router.post("/audience/{run_id}")
@@ -56,6 +57,19 @@ def audience_search(q: str, type: str = "interest"):
         return {"results": _mt.search_interests(q, token)}
     except Exception as exc:
         return {"results": [], "error": str(exc)}
+
+
+@router.get("/audience-pool")
+def audience_pool():
+    """Verified, fixed option lists for targeting axes with no live Meta search
+    (job titles, income clusters, industries) — the add-UI picks from these
+    instead of free-text, so nothing unverified reaches the Graph API."""
+    from pikorua_adflow.tools import meta_targeting as _mt
+    return {
+        "work_positions": _mt.WORK_POSITION_POOL,
+        "income_clusters": _mt._INCOME_TOP_10,
+        "industries": _mt._INDUSTRIES_ENTERPRISE,
+    }
 
 
 @router.get("/meta-saved-audiences")
@@ -107,7 +121,7 @@ def upload_crm_audience(req: CRMAudienceRequest):
         raise HTTPException(status_code=400, detail=result["error"])
 
     try:
-        existing: list[dict] = json.loads(AUDIENCES_REGISTRY_PATH.read_text()) if AUDIENCES_REGISTRY_PATH.exists() else []
+        existing: list[dict] = json.loads(AUDIENCES_REGISTRY_PATH.read_text(encoding="utf-8")) if AUDIENCES_REGISTRY_PATH.exists() else []
     except (ValueError, OSError):
         existing = []
 
@@ -146,7 +160,7 @@ def upload_crm_audience(req: CRMAudienceRequest):
             new_entries.append(entry)
     try:
         AUDIENCES_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        AUDIENCES_REGISTRY_PATH.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+        AUDIENCES_REGISTRY_PATH.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
     result["registry_saved"] = len(new_entries)
