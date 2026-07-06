@@ -17,16 +17,29 @@ from typing import Optional
 
 # Always-banned fabrications regardless of brief.
 _ABSOLUTE_PATTERNS = [
-    r"\b\d{3,5}\s*(?:[-–]\s*\d{3,5}\s*)?sq\.?\s*ft\.?\b",          # sq ft in isolation
     r"\b\+?\d[\d\s\-]{7,}\d\b",                                     # phone numbers
     r"\bhttps?://\S+\b", r"\bwww\.\S+\b", r"\b\S+\.(?:com|in|co)\b",  # URLs
     r"\bRERA[\s:#A-Z0-9]*\b",                                       # RERA numbers/refs
-    r"\b\d{1,3}\s*(?:floors?|storey?s?|stories|towers?)\b",         # floor/storey counts
     r"\bpossession\s+(?:by|in|from)?\s*\w*\s*\d{4}\b",              # possession dates
     r"\b\d{1,2}\s*km\s+from\b[^.]*",                                # invented distances
     r"\b(?:best|finest|number\s*one|no\.?\s*1|india'?s\s+finest|world'?s\s+best)\b",
     r"\bguaranteed\s+(?:returns?|appreciation)\b",
 ]
+
+# Structure counts (sq ft, floor/storey/tower counts). These are hallucination guards
+# by default, but they are also REAL, user-provided features (e.g. "four 30-storey
+# towers", "3,000 sq ft"). They are stripped only when the brief does NOT license them
+# via `allow_structure_counts` — set when the campaign's amenities/exterior description
+# actually contain such figures. This lets on-brief structural scenes survive while a
+# thin brief still can't hallucinate a storey count.
+_STRUCTURE_COUNT_PATTERNS = [
+    r"\b\d{3,5}\s*(?:[-–]\s*\d{3,5}\s*)?sq\.?\s*ft\.?\b",          # sq ft in isolation
+    r"\b\d{1,3}\s*(?:floors?|storey?s?|stories|towers?)\b",         # floor/storey counts
+]
+
+# Keywords that, when present in the brief's amenities/description, license structure counts.
+_STRUCTURE_KEYWORDS = ("storey", "storeys", "storeyed", "story", "stories",
+                       "floor", "floors", "tower", "towers", "sq ft", "sqft", "sq.ft")
 
 # Technical noise that must never reach Ideogram (logo/brand/font/pixel instructions).
 _TECH_NOISE_RE = re.compile(
@@ -64,9 +77,12 @@ _BRAND_TEXT_RE = re.compile(
 )
 
 
-def _strip_absolute(text: str) -> str:
+def _strip_absolute(text: str, brief: dict | None = None) -> str:
     for pat in _ABSOLUTE_PATTERNS:
         text = re.sub(pat, "", text, flags=re.IGNORECASE)
+    if not (brief or {}).get("allow_structure_counts"):
+        for pat in _STRUCTURE_COUNT_PATTERNS:
+            text = re.sub(pat, "", text, flags=re.IGNORECASE)
     return text
 
 
@@ -161,7 +177,7 @@ def sanitize_llm_field(text: str, brief: dict) -> str:
     protection needed. Returns cleaned text WITHOUT the anti-logo guard (caller appends it).
     """
     brief = brief or {}
-    out = _strip_absolute(text)
+    out = _strip_absolute(text, brief)
     out = _strip_conditional_sentences(out, brief)
     out = _TECH_NOISE_RE.sub("", out)
     out = _strip_project_name(out, brief)
@@ -187,7 +203,7 @@ def sanitize(text: str, brief: dict, strip_tech_noise: bool = True) -> str:
     # Split at the text-strings marker so we protect the brief-data section.
     if _SPLIT_MARKER in text:
         comp_section, strings_section = text.split(_SPLIT_MARKER, 1)
-        comp_section = _strip_absolute(comp_section)
+        comp_section = _strip_absolute(comp_section, brief)
         comp_section = _strip_conditional_sentences(comp_section, brief)
         if strip_tech_noise:
             comp_section = _TECH_NOISE_RE.sub("", comp_section)
@@ -196,7 +212,7 @@ def sanitize(text: str, brief: dict, strip_tech_noise: bool = True) -> str:
         comp_section = _strip_fabricated_usps(comp_section + _SPLIT_MARKER + strings_section, brief)
         out = comp_section  # _strip_fabricated_usps re-joins
     else:
-        out = _strip_absolute(text)
+        out = _strip_absolute(text, brief)
         out = _strip_conditional_sentences(out, brief)
         if strip_tech_noise:
             out = _TECH_NOISE_RE.sub("", out)

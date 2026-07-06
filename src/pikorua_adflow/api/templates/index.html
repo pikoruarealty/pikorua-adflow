@@ -40,42 +40,65 @@
         <h2 class="font-headline text-2xl">The property</h2>
       </div>
       <div class="space-y-4">
+        <!-- Prompt-first entry: describe everything, let AI structure it -->
         <div>
-          <label class="label-caps text-outline block mb-1" for="property_name">What are we advertising?</label>
-          <input id="property_name" name="property_name" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Oberoi Sky Heights, 3BHK sea-view apartment"/>
-        </div>
-        <div class="grid md:grid-cols-2 gap-4">
-          <div>
-            <label class="label-caps text-outline block mb-1" for="property_type">Type of property</label>
-            <input id="property_type" name="property_type" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. sea-view apartment, 4BHK villa"/>
-          </div>
-          <div>
-            <label class="label-caps text-outline block mb-1" for="city">City</label>
-            <input id="city" name="city" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Mumbai"/>
+          <label class="label-caps text-outline block mb-1" for="property_description">Describe the property</label>
+          <p class="text-sm text-on-surface-variant mb-2">Write it however you like — the project, configuration, location, price, amenities (pool, clubhouse, towers, garden, sports court…), whether the sample flat is ready, and if it's 100% cheque payment. We'll structure it for you to review.</p>
+          <textarea id="property_description" name="property_description" rows="5" class="w-full border border-outline-variant rounded bg-transparent p-3 focus:border-primary focus:ring-0 resize-y" placeholder="e.g. Riverside Greens on SP Ring Road, Ahmedabad — spacious 4 & 5 BHK luxury apartments, 3 Cr for 4 BHK and 4.5 Cr for 5 BHK onwards. Four 30-storey towers around a landscaped central garden, club-class amenities on the ground floor, rooftop infinity pool and a gold court beside the property. Sample flat ready. 100% cheque payment only."></textarea>
+          <div class="flex items-center gap-3 mt-2">
+            <button type="button" id="extract-btn" onclick="extractBrief()" class="inline-flex items-center gap-2 bg-primary text-on-primary rounded label-caps px-5 py-2 hover:bg-surface-tint transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+              <span class="material-symbols-outlined text-base">auto_awesome</span> Extract details
+            </button>
+            <span id="extract-status" class="text-sm text-outline"></span>
           </div>
         </div>
-        <div class="grid md:grid-cols-2 gap-4">
-          <div>
-            <label class="label-caps text-outline block mb-1" for="locality">Area / locality <span class="text-outline-variant normal-case">(optional)</span></label>
-            <input id="locality" name="locality" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Bandra West, Thaltej"/>
+
+        <!-- Structured fields — auto-filled by extraction; open to review or fill manually -->
+        <details id="review-fields" class="border border-outline-variant rounded">
+          <summary class="label-caps text-primary cursor-pointer px-3 py-2.5 select-none">Review / edit the details</summary>
+          <div class="space-y-4 p-3 pt-1">
+            <div>
+              <label class="label-caps text-outline block mb-1" for="property_name">What are we advertising?</label>
+              <input id="property_name" name="property_name" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Oberoi Sky Heights, 3BHK sea-view apartment"/>
+            </div>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <label class="label-caps text-outline block mb-1" for="property_type">Type of property</label>
+                <input id="property_type" name="property_type" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. sea-view apartment, 4BHK villa"/>
+              </div>
+              <div>
+                <label class="label-caps text-outline block mb-1" for="city">City</label>
+                <input id="city" name="city" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Mumbai"/>
+              </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <label class="label-caps text-outline block mb-1" for="locality">Area / locality <span class="text-outline-variant normal-case">(optional)</span></label>
+                <input id="locality" name="locality" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. Bandra West, Thaltej"/>
+              </div>
+              <div>
+                <label class="label-caps text-outline block mb-1" for="price_cr">Price <span class="text-outline-variant normal-case">(₹ crores)</span></label>
+                <input id="price_cr" name="price_cr" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. 4.5"/>
+              </div>
+            </div>
+            <div>
+              <label class="label-caps text-outline block mb-1" for="standout_feature">What makes it special? <span class="text-outline-variant normal-case">(optional)</span></label>
+              <input id="standout_feature" name="standout_feature" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. infinity pool on the 32nd floor"/>
+            </div>
+            <div>
+              <label class="label-caps text-outline block mb-1">Amenities to feature in the images <span class="text-outline-variant normal-case">(one per line — each is spread across a different ad variant)</span></label>
+              <textarea id="amenities" name="amenities" rows="4" class="w-full border border-outline-variant rounded bg-transparent p-2 text-sm focus:border-primary focus:ring-0 resize-y" placeholder="rooftop infinity pool&#10;club-class amenities on the ground floor&#10;landscaped garden between 4 towers&#10;spacious 4 & 5 BHK apartments&#10;gold / sports court"></textarea>
+            </div>
+            <label class="flex items-center gap-3 cursor-pointer text-sm">
+              <input type="checkbox" id="sample_ready" name="sample_ready" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
+              Sample apartment ready to view
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer text-sm">
+              <input type="checkbox" id="cheque_only" name="cheque_only" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
+              100% cheque payment only
+            </label>
           </div>
-          <div>
-            <label class="label-caps text-outline block mb-1" for="price_cr">Price <span class="text-outline-variant normal-case">(₹ crores)</span></label>
-            <input id="price_cr" name="price_cr" required class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. 4.5"/>
-          </div>
-        </div>
-        <div>
-          <label class="label-caps text-outline block mb-1" for="standout_feature">What makes it special? <span class="text-outline-variant normal-case">(optional)</span></label>
-          <input id="standout_feature" name="standout_feature" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. infinity pool on the 32nd floor"/>
-        </div>
-        <label class="flex items-center gap-3 cursor-pointer text-sm">
-          <input type="checkbox" id="sample_ready" name="sample_ready" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
-          Sample apartment ready to view
-        </label>
-        <label class="flex items-center gap-3 cursor-pointer text-sm">
-          <input type="checkbox" id="cheque_only" name="cheque_only" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
-          100% cheque payment only
-        </label>
+        </details>
 
         <!-- Reference creatives -->
         <div class="pt-2">
@@ -293,10 +316,49 @@ form.campaign_duration_days.addEventListener('input', syncDailyBudget);
   }
 })();
 
+/* Prompt → structured fields */
+function extractBrief() {
+  const desc = document.getElementById('property_description').value.trim();
+  const statusEl = document.getElementById('extract-status');
+  const exbtn = document.getElementById('extract-btn');
+  if (desc.length < 3) { statusEl.textContent = 'Write a description first.'; return; }
+  exbtn.disabled = true;
+  statusEl.textContent = 'Reading your description…';
+  api('/extract-property-brief', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: desc }) })
+    .then(d => {
+      const setVal = (id, v) => { if (v !== undefined && v !== null && String(v).length) document.getElementById(id).value = v; };
+      setVal('property_name', d.property_name);
+      setVal('property_type', d.property_type);
+      setVal('city', d.city);
+      setVal('locality', d.locality);
+      setVal('price_cr', d.price_cr);
+      setVal('standout_feature', d.standout_feature);
+      if (Array.isArray(d.amenities)) document.getElementById('amenities').value = d.amenities.join('\n');
+      document.getElementById('sample_ready').checked = !!d.sample_ready;
+      document.getElementById('cheque_only').checked = !!d.cheque_only;
+      document.getElementById('review-fields').open = true;
+      statusEl.textContent = 'Done — please review the details below and edit anything that’s off.';
+    })
+    .catch(err => { statusEl.textContent = 'Could not read it: ' + err.message; })
+    .finally(() => { exbtn.disabled = false; });
+}
+
 form.addEventListener('submit', function (e) {
   e.preventDefault();
+  // Required fields live inside the collapsible review panel — validate in JS so a
+  // collapsed panel never hides a blank required field.
+  const missing = [['property_name', 'What are we advertising?'], ['property_type', 'Type of property'],
+                   ['city', 'City'], ['price_cr', 'Price']].filter(([id]) => !form[id].value.trim());
+  if (missing.length) {
+    document.getElementById('review-fields').open = true;
+    setStatus('Please fill: ' + missing.map(m => m[1]).join(', '), 'fail');
+    document.getElementById(missing[0][0]).focus();
+    return;
+  }
   btn.disabled = true;
   const targetAdset = document.getElementById('target_adset_id').value;
+  const amenities = document.getElementById('amenities').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
   const payload = {
     property_name: form.property_name.value.trim(), platform: form.platform.value,
     goal: form.goal.value, budget_inr: parseInt(form.budget_inr.value, 10),
@@ -310,6 +372,8 @@ form.addEventListener('submit', function (e) {
     cta: form.cta.value, company_name: form.company_name.value.trim(),
     sample_ready: form.sample_ready.checked,
     cheque_only: form.cheque_only.checked,
+    property_description: document.getElementById('property_description').value.trim(),
+    amenities: amenities,
   };
   if (targetAdset) payload.target_adset_id = targetAdset;
   setStatus('Sending…', 'queued');

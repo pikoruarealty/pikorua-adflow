@@ -21,6 +21,8 @@ class CampaignBrief(BaseModel):
     property_type: str = Field(..., description="e.g. 'sea-view apartment', '4BHK villa'")
     price_cr: str = Field(..., description="Price in crores, e.g. '4.5'")
     standout_feature: str = Field("", description="One concrete differentiator the copywriter can anchor on. Optional.")
+    property_description: str = Field("", description="Free-text description of the whole property the user typed. Source for GPT extraction; kept for reference.")
+    amenities: list[str] = Field(default_factory=list, description="Concrete, depictable property features (pool, clubhouse, landscaped garden, 4 towers, gold court, spacious 4/5 BHK). Distributed across image variants so each scene shows a different real feature.")
     buyer_type: str = Field("HNI/NRI", description="Target buyer segment: 'HNI', 'NRI', or 'HNI/NRI'")
     nri_geographies: str = Field("", description="NRI diaspora locations if relevant, e.g. 'UAE, US, UK'")
     campaign_duration_days: int = Field(30, gt=0, description="Campaign flight duration in days")
@@ -49,6 +51,10 @@ class CampaignBrief(BaseModel):
                 self.clientele_type = "hni"
             else:
                 self.clientele_type = "hni_nri"
+
+
+class ExtractBriefReq(BaseModel):
+    text: str = Field(..., min_length=3, description="Free-text property description to parse into structured brief fields.")
 
 
 class ApproveRequest(BaseModel):

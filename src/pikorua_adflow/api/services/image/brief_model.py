@@ -31,6 +31,7 @@ class BriefModel:
     # Optional (render only if present)
     size_sqft: str = ""
     usps: list[str] = field(default_factory=list)
+    amenities: list[str] = field(default_factory=list)  # depictable features (scene direction, not footer text)
     sample_ready: bool = False
     cheque_only: bool = False
 
@@ -246,6 +247,7 @@ class BriefModel:
             cta=_clean(cta or brief.get("sample_ready_cta")),
             size_sqft=_clean(brief.get("size_sqft") or brief.get("size")),
             usps=[str(u).strip() for u in usps if str(u).strip()],
+            amenities=[str(a).strip() for a in (brief.get("amenities") or []) if str(a).strip()],
             sample_ready=sample_ready,
             cheque_only=bool(brief.get("cheque_only", False)),
             property_name=_clean(brief.get("property_name")),
@@ -263,4 +265,14 @@ class BriefModel:
             "config": self.config,
             "usps": self.usps,
             "property_name": self.property_name,
+            # License real structure counts (storeys/towers/sq ft) through the sanitizer
+            # only when the property's own amenities/type actually describe them — so an
+            # on-brief "four 30-storey towers" survives, but a thin brief still can't
+            # hallucinate a storey count.
+            "allow_structure_counts": self._has_structure_counts(),
         }
+
+    def _has_structure_counts(self) -> bool:
+        from .sanitizer import _STRUCTURE_KEYWORDS
+        hay = " ".join([*self.amenities, self.property_type, self.size_sqft]).lower()
+        return any(k in hay for k in _STRUCTURE_KEYWORDS)

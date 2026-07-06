@@ -859,13 +859,15 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
     locality_str = f", {brief.locality}" if brief.locality else ""
     nri_str = f" NRI target geographies: {brief.nri_geographies}." if brief.nri_geographies else ""
     feature_str = f" Standout feature: {brief.standout_feature}." if brief.standout_feature else ""
+    amenities_list = [a.strip() for a in (brief.amenities or []) if a and a.strip()]
+    amenities_str = f" Key amenities/features: {', '.join(amenities_list)}." if amenities_list else ""
     company_str = brief.company_name.strip() if brief.company_name else ""
     inputs = {
         "platform": brief.platform,
         "product": (
             f"{'(' + company_str + ') — ' if company_str else ''}Luxury Real Estate Consultancy. "
             f"Property: {brief.property_name}, "
-            f"a {brief.property_type} in {brief.city}{locality_str} at ₹{brief.price_cr} Cr.{feature_str}"
+            f"a {brief.property_type} in {brief.city}{locality_str} at ₹{brief.price_cr} Cr.{feature_str}{amenities_str}"
         ),
         "target_audience": (
             f"{brief.buyer_type} buyers seeking premium {brief.property_type} in {brief.city}. "
@@ -887,6 +889,7 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
         "cheque_only": "yes" if brief.cheque_only else "no",
         "clientele_type": brief.clientele_type,
         "standout_feature": brief.standout_feature or "none provided — use the thin-brief fallback",
+        "amenities": ", ".join(amenities_list) if amenities_list else "none provided",
         "company_name": company_str,
         "persona": "No persona data — audience crew has not run yet.",
         "trends": "No trend data — audience crew has not run yet.",

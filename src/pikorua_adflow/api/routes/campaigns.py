@@ -16,11 +16,64 @@ from fastapi.responses import JSONResponse
 
 from ..config import TREND_HOOKS_PATH, TREND_TTL_SECONDS
 from ..models import (ApproveRequest, CampaignBrief, ContentEdit,
-                      RescoreVariantPayload, RewriteCopyPayload)
+                      ExtractBriefReq, RescoreVariantPayload, RewriteCopyPayload)
 from ..services import campaign_service as cs
 from ..state import RUNS, RUNS_LOCK, save_runs
 
 router = APIRouter()
+
+
+@router.post("/extract-property-brief")
+def extract_property_brief(payload: ExtractBriefReq):
+    """Parse one free-text property description into structured brief fields via a
+    cheap mechanical LLM (GPT-4o-mini). The user reviews/edits the result before
+    launching, so this only needs to be a good first pass — never the final word."""
+    system_prompt = """You extract structured data from a real-estate property description written by a marketer. Return ONLY valid JSON, no prose, no markdown fence.
+
+Extract these keys:
+- property_name: the project/building name if stated, else a short descriptive label (e.g. "4 & 5 BHK riverside apartments"). Never invent a brand.
+- property_type: the dwelling type as a short noun phrase (e.g. "luxury apartment", "4 BHK villa", "penthouse"). Include the BHK config here if mentioned.
+- city: the city, if stated.
+- locality: the specific area/neighbourhood within the city, if stated.
+- price_cr: price in crores as the user expressed it (e.g. "3.5", "3-4.5", "3 for 4 bhk and 4.5 for 5 bhk onwards"). Empty string if no price given.
+- standout_feature: the single most marketable differentiator in one short phrase.
+- amenities: an ARRAY of concrete, VISUALLY DEPICTABLE features — things a photograph could show. Each item is a short phrase. Examples: "rooftop infinity pool", "club-class amenities on ground floor", "landscaped garden between 4 towers", "30-storey towers", "gold/sports court", "spacious 4 & 5 BHK apartments", "double-height living room", "private terrace". Split compound descriptions into separate items. Exclude abstract selling points (e.g. "great investment", "prime location") — only physical, shootable features. Empty array if none.
+- sample_ready: true only if the text says a sample flat/show home is ready to view.
+- cheque_only: true only if the text says 100% cheque / white payment / no cash.
+
+Never fabricate values that are not supported by the text. Use "" or [] or false when unknown."""
+    model = os.getenv("MODEL", "openrouter/openai/gpt-4o-mini")
+    try:
+        resp = litellm.completion(
+            model=model,
+            messages=[{"role": "system", "content": system_prompt},
+                      {"role": "user", "content": payload.text.strip()}],
+            temperature=0.1, max_tokens=600,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+        m = re.search(r"\{[\s\S]*\}", raw)
+        data = json.loads(m.group(0) if m else raw)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not read the description: {exc}")
+
+    def _s(k):
+        return str(data.get(k) or "").strip()
+    amenities = data.get("amenities") or []
+    if isinstance(amenities, str):
+        amenities = [amenities]
+    amenities = [str(a).strip() for a in amenities if str(a).strip()]
+    return {
+        "property_name": _s("property_name"),
+        "property_type": _s("property_type"),
+        "city": _s("city"),
+        "locality": _s("locality"),
+        "price_cr": _s("price_cr"),
+        "standout_feature": _s("standout_feature"),
+        "amenities": amenities,
+        "sample_ready": bool(data.get("sample_ready", False)),
+        "cheque_only": bool(data.get("cheque_only", False)),
+    }
 
 
 @router.post("/launch-campaign")

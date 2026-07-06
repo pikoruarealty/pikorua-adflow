@@ -191,6 +191,29 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
     sanitizer_brief = _brief_for_sanitizer(brief)
     sanitizer_brief["sample_ready"] = sample_ready  # allow payload override
 
+    # Amenity → variant distribution: give each variant one distinct real feature to
+    # build its scene around, so the ads reflect THIS property (pool, clubhouse, towers,
+    # grand living room…) instead of generic interchangeable interiors. Computed once
+    # for the whole batch and persisted onto each entry as `scene_features`, so even a
+    # single-variant "Generate" click renders the feature assigned to that slot.
+    amenities = [a for a in (brief.get("amenities") or []) if str(a).strip()]
+    if amenities and any("scene_features" not in e for e in visual_entries):
+        try:
+            from ..services.image import scene_features as _sf
+            batch_keys = [
+                e.get("variant_key", "") for e in visual_entries if e.get("variant_key")
+            ]
+            mapping = _sf.distribute(amenities, batch_keys, brief)
+            if mapping:
+                for e in visual_entries:
+                    if "scene_features" not in e:
+                        e["scene_features"] = mapping.get(e.get("variant_key", ""), "")
+                (review_folder / "visual_prompts.json").write_text(
+                    json.dumps(visual_entries, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+        except Exception as exc:
+            print(f"[generate-images] amenity distribution skipped: {exc}")
+
     try:
         gen_eff_meta = cs.effective_meta(review_folder)
     except Exception:
@@ -297,9 +320,18 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
             )
             brief_model.has_logo = BRAND_LOGO_PATH.exists()
 
-            exterior_note = ""
+            # Scene direction for this slot: the amenity feature assigned to this variant
+            # (so the photo shows a real, on-brief feature, not a generic room). For the
+            # exterior variant the user's typed description wins when provided.
+            scene_note = (entry.get("scene_features") or "").strip()
             if variant_key == "exterior_establishing_shot" and payload.exterior_brief:
-                exterior_note = payload.exterior_brief.strip()
+                scene_note = payload.exterior_brief.strip()
+            exterior_note = scene_note
+            # The assigned scene note (esp. a typed exterior brief) may itself name real
+            # storey/tower/sq-ft counts; add it to the model's amenities so the sanitizer
+            # licenses those figures instead of stripping them as hallucinations.
+            if scene_note:
+                brief_model.amenities = [*brief_model.amenities, scene_note]
 
             # Sibling-aware diversity: look at every OTHER slot's already-committed
             # (skeleton, palette) — whether from an earlier session or an earlier
@@ -327,6 +359,9 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
             new_entry = spec.to_entry()
             new_entry["variant_key"] = variant_key
             new_entry["prompt_num"] = i
+            # Keep the assigned amenity feature on the entry so regeneration reuses it.
+            if entry.get("scene_features"):
+                new_entry["scene_features"] = entry["scene_features"]
             existing_idx = next(
                 (j for j, e in enumerate(visual_entries) if e.get("prompt_num") == i), None
             )

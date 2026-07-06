@@ -177,11 +177,34 @@ def _llm_spec(
     else:
         scene_type_rule = ""
 
+    # When the caller assigns this variant a specific property feature to depict
+    # (pool, clubhouse, landscaped garden between towers, a grand living room, the tower
+    # facade…), that feature becomes the non-negotiable hero of the scene — this is what
+    # stops every ad looking like the same generic interior.
+    if extra_scene_note:
+        feature_mandate = (
+            "FEATURE MANDATE (HIGHEST PRIORITY — overrides generic scene defaults): this "
+            "variant MUST build its photograph around this specific, real property "
+            f"feature — make it the unmistakable hero of the frame:\n  «{extra_scene_note}»\n"
+            "Depict it concretely and recognisably; do NOT fall back to a generic room or "
+            "a couch-and-coffee-table scene when this feature can be shown. If the feature "
+            "is a SHARED AMENITY or OUTDOOR/COMMON space (pool, clubhouse, lounge, gym, "
+            "landscaped garden, sports/gold court, podium, tower facade), depict THAT "
+            "amenity space directly — such spaces may legitimately be open-air, "
+            "double-height, or grandly scaled, and the apartment-interior proportion "
+            "limits below apply ONLY to private in-unit rooms, not to amenity or exterior "
+            "spaces. Keep the people/no-people rule of the variant, the luxury materials, "
+            "and the calm text zone.\n\n"
+        )
+    else:
+        feature_mandate = ""
+
     system = (
         "You are a senior luxury real-estate ad art director. You design a finished "
         "advertisement, not a photo. Output ONLY valid JSON, no prose around it.\n\n"
         f"BRAND: {brand}\n\n"
         f"SCENE DIRECTION (make the photo read as genuinely luxury): {scene_dir}\n\n"
+        f"{feature_mandate}"
         "Produce THREE creative pieces:\n"
         f"PROPERTY TYPE RULE: {scene_type_rule}The scene must clearly match the property "
         "type above — wrong property-type cues break buyer trust immediately.\n\n"
@@ -437,7 +460,11 @@ def _llm_spec(
         f"  {cta_line}{cheque_line}\n"
         f"  spec strip items (footer ONLY — never scene materials like marble/walnut/glazing): {footer_items}\n\n"
         f"Variant creative brief: {anchor}\n"
-        + (f"Additional scene context: {extra_scene_note}\n" if extra_scene_note else "")
+        + (
+            f"REQUIRED HERO FEATURE for this variant (see FEATURE MANDATE — build the "
+            f"scene_prose around this, not the generic brief): {extra_scene_note}\n"
+            if extra_scene_note else ""
+        )
         + 'JSON keys: {"scene_prose","skeleton","composition","palette_id",'
         '"type_pairing_id","tone"}'
     )
