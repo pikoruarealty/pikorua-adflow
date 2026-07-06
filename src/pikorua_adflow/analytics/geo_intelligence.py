@@ -109,10 +109,40 @@ def reach_for_city(city_name: str, base_audience: dict, token: str, account: str
 
 # ── Targeted-city extraction from a live ad-set targeting spec ─────────────────
 def targeted_cities(targeting: dict) -> list[dict]:
-    """[{name, key}] for the cities a live ad set currently targets."""
+    """[{name, key}] for the cities a live ad set currently targets.
+
+    NOTE: when Meta returns a live ad set's targeting, city entries carry only a
+    `key` (no `name`) — so `name` falls back to the key string. Never compare this
+    `name` against CRM city names; compare on `key` (see covered_city_keys)."""
     geo = (targeting or {}).get("geo_locations", {}) or {}
     return [{"name": c.get("name") or str(c.get("key")), "key": str(c.get("key"))}
             for c in (geo.get("cities") or [])]
+
+
+def covered_city_keys(targeting: dict, saved_audience: dict | None = None) -> set[str]:
+    """
+    The set of city KEYS a campaign effectively covers — the fix for the
+    "Ahmedabad shown as untargeted while its areas are selected" bug.
+
+    Meta's live targeting read gives geo keys, not names, and area-level targeting
+    puts coverage under `neighborhoods`/`zips` (no city entry at all). This unions:
+      • directly-targeted city keys,
+      • the city_key stamped on each targeted neighbourhood/zip in the saved audience
+        (build_default_audience/audience.json carry it), and
+      • primary_city_id-style hints where present.
+    Callers compare a CRM city's resolved key against this set.
+    """
+    geo = (targeting or {}).get("geo_locations", {}) or {}
+    keys: set[str] = {str(c.get("key")) for c in (geo.get("cities") or []) if c.get("key")}
+    # Areas in the live spec are bare keys; the campaign's saved audience is where the
+    # area→city_key mapping lives (stamped at selection time).
+    aud = saved_audience or {}
+    for coll in (aud.get("neighborhoods") or [], aud.get("zips") or []):
+        for a in coll:
+            ck = str(a.get("city_key") or "")
+            if ck:
+                keys.add(ck)
+    return keys
 
 
 # ── Live signal 3: spend per geo region (Meta region breakdown) ──────────────────
@@ -136,6 +166,7 @@ def _spend_by_region(campaign_id: str, token: str) -> dict[str, float]:
 # ── The recommendation engine ──────────────────────────────────────────────────
 def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
                         crm_leads: list[dict], *, base_audience: dict | None = None,
+                        saved_audience: dict | None = None,
                         token: str = "", account: str = "",
                         campaign_id: str = "") -> dict:
     """
@@ -167,13 +198,32 @@ def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
     spend_map = _spend_by_region(campaign_id, token)
 
     current = targeted_cities(targeting)
-    current_keys = {_norm(c["name"]) for c in current}
+    # A live ad set's targeting returns geo KEYS, not names — so compare on keys, never
+    # on the key-as-name fallback (that mismatch made "Ahmedabad" read as untargeted
+    # even when it was). Resolve each CRM city → key and union in area→city coverage.
+    covered = covered_city_keys(targeting, saved_audience)
+    country = base_audience.get("country", "IN")
+    resolve_cache = None
+    key_for_city: dict[str, str] = {}
+    if token:
+        from pikorua_adflow.tools import meta_targeting as mt
+        resolve_cache = mt._load_cache()
+        for _ck, _p in perf.items():
+            try:
+                hit = mt._best_city(_p["display"], token, country, resolve_cache)
+            except Exception:
+                hit = None
+            if hit and hit.get("key"):
+                key_for_city[_ck] = str(hit["key"])
+        mt._save_cache(resolve_cache)
 
     # TRIM (review-only): a TARGETED city with enough leads but zero quality. Framed as a
     # question — these buyers may be investors, so the human decides.
     # When spend data is available, the card shows the actual ₹ at stake.
     for c in current:
-        p = perf.get(_norm(c["name"]))
+        # Match this targeted city (a key) back to a CRM perf city via resolved keys.
+        p = next((perf[ck] for ck, k in key_for_city.items()
+                  if k == str(c["key"]) and ck in perf), None)
         if p and p["leads"] >= GEO_MIN_LEADS_TO_JUDGE and p["quality"] == 0:
             # Match city name against Meta's region names (best-effort fuzzy lookup).
             city_key = _norm(p["display"])
@@ -196,11 +246,15 @@ def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
 
     # ADD (opportunity): cities your CRM leads actually come from that you're NOT targeting
     # and that already show quality interest. Ranked by live reach where resolvable.
+    # Only suggest a city we've RESOLVED to a key and confirmed is not already covered —
+    # conservative on purpose, so an unresolved/ambiguous city never triggers a false
+    # "you're not targeting X" card (the bug this fix removes).
     reach_cache: dict = {}
     probes = 0
     add_candidates = [
         (key, p) for key, p in perf.items()
-        if key not in current_keys and p["quality"] >= GEO_ADD_MIN_QUALITY
+        if p["quality"] >= GEO_ADD_MIN_QUALITY
+        and key in key_for_city and key_for_city[key] not in covered
     ]
     add_candidates.sort(key=lambda kp: (kp[1]["quality"], kp[1]["leads"]), reverse=True)
     for key, p in add_candidates:

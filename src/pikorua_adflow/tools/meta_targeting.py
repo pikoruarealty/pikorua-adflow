@@ -123,6 +123,7 @@ _WORK_POSITIONS_CSUITE = [
     {"id": "112558655421889",  "name": "Chief financial officer"},
     {"id": "133337610036491",  "name": "Founder, Director, CEO"},
     {"id": "1379551615695666", "name": "Executive Vice President (EVP)"},
+    {"id": "103113219728224",  "name": "Chief executive officer"},  # verified generic CEO title
 ]
 # IT-specific C-suite — AVOID for luxury real estate (used in ₹967 CPL GODREJ campaign).
 # Listed here for reference; not added to any clientele profile.
@@ -643,6 +644,122 @@ def search_behaviours(query: str, token: str, limit: int = 8) -> list[dict]:
     return out
 
 
+# ── area-level geo: neighbourhoods + pincodes (India-verified) ───────────────
+def search_neighborhoods(query: str, token: str, region: str = "", limit: int = 12,
+                         strict: bool = False) -> list[dict]:
+    """
+    Neighbourhood candidates for area-level targeting: [{key, name, region, region_id}].
+    Meta returns the same neighbourhood name across states (e.g. "Prahlad Nagar" in
+    UP *and* Gujarat). `region` behaviour:
+      • strict=True  → keep ONLY same-region hits (used by the auto suggestion row,
+        which queries by city name and must never surface a wrong-state area).
+      • strict=False → keep all India hits but sort same-region first (manual typeahead;
+        the UI shows each result's region so the user disambiguates — Meta sometimes
+        mis-tags a valid area's region, e.g. Ahmedabad's "Satellite", so we don't drop).
+    """
+    params = {
+        "type": "adgeolocation",
+        "location_types": json.dumps(["neighborhood"]),
+        "q": query,
+        "limit": limit,
+    }
+    rl = (region or "").strip().lower()
+    out = []
+    for d in _get(params, token):
+        if d.get("country_code") != "IN":
+            continue
+        if strict and rl and (d.get("region", "").lower() != rl):
+            continue
+        out.append({
+            "key": str(d["key"]),
+            "name": d.get("name", ""),
+            "region": d.get("region", ""),
+            "region_id": d.get("region_id"),
+        })
+    if rl and not strict:
+        out.sort(key=lambda n: n.get("region", "").lower() != rl)  # same-region first
+    return out
+
+
+def search_zips(query: str, token: str, limit: int = 15) -> list[dict]:
+    """Pincode candidates: [{key, name, primary_city, primary_city_id}] (India only)."""
+    params = {
+        "type": "adgeolocation",
+        "location_types": json.dumps(["zip"]),
+        "q": query,
+        "limit": limit,
+    }
+    out = []
+    for d in _get(params, token):
+        if d.get("country_code") != "IN":
+            continue
+        out.append({
+            "key": str(d["key"]),
+            "name": d.get("name", ""),
+            "primary_city": d.get("primary_city", ""),
+            "primary_city_id": str(d.get("primary_city_id") or ""),
+        })
+    return out
+
+
+def suggest_neighborhoods_for_city(city_name: str, region: str, city_key: str,
+                                   token: str, limit: int = 15) -> list[dict]:
+    """Neighbourhoods within a city, for the 'Suggested for {city}' quick-add row.
+    Queries by city name and keeps only same-region hits; stamps city_key on each."""
+    if not city_name:
+        return []
+    out = []
+    for n in search_neighborhoods(city_name, token, region=region, limit=limit, strict=True):
+        out.append({"key": n["key"], "name": n["name"], "region": n.get("region", ""),
+                    "city_key": str(city_key or "")})
+    return out
+
+
+# Postal-circle first-3-digit prefixes by Indian state (factual postal geography,
+# not an opportunity ranking — the no-hardcoded-cities rule in geo_intelligence is
+# about wealth/opportunity tables, which this is not). Used only to enumerate a
+# city's pincodes for suggestions; manual pincode add works anywhere via search_zips.
+_STATE_ZIP_PREFIXES: dict[str, list[str]] = {
+    "gujarat": ["380", "382", "360", "361", "364", "388", "390", "395", "396"],
+    "maharashtra": ["400", "410", "411", "413", "440", "422", "431"],
+    "delhi": ["110"],
+    "karnataka": ["560", "570", "580", "590"],
+    "rajasthan": ["302", "313", "324", "342"],
+    "madhya pradesh": ["452", "462", "482", "474"],
+    "uttar pradesh": ["201", "226", "208", "282"],
+    "tamil nadu": ["600", "641", "620", "625"],
+    "telangana": ["500", "506"],
+    "west bengal": ["700", "711"],
+    "haryana": ["122", "121", "124"],
+    "punjab": ["141", "143", "160"],
+}
+
+
+def suggest_zips_for_city(city_name: str, city_key: str, region: str, token: str,
+                          max_zips: int = 24) -> list[dict]:
+    """Pincodes belonging to a city, for the 'Suggested for {city}' quick-add row.
+    Probes the state's postal prefixes and keeps only pincodes whose primary_city_id
+    matches this city. Returns [] for regions we don't have prefixes for (the UI then
+    falls back to neighbourhood suggestions + manual pincode entry)."""
+    prefixes = _STATE_ZIP_PREFIXES.get((region or "").strip().lower(), [])
+    if not prefixes or not city_key:
+        return []
+    seen: set[str] = set()
+    out: list[dict] = []
+    for pfx in prefixes:
+        if len(out) >= max_zips:
+            break
+        try:
+            hits = search_zips(pfx, token, limit=30)
+        except RuntimeError:
+            continue
+        for z in hits:
+            if z["primary_city_id"] == str(city_key) and z["key"] not in seen:
+                seen.add(z["key"])
+                out.append({"key": z["key"], "name": z["name"], "city_key": str(city_key)})
+    return sorted(out, key=lambda z: z["name"])[:max_zips]
+
+
 # ── resolve (best single match) — cached ─────────────────────────────────────
 def _search_query(name: str) -> str:
     """Meta's adinterest/behaviour typeahead frequently returns zero hits when queried
@@ -729,6 +846,9 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
         interests  = llm_selection.get("interests", [])
         behaviours = llm_selection.get("behaviours", [])
         work_positions = llm_selection.get("work_positions") or profile.get("work_positions", [])
+        # LLM relationship pick overrides the profile default when it made one.
+        if llm_selection.get("relationship_statuses"):
+            relationship_statuses = llm_selection["relationship_statuses"]
         age_min, age_max = llm_selection["age_min"], llm_selection["age_max"]
         _save_cache(cache)  # llm_selection was already resolved+cached by resolve_llm_targeting
     else:
@@ -768,6 +888,16 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
         "city_key": resolved_city["key"] if resolved_city else None,
         "region": resolved_city.get("region", "") if resolved_city else "",
         "radius_km": DEFAULT_RADIUS_KM,
+        # Geo model: "radius" (city+radius circle, default) or "areas" (specific
+        # neighbourhoods/pincodes only — set by the audience panel). Areas carry a
+        # `city_key` so downstream geo analysis can map an area back to its city.
+        "geo_mode": "radius",
+        "neighborhoods": [],
+        "zips": [],
+        # Platform/OS restriction: "all" (default) | "ios" | "android". Advisory
+        # default can be suggested by autooptimiser's device-performance rung,
+        # but is only ever applied when the user approves/saves it.
+        "platform_os": "all",
         "age_min": age_min,
         "age_max": age_max,
         "interests": interests,
@@ -807,19 +937,39 @@ def build_targeting_spec(audience: dict) -> dict:
 
     city_key = audience.get("city_key")
     nri_countries = [c for c in (audience.get("nri_countries") or []) if c]
+    neighborhoods = [{"key": str(n["key"])} for n in (audience.get("neighborhoods") or []) if n.get("key")]
+    zips = [{"key": str(z["key"])} for z in (audience.get("zips") or []) if z.get("key")]
+    # geo_mode "areas" means: target ONLY the chosen neighbourhoods/pincodes (tight —
+    # avoids the wasteland a broad city radius sweeps in). Fall back to the city radius
+    # circle if the user flipped to areas but hasn't picked any yet.
+    use_areas = audience.get("geo_mode") == "areas" and (neighborhoods or zips)
     geo: dict[str, Any] = {}
-    if city_key:
+    if use_areas:
+        if neighborhoods:
+            geo["neighborhoods"] = neighborhoods
+        if zips:
+            geo["zips"] = zips
+    elif city_key:
         radius = int(audience.get("radius_km") or DEFAULT_RADIUS_KM)
         radius = max(_RADIUS_MIN_KM, min(_RADIUS_MAX_KM, radius))
         geo["cities"] = [{"key": str(city_key), "radius": radius, "distance_unit": "kilometer"}]
     else:
         geo["countries"] = [country]
-    # NRI diaspora countries sit alongside the city in the same geo_locations block.
-    # Meta unions them: reach people in the city radius OR in any of these countries.
+    # NRI diaspora countries sit alongside the geo above in the same geo_locations block.
+    # Meta unions them: reach people in the city radius / chosen areas OR any of these countries.
     if nri_countries:
         existing = geo.get("countries", [])
         geo["countries"] = list(dict.fromkeys(existing + nri_countries))
     spec["geo_locations"] = geo
+
+    # Platform/OS restriction — Meta's targeting.user_os field (verified live:
+    # accepts ["iOS"] / ["Android"], distinct from publisher_platforms which
+    # controls FB/IG/Audience-Network placement, not device OS).
+    platform_os = (audience.get("platform_os") or "all").strip().lower()
+    if platform_os == "ios":
+        spec["user_os"] = ["iOS"]
+    elif platform_os == "android":
+        spec["user_os"] = ["Android"]
 
     group: dict[str, Any] = {}
     interests = [{"id": str(i["id"]), "name": i.get("name", "")}
@@ -925,6 +1075,10 @@ INTEREST_POOL: dict[str, list[str]] = {
         "Interior design (design)",
         "Home improvement (home and garden)",
     ],
+    "professional_services": [
+        "Lawyer (law and legal services)",       # verified id 6003392101554
+        "law firm (law and legal services)",      # verified id 6003057724244
+    ],
     "travel_signal": [
         "First-class travel (travel and tourism business)",
         "Business class (air travel)",
@@ -971,6 +1125,13 @@ WORK_POSITION_POOL: dict[str, list[dict]] = {
         {"id": "108900439134105", "name": "Property"},
         {"id": "105525432814378", "name": "Chartered accountant"},
         {"id": "105563979478424", "name": "Executive director"},
+        {"id": "107402372623035", "name": "Doctor"},                 # verified job title
+        {"id": "649354901854686", "name": "Medical Doctor (MD)"},    # verified job title
+        {"id": "112696438745118", "name": "Lawyer"},                 # verified job title
+        {"id": "112184688796827", "name": "Advocate"},               # verified job title (India)
+        {"id": "100336133352803", "name": "Merchant Navy"},          # verified job title
+        {"id": "530784513684674", "name": "Government Employee"},   # verified job title
+        {"id": "108276862537207", "name": "Pharmaceutical sciences"}, # verified job title (pharma proxy)
     ],
 }
 _WORK_POSITION_BY_NAME: dict[str, dict] = {
@@ -982,6 +1143,37 @@ MAX_LLM_INTERESTS = 10
 MAX_LLM_BEHAVIOURS = 4
 MAX_CSUITE_WORK_POSITIONS = 2
 MAX_LLM_WORK_POSITIONS = 3
+
+# Relationship-status axis (Meta's top-level `relationship_statuses` enum) — an
+# LLM-selectable + UI-editable lever, not a hardcoded default. Luxury real-estate
+# buyers skew married/family, so "Married" is the useful one here; 2=engaged kept
+# available for wedding-adjacent inventory. Values are Meta's documented enum ints.
+RELATIONSHIP_STATUS_POOL: dict[str, int] = {
+    "Married": 3,
+    "Engaged": 2,
+}
+_RELATIONSHIP_BY_NAME = {k.lower(): v for k, v in RELATIONSHIP_STATUS_POOL.items()}
+
+# ── NRI / Gujarati-diaspora country suggestions ──────────────────────────────
+# High Gujarati + broader Indian-diaspora density, curated for click-to-add in the
+# audience panel (not auto-applied). ISO-2 codes match _NRI_COUNTRY_MAP / geo union.
+NRI_DIASPORA_SUGGESTIONS: list[dict] = [
+    {"code": "US", "label": "United States"},
+    {"code": "GB", "label": "United Kingdom"},
+    {"code": "AE", "label": "UAE (Dubai/Abu Dhabi)"},
+    {"code": "CA", "label": "Canada"},
+    {"code": "AU", "label": "Australia"},
+    {"code": "KE", "label": "Kenya"},
+    {"code": "ZA", "label": "South Africa"},
+    {"code": "SG", "label": "Singapore"},
+    {"code": "NZ", "label": "New Zealand"},
+    {"code": "OM", "label": "Oman"},
+    {"code": "QA", "label": "Qatar"},
+    {"code": "BH", "label": "Bahrain"},
+    {"code": "KW", "label": "Kuwait"},
+    {"code": "TZ", "label": "Tanzania"},
+    {"code": "UG", "label": "Uganda"},
+]
 
 
 def render_targeting_pool_for_prompt() -> str:
@@ -998,6 +1190,17 @@ def render_targeting_pool_for_prompt() -> str:
     lines.append("WORK POSITIONS (choose only from these names, verbatim):")
     for tag, positions in WORK_POSITION_POOL.items():
         lines.append(f"  [{tag}] " + ", ".join(p["name"] for p in positions))
+    lines.append("")
+    lines.append("NOTE — 100% cheque-only buyers (declared/legitimate income, no cash "
+                 "component) skew toward: Chief executive officer/Chief financial officer "
+                 "(csuite_tier), Merchant Navy/Government Employee/Pharmaceutical sciences "
+                 "(specialist_tier), IT Director/CIO (it_tier), and Export/International "
+                 "business (trader_industrialist interests) — favour these when the brief "
+                 "says cheque-only, still within the owner/csuite caps above.")
+    lines.append("")
+    lines.append("RELATIONSHIP STATUS (optional; choose from these names, verbatim — "
+                 "luxury/family buyers usually skew Married):")
+    lines.append("  " + ", ".join(RELATIONSHIP_STATUS_POOL.keys()))
     return "\n".join(lines)
 
 
@@ -1060,10 +1263,21 @@ def resolve_llm_targeting(selection: dict | None, token: str) -> dict | None:
             behaviours.append(hit)
     _save_cache(cache)
 
+    # Relationship statuses — optional. Accept either the enum ints directly or the
+    # pool names ("Married"/"Engaged"); anything unrecognised is dropped.
+    rel_statuses: list[int] = []
+    for r in (selection.get("relationship_statuses") or []):
+        if isinstance(r, int) and r in RELATIONSHIP_STATUS_POOL.values():
+            rel_statuses.append(r)
+        elif isinstance(r, str) and r.lower() in _RELATIONSHIP_BY_NAME:
+            rel_statuses.append(_RELATIONSHIP_BY_NAME[r.lower()])
+    rel_statuses = list(dict.fromkeys(rel_statuses))
+
     return {
         "interests": interests,
         "behaviours": behaviours,
         "work_positions": work_positions,
+        "relationship_statuses": rel_statuses,
         "age_min": age_min,
         "age_max": age_max,
         "reasoning": str(selection.get("reasoning", ""))[:600],
@@ -1167,7 +1381,17 @@ def interests_from_crm_profiles(top_profiles: list[dict], token: str,
 def audience_summary(audience: dict) -> str:
     """One-line human summary for the deploy preview / logs."""
     geo = audience.get("city") or audience.get("country") or "India"
-    if audience.get("city") and audience.get("city_key"):
+    nbh = audience.get("neighborhoods") or []
+    zps = audience.get("zips") or []
+    if audience.get("geo_mode") == "areas" and (nbh or zps):
+        area_bits = []
+        if nbh:
+            area_bits.append(f"{len(nbh)} area{'s' if len(nbh) != 1 else ''}")
+        if zps:
+            area_bits.append(f"{len(zps)} pincode{'s' if len(zps) != 1 else ''}")
+        city_lbl = audience.get("city") or ""
+        geo = (f"{city_lbl}: " if city_lbl else "") + " + ".join(area_bits)
+    elif audience.get("city") and audience.get("city_key"):
         geo = f"{audience['city']} +{audience.get('radius_km', DEFAULT_RADIUS_KM)}km"
     nri = audience.get("nri_countries") or []
     n_int = len(audience.get("interests", []))
@@ -1182,8 +1406,15 @@ def audience_summary(audience: dict) -> str:
         bits.append(f"{n_int} interest{'s' if n_int != 1 else ''}")
     if n_beh:
         bits.append(f"{n_beh} behaviour{'s' if n_beh != 1 else ''}")
+    if 3 in (audience.get("relationship_statuses") or []):
+        bits.append("Married")
     if n_inc:
         bits.append(f"{n_inc} custom audience{'s' if n_inc != 1 else ''}")
     if n_exc:
         bits.append(f"{n_exc} excluded")
+    platform_os = (audience.get("platform_os") or "all").strip().lower()
+    if platform_os == "ios":
+        bits.append("iOS only")
+    elif platform_os == "android":
+        bits.append("Android only")
     return " · ".join(bits)

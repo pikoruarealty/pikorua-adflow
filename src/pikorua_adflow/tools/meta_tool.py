@@ -214,6 +214,14 @@ def _create_adset(
             "targeting_automation": {"advantage_audience": 0},
         }
 
+    # Automatic placements include Audience Network, which Meta forbids combining
+    # with "Broad Category Cluster" detailed targeting (e.g. our income clusters /
+    # user_adclusters) — that combo is what throws "You have chosen invalid broad
+    # categories". Restricting to Facebook + Instagram avoids the conflict and is
+    # standard practice for Lead Gen ads anyway (Audience Network converts poorly
+    # on lead forms).
+    adset_targeting.setdefault("publisher_platforms", ["facebook", "instagram"])
+
     _geo = adset_targeting.get("geo_locations", {})
     _sg_via_country = "SG" in _geo.get("countries", [])
     _sg_via_city = any(c.get("country") == "SG" for c in _geo.get("cities", []))
@@ -817,6 +825,68 @@ def fetch_insights_by_region(campaign_id: str, token: str,
         return []
 
 
+# Meta's impression_device values map to a coarser iOS/Android/desktop grouping —
+# there is no direct "OS" breakdown, but device model implies OS unambiguously.
+_IOS_DEVICES = {"iphone", "ipad", "ipod"}
+_ANDROID_DEVICES = {"android_smartphone", "android_tablet"}
+
+
+def fetch_insights_by_platform(campaign_id: str, token: str,
+                               date_preset: str = "last_30d") -> dict[str, dict]:
+    """Spend/leads/CPL grouped into ios/android/desktop/other for a campaign.
+    Uses Graph API insights with breakdowns=['impression_device'] (verified live
+    2026-07-06). Returns {"ios": {...}, "android": {...}, "desktop": {...},
+    "other": {...}} each with spend_inr, impressions, leads, cpl_inr (0 if no
+    leads). Returns {} on any failure — callers must treat that as "no data".
+
+    Powers the platform-toggle auto-suggestion: compares iOS vs Android CPL on
+    an already-running campaign so a recommendation can be surfaced (never
+    auto-applied — see autooptimiser's platform rung).
+    """
+    try:
+        data = _get(
+            f"{campaign_id}/insights", token,
+            {
+                "fields": "spend,impressions,actions",
+                "date_preset": date_preset,
+                "breakdowns": "impression_device",
+                "level": "campaign",
+                "limit": "500",
+            },
+        )
+    except Exception:
+        return {}
+
+    groups: dict[str, dict] = {
+        "ios": {"spend_inr": 0.0, "impressions": 0, "leads": 0},
+        "android": {"spend_inr": 0.0, "impressions": 0, "leads": 0},
+        "desktop": {"spend_inr": 0.0, "impressions": 0, "leads": 0},
+        "other": {"spend_inr": 0.0, "impressions": 0, "leads": 0},
+    }
+    for row in data.get("data", []):
+        device = (row.get("impression_device") or "").strip().lower()
+        if device in _IOS_DEVICES:
+            key = "ios"
+        elif device in _ANDROID_DEVICES:
+            key = "android"
+        elif device == "desktop":
+            key = "desktop"
+        else:
+            key = "other"
+        leads = 0
+        for act in (row.get("actions") or []):
+            if act.get("action_type") in ("lead", "onsite_conversion.lead_grouped"):
+                leads += int(float(act.get("value", 0)))
+        groups[key]["spend_inr"] += float(row.get("spend") or 0)
+        groups[key]["impressions"] += int(float(row.get("impressions") or 0))
+        groups[key]["leads"] += leads
+
+    for g in groups.values():
+        g["spend_inr"] = round(g["spend_inr"], 2)
+        g["cpl_inr"] = round(g["spend_inr"] / g["leads"], 2) if g["leads"] else 0.0
+    return groups
+
+
 def fetch_relevance_diagnostics(ad_ids: list[str], token: str) -> dict[str, dict]:
     """Per-ad relevance rankings (quality/engagement/conversion). {} entries on failure."""
     out: dict[str, dict] = {}
@@ -1240,6 +1310,30 @@ def add_custom_audiences(adset_id: str, token: str, *, include_ids: list[str] | 
             + [{"id": str(i)} for i in exclude_ids if str(i) not in cur]
         )
     return update_adset_targeting(adset_id, new_targeting, token)
+
+
+def list_saved_audiences(ad_account_id: str, token: str) -> list[dict]:
+    """List Meta's true Saved Audience objects (targeting-spec-only, reusable
+    across ad sets) — distinct from Custom/Lookalike audiences. Raises on failure."""
+    data = _get(
+        f"act_{ad_account_id}/saved_audiences",
+        token,
+        {"fields": "id,name,targeting,approximate_count_lower_bound", "limit": "100"},
+    )
+    return data.get("data", [])
+
+
+def create_saved_audience(ad_account_id: str, token: str, name: str, targeting_spec: dict) -> str:
+    """Save a targeting spec as a reusable Meta Saved Audience. Returns the new id.
+    Raises RuntimeError on failure."""
+    ok, data = _do_post(
+        f"act_{ad_account_id}/saved_audiences",
+        {"name": name, "targeting": targeting_spec},
+        token,
+    )
+    if not ok:
+        raise RuntimeError(f"POST act_{ad_account_id}/saved_audiences failed: {data}")
+    return str(data["id"])
 
 
 # ---- Phase 2: Meta Recommendations ---------------------------------------- #

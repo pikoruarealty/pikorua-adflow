@@ -607,82 +607,6 @@ def revert_logo(run_id: str, prompt_slug: str):
     return {"ok": True}
 
 
-@router.post("/inpaint/{run_id}/{prompt_slug}")
-async def inpaint_image(run_id: str, prompt_slug: str, request: Request):
-    """Inpaint a masked region of an existing generated image.
-
-    prompt_slug accepts:
-      - A plain integer string (e.g. "1") for standard image slots → image_1.png
-      - An "r{k}" string (e.g. "r1") for reference variant slots → image_r1.png
-
-    Accepts multipart/form-data with:
-      - mask_png   : PNG file (white = regenerate, black = keep)
-      - edit_prompt: plain text describing the change
-      - source_file: optional filename of the image to edit (defaults to latest variant)
-    Returns the new variant filename.
-    """
-    # Validate slug: integer or r<integer>
-    if not re.fullmatch(r'\d+|r\d+', prompt_slug):
-        raise HTTPException(status_code=422, detail=f"Invalid prompt_slug: {prompt_slug!r}")
-
-    ideogram_key = os.getenv("IDEOGRAM_API_KEY", "")
-    if not ideogram_key:
-        raise HTTPException(status_code=400, detail="IDEOGRAM_API_KEY not configured.")
-    run = cs.require_complete(run_id)
-    images_dir = Path(run["review_folder"]) / "images"
-
-    form = await request.form()
-    edit_prompt = (form.get("edit_prompt") or "").strip()
-    if not edit_prompt:
-        raise HTTPException(status_code=400, detail="edit_prompt is required.")
-
-    # Resolve source image
-    source_file = (form.get("source_file") or "").strip()
-    if source_file:
-        if not re.fullmatch(r'image_(?:\d+|r\d+)(?:_v\d+)?\.png', source_file):
-            raise HTTPException(status_code=400, detail="Invalid source_file.")
-        src_path = images_dir / source_file
-    else:
-        # Use latest variant: prefer highest _vN, fall back to base image
-        variants = sorted(
-            [f for f in images_dir.glob(f"image_{prompt_slug}_v*.png")],
-            key=lambda p: int(re.search(r"_v(\d+)", p.name).group(1))
-        )
-        src_path = variants[-1] if variants else images_dir / f"image_{prompt_slug}.png"
-    if not src_path.exists():
-        raise HTTPException(status_code=404, detail="Source image not found.")
-
-    mask_file = form.get("mask_png")
-    if mask_file is None:
-        raise HTTPException(status_code=400, detail="mask_png is required.")
-    mask_bytes = await mask_file.read()
-    image_bytes = src_path.read_bytes()
-
-    # Determine aspect from the run's visual brief (default 4:5)
-    aspect = "4x5"
-
-    # INPAINT_MOCK=1 skips the Ideogram API call for UI/flow testing without credits.
-    # Returns the edit prompt so you can review what would have been sent to Ideogram.
-    if os.getenv("INPAINT_MOCK") == "1":
-        return {"mock": True, "prompt_sent": edit_prompt, "prompt_slug": prompt_slug}
-
-    result_bytes = imgs.call_ideogram_inpaint(
-        image_bytes=image_bytes,
-        mask_bytes=mask_bytes,
-        prompt=edit_prompt,
-        key=ideogram_key,
-        aspect=aspect,
-    )
-
-    # Save as next available variant slot
-    k = 2
-    while (images_dir / f"image_{prompt_slug}_v{k}.png").exists():
-        k += 1
-    out_path = images_dir / f"image_{prompt_slug}_v{k}.png"
-    out_path.write_bytes(result_bytes)
-    return {"file": out_path.name, "prompt_slug": prompt_slug}
-
-
 @router.post("/assign-image/{run_id}/{variant_num}")
 def assign_image(run_id: str, variant_num: int, payload: AssignImagePayload):
     run = cs.require_complete(run_id)
@@ -701,34 +625,46 @@ def assign_image(run_id: str, variant_num: int, payload: AssignImagePayload):
 
 @router.post("/generate-reference-variant/{run_id}")
 def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
-    """Generate an image from a reference creative using one of two modes:
+    """Generate an image from a reference creative using one of three modes:
 
-    mode="remix" (default):
-      Ideogram remix endpoint — preserves the reference image's composition and visual
-      style while adapting all text elements to the current campaign brief.
-      image_weight controls how much of the reference is preserved (0.0-1.0).
+    mode="text_only" (default):
+      Edits the reference image in place (OpenAI gpt-image-1) — same photo, same scene,
+      same elements; only headline/price/CTA copy changes. Tightest, closest to reference.
 
-    mode="new_scene":
+    mode="change_scene":
       Extracts the reference image's ad element layout (where location name, price,
-      badge, footer sit) via vision LLM and uses it as composition_notes.
-      Generates a fresh lifestyle scene using scene_variant from our standard pipeline.
-      The photography is brand new; the text element positions mirror the reference.
+      badge, footer sit) via vision LLM and uses it as composition_notes. Generates a
+      brand-new photographic scene (gpt-image-1 text-to-image) using scene_variant from
+      our standard pipeline. Photography is new; text element positions mirror the reference.
 
-    Set REMIX_MOCK=1 to return prompts without calling Ideogram (for testing).
-    Set custom_prompt to override the auto-assembled prompt.
+    mode="change_elements":
+      Edits the reference image in place (gpt-image-1), keeping the photo/scene but
+      varying secondary ad elements (badge, CTA style, accent colour, footer treatment) —
+      for visually distinct variants from one reference without changing the scene.
+
+    Ideogram is not used for this feature — it struggles to preserve exact ad copy when
+    editing an existing image. All three modes call OpenAI's gpt-image-1.
+
+    Set REMIX_MOCK=1 to return prompts/instructions without calling OpenAI (for testing).
+    Set custom_prompt to override the auto-assembled prompt/instruction.
     """
     import datetime
     import shutil
 
-    ideogram_key = os.getenv("IDEOGRAM_API_KEY", "")
+    from ..services.image import openai_client
+
+    openai_key = os.getenv("OPENAI_API_KEY", "")
     run = cs.require_complete(run_id)
     review_folder = Path(run["review_folder"])
     images_dir = review_folder / "images"
     images_dir.mkdir(exist_ok=True)
 
     # Validate mode
-    if payload.mode not in ("remix", "new_scene"):
-        raise HTTPException(status_code=400, detail="mode must be 'remix' or 'new_scene'.")
+    if payload.mode not in ("text_only", "change_scene", "change_elements"):
+        raise HTTPException(
+            status_code=400,
+            detail="mode must be 'text_only', 'change_scene', or 'change_elements'.",
+        )
 
     # Validate the reference image exists
     safe_name = re.sub(r"[^\w.\-]", "_", payload.reference_filename)
@@ -739,6 +675,8 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
     brief = run.get("brief", {})
     eff = cs.effective_meta(review_folder)
     first_headline = next((c["headline"] for c in eff.values() if c.get("headline")), "")
+    sample_ready = bool(brief.get("sample_ready", False))
+    default_cta = "Sample Flat Ready" if sample_ready else ""
 
     # Find next available image_r{k}.png slot
     k = 1
@@ -746,78 +684,50 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
         k += 1
     out_path = images_dir / f"image_r{k}.png"
 
-    # ── Mode: remix (match layout + scene type, correct text from brief) ───────
-    if payload.mode == "remix":
+    # ── Mode: text_only — tight in-place copy edit ──────────────────────────────
+    if payload.mode == "text_only":
         if payload.custom_prompt:
-            prompt = payload.custom_prompt.strip()
-            ref_layout = ""
+            instruction = payload.custom_prompt.strip()
         else:
-            from ..services.image.brief_model import BriefModel
-            from ..services.image.art_director import build_ad_spec
-            from ..services.image import baked_prompt as _baked_prompt
-
-            # Extract WHERE text elements sit in the reference ad (cached)
-            ref_layout = imgs.extract_reference_ad_layout(ref_path)
-            if not ref_layout:
-                raise HTTPException(
-                    status_code=502,
-                    detail="Could not extract ad layout from reference image. Check VISION_MODEL.",
-                )
-            # Extract the photographic scene/mood of the reference (cached)
-            ref_scene = imgs.analyze_reference_image(ref_path)
-
-            sample_ready = bool(brief.get("sample_ready", False))
-            default_cta = "Sample Flat Ready" if sample_ready else ""
-            brief_model = BriefModel.from_brief(
-                brief,
-                headline=first_headline,
-                cta=default_cta,
-                sample_ready_override=sample_ready,
-            )
-            brief_model.has_logo = BRAND_LOGO_PATH.exists()
-
-            # Use the art director to produce an AdSpec, then override the composition
-            # with the reference layout so the new image mirrors the reference's element
-            # positions while getting fresh photography and correct brief text.
-            spec = build_ad_spec(
-                variant_key="interior_signature_moment",
-                prompt_num=k,
-                brief=brief_model,
-            )
-            spec.composition = (
-                f"{ref_scene}\n\nAD ELEMENT LAYOUT (mirror this reference ad layout "
-                f"exactly — same positions for all text zones):\n{ref_layout}"
-            )
-            prompt = _baked_prompt.build(spec, brief_model)
+            price = brief.get("price_display") or brief.get("price") or ""
+            lines = [
+                "Edit this real-estate advertisement image. Keep the photograph, scene, "
+                "composition, layout, colours, and all graphic elements exactly as they are.",
+                "Only update the text content:",
+            ]
+            if first_headline:
+                lines.append(f'- Headline/tagline text should read: "{first_headline}"')
+            if price:
+                lines.append(f'- Price should read: "{price}"')
+            if default_cta:
+                lines.append(f'- CTA/badge text should read: "{default_cta}"')
+            lines.append("Do not change anything else about the image.")
+            instruction = "\n".join(lines)
 
         if os.getenv("REMIX_MOCK") == "1":
             return {
-                "mock": True, "mode": "remix",
-                "prompt_sent": prompt, "filename": out_path.name,
-                "reference": safe_name, "composition_notes": ref_layout,
+                "mock": True, "mode": "text_only",
+                "prompt_sent": instruction, "filename": out_path.name,
+                "reference": safe_name,
             }
 
-        if not ideogram_key:
-            raise HTTPException(status_code=400, detail="IDEOGRAM_API_KEY not configured.")
+        if not openai_key:
+            raise HTTPException(status_code=400, detail="OPENAI_API_KEY not configured.")
 
         try:
-            result_bytes = imgs.call_ideogram(
-                prompt, ideogram_key,
-                speed=payload.speed.upper() if payload.speed else "DEFAULT",
-                aspect=payload.aspect,
+            result_bytes = openai_client.edit_image(
+                ref_path.read_bytes(), instruction, openai_key, aspect=payload.aspect,
             )
         except Exception as exc:
             from pikorua_adflow.tools.errors import explain_and_log
-            friendly = explain_and_log("Reference variant — match layout", exc)
+            friendly = explain_and_log("Reference variant — text only", exc)
             raise HTTPException(status_code=502, detail=friendly["message"])
 
-        provenance = {
-            "reference_filename": safe_name,
-            "mode": "remix",
-        }
+        prompt = instruction
+        provenance = {"reference_filename": safe_name, "mode": "text_only"}
 
-    # ── Mode: new_scene ────────────────────────────────────────────────────────
-    else:
+    # ── Mode: change_scene — fresh photography, same layout ─────────────────────
+    elif payload.mode == "change_scene":
         from ...crews.content_crew.task_composer import get_variant_meta as _get_vm
 
         # Validate scene_variant
@@ -840,9 +750,6 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
         # Generate scene_prose for the chosen variant via a small LLM call
         creative_brief = vm.get("creative_brief", "")
         scene_pool_str = ", ".join(vm.get("scene_pool", [])[:3])
-        allowed_palettes = vm.get("allowed_palettes", ["charcoal_gold"])
-        palette_tag = allowed_palettes[0]
-        tone_tag = vm.get("default_tone_bias", "dark_luxury")
 
         scene_system = (
             "You are a luxury real estate photographer writing a shot brief for an AI image "
@@ -881,8 +788,6 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
             except Exception as exc:
                 raise HTTPException(status_code=502, detail=f"Scene LLM call failed: {exc}")
 
-            sample_ready = bool(brief.get("sample_ready", False))
-            default_cta = "Sample Flat Ready" if sample_ready else ""
             brief_model = BriefModel.from_brief(
                 brief,
                 headline=first_headline,
@@ -909,32 +814,64 @@ def generate_reference_variant(run_id: str, payload: GenerateRefVariantPayload):
 
         if os.getenv("REMIX_MOCK") == "1":
             return {
-                "mock": True, "mode": "new_scene",
+                "mock": True, "mode": "change_scene",
                 "prompt_sent": prompt,
                 "scene_prose": scene_prose if not payload.custom_prompt else prompt,
                 "composition_notes": ref_layout,
                 "filename": out_path.name, "reference": safe_name,
             }
 
-        if not ideogram_key:
-            raise HTTPException(status_code=400, detail="IDEOGRAM_API_KEY not configured.")
+        if not openai_key:
+            raise HTTPException(status_code=400, detail="OPENAI_API_KEY not configured.")
 
         try:
-            result_bytes = imgs.call_ideogram(
-                prompt, ideogram_key,
-                speed=payload.speed.upper() if payload.speed else "DEFAULT",
-                aspect=payload.aspect,
-            )
+            result_bytes = openai_client.generate_image(prompt, openai_key, aspect=payload.aspect)
         except Exception as exc:
             from pikorua_adflow.tools.errors import explain_and_log
-            friendly = explain_and_log("Reference variant — new scene", exc)
+            friendly = explain_and_log("Reference variant — change scene", exc)
             raise HTTPException(status_code=502, detail=friendly["message"])
 
         provenance = {
             "reference_filename": safe_name,
-            "mode": "new_scene",
+            "mode": "change_scene",
             "scene_variant": payload.scene_variant,
         }
+
+    # ── Mode: change_elements — keep photo, vary secondary elements ─────────────
+    else:
+        if payload.custom_prompt:
+            instruction = payload.custom_prompt.strip()
+        else:
+            instruction = (
+                "Edit this real-estate advertisement image. Keep the photograph and scene "
+                "exactly as they are — do not change the setting, subject, or composition.\n"
+                "Vary the secondary graphic ad elements to produce a visually distinct variant: "
+                "change the badge/CTA shape and colour, the accent colour used in text callouts, "
+                "and the footer/spec-row treatment. Keep all text content (headline, price, "
+                "location) the same as in the reference — only restyle these secondary elements."
+            )
+
+        if os.getenv("REMIX_MOCK") == "1":
+            return {
+                "mock": True, "mode": "change_elements",
+                "prompt_sent": instruction, "filename": out_path.name,
+                "reference": safe_name,
+            }
+
+        if not openai_key:
+            raise HTTPException(status_code=400, detail="OPENAI_API_KEY not configured.")
+
+        try:
+            result_bytes = openai_client.edit_image(
+                ref_path.read_bytes(), instruction, openai_key, aspect=payload.aspect,
+            )
+        except Exception as exc:
+            from pikorua_adflow.tools.errors import explain_and_log
+            friendly = explain_and_log("Reference variant — change elements", exc)
+            raise HTTPException(status_code=502, detail=friendly["message"])
+
+        prompt = instruction
+        provenance = {"reference_filename": safe_name, "mode": "change_elements"}
 
     # ── Common: save, logo composite, record provenance ───────────────────────
     out_path.write_bytes(result_bytes)

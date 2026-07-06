@@ -12,6 +12,7 @@ All matching is case-insensitive.  Unknown values are passed through unchanged.
 """
 from __future__ import annotations
 
+import json
 import re
 from difflib import get_close_matches
 
@@ -125,15 +126,29 @@ def _normalise_profession(raw: str) -> str:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _scalarize(value):
+    """
+    Coerce a field value to something every consumer (Excel, CSV, scoring) can
+    handle. Supabase/PostgREST returns array/jsonb columns (e.g. Configuration)
+    as native Python lists, which openpyxl and other scalar-only writers reject.
+    """
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(v) for v in value)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
 def normalise_rows(rows: list[dict]) -> list[dict]:
     """
-    Return a new list of rows with City and Profession fields canonicalised.
-    Does NOT mutate the input rows.  City is checked in both "City" and
-    "CurrentCity" keys (crm_source maps both).  Unknown values are preserved.
+    Return a new list of rows with City and Profession fields canonicalised,
+    and every field coerced to a scalar value. Does NOT mutate the input rows.
+    City is checked in both "City" and "CurrentCity" keys (crm_source maps
+    both). Unknown values are preserved.
     """
     out: list[dict] = []
     for row in rows:
-        r = dict(row)
+        r = {k: _scalarize(v) for k, v in row.items()}
         for city_key in ("City", "CurrentCity"):
             if r.get(city_key):
                 r[city_key] = _normalise_city(r[city_key])

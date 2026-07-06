@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import threading
 
-from .config import RUNS_PATH
+from .config import OUTPUT_DIR, RUNS_PATH
 
 
 def load_runs() -> dict[str, dict]:
@@ -24,10 +24,14 @@ def load_runs() -> dict[str, dict]:
         return {}
     try:
         data = json.loads(RUNS_PATH.read_text(encoding="utf-8"))
-        for run in data.values():
+        for run_id, run in data.items():
             if run.get("status", "").startswith("running_") or run.get("status") == "queued":
-                run["status"] = "failed"
-                run["error"] = "Server restarted while run was in progress."
+                if (OUTPUT_DIR / f"pipeline_state_{run_id}.json").exists():
+                    run["status"] = "failed_resumable"
+                    run["error"] = "Server restarted mid-run — resumable from the audience-analysis checkpoint."
+                else:
+                    run["status"] = "failed"
+                    run["error"] = "Server restarted while run was in progress."
         return data
     except Exception:
         return {}

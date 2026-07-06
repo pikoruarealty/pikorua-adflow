@@ -111,6 +111,7 @@ def delete_run(run_id: str):
     with RUNS_LOCK:
         del RUNS[run_id]
     save_runs()
+    cs._clear_pipeline_state(run_id)
     return {"status": "deleted", "run_id": run_id}
 
 
@@ -119,7 +120,7 @@ def rerun_campaign(run_id: str):
     if run_id not in RUNS:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
     run = RUNS[run_id]
-    if run.get("status") != "failed":
+    if run.get("status") not in ("failed", "failed_resumable"):
         raise HTTPException(status_code=400, detail="Only failed runs can be re-run.")
     brief_data = run.get("brief", {})
     brief = CampaignBrief(**brief_data)
@@ -133,6 +134,25 @@ def rerun_campaign(run_id: str):
     save_runs()
     threading.Thread(target=cs.run_pipeline, args=(new_run_id, brief), daemon=True).start()
     return {"status": "queued", "run_id": new_run_id, "rerun_of": run_id}
+
+
+@router.post("/resume-pipeline/{run_id}")
+def resume_pipeline(run_id: str):
+    """Resume a run whose ContentCrew stage failed, skipping the already-completed
+    AudienceCrew stage via its on-disk checkpoint. Only available while the
+    checkpoint file survives (run status "failed_resumable")."""
+    if run_id not in RUNS:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
+    run = RUNS[run_id]
+    if run.get("status") != "failed_resumable":
+        raise HTTPException(status_code=400, detail="This run has no resumable checkpoint.")
+    threading.Thread(target=cs.resume_pipeline, args=(run_id,), daemon=True,
+                     name=f"resume-{run_id}").start()
+    return JSONResponse(status_code=202, content={
+        "status": "running_stage2", "run_id": run_id,
+        "message": "Resuming from audience-analysis checkpoint. Poll /status/{run_id} for progress.",
+        "poll_url": f"/status/{run_id}",
+    })
 
 
 # ── Content editing overlay ──────────────────────────────────────────────────

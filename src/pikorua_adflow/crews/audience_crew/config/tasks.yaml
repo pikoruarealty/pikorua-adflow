@@ -139,7 +139,7 @@ select_targeting:
   description: >
     Choose the actual Meta ad-set targeting for a {property_type} priced at
     ₹{price_cr} Cr in {city}{locality_suffix}, for buyer type {buyer_type}
-    (goal: {goal}).
+    (goal: {goal}). 100% cheque payment only (no cash component accepted): {cheque_only}.
 
     You must choose ONLY from the candidate pool below — every name in it is
     verified to exist on Meta. Do not invent, rephrase, or abbreviate a name;
@@ -183,11 +183,21 @@ select_targeting:
     - Set age_min/age_max from CRM signal if it indicates an age skew;
       otherwise use a standard HNI/NRI luxury-buyer range rather than
       guessing from property type.
+    - relationship_statuses is optional. Include "Married" only when the buyer
+      profile skews to families/end-users (most luxury homes do); leave it empty
+      for pure-investor or younger audiences. Choose only from the RELATIONSHIP
+      STATUS names in the pool, verbatim.
+    - If cheque_only is "yes", this property only accepts declared/legitimate
+      income buyers (no cash component) — lean into the pool's cheque-only note
+      (CEO/CFO, Merchant Navy, Government Employee, Pharmaceutical sciences,
+      IT Director/CIO, Export/International business) alongside whatever CRM
+      signal indicates, still respecting the owner/csuite caps above.
   expected_output: >
     A single JSON object, nothing else, with keys:
     interests (list of strings, each copied verbatim from the pool),
     behaviours (list of strings, verbatim from the pool),
     work_positions (list of strings, verbatim from the pool),
+    relationship_statuses (list of strings from the pool, may be empty),
     age_min (integer), age_max (integer),
     reasoning (1-3 sentences: what CRM signal drove these picks, or — if CRM
     data was thin/absent — a note that this is a balanced default mix rather

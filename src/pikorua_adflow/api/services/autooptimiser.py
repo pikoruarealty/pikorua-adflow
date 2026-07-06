@@ -537,9 +537,21 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
     from pikorua_adflow.analytics import geo_intelligence as _geoi
     base_aud = _audience_from_targeting(targeting)
     all_city_keys = [str(c.get("key")) for c in (geo.get("cities") or [])]
+    # The saved audience carries the area→city_key mapping needed so "areas of
+    # Ahmedabad selected" isn't misread as "Ahmedabad untargeted".
+    saved_aud = None
+    if run_id:
+        try:
+            from pikorua_adflow.api.services import campaign_service as _cs
+            _run = RUNS.get(run_id) or {}
+            if _run.get("review_folder"):
+                saved_aud = _cs.load_audience(_run["review_folder"])
+        except Exception:
+            saved_aud = None
     try:
         georecs = _geoi.geo_recommendations(campaign, targeting, brief, crm_leads,
                                             base_audience=base_aud,
+                                            saved_audience=saved_aud,
                                             campaign_id=cid)
     except Exception:
         georecs = {"trim": [], "add": []}
@@ -596,6 +608,35 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
             f"Local buyers are saturated (seen {freq}×). NRI diaspora is a fresh, "
             "high-value audience for this price tier.",
             "add_nri", {"adset_id": adset_id, "iso_codes": _NRI_DEFAULT})
+
+    # Rung 5.5 (APPROVE) — platform (iOS/Android) restriction. Never auto-applied —
+    # narrowing device reach is a real reach tradeoff, so it's always a human decision.
+    # Fires only once there's enough volume on BOTH platforms to trust the comparison,
+    # and only suggests restricting to the platform that is clearly, meaningfully cheaper.
+    if not _in_cooldown(camp_state, "set_platform"):
+        try:
+            from pikorua_adflow.tools import meta_tool as _mtt
+            cur_os = [o.lower() for o in (targeting.get("user_os") or [])]
+            already_restricted = bool(cur_os)
+            if not already_restricted:
+                platform_perf = _mtt.fetch_insights_by_platform(cid, token=os.getenv("META_ACCESS_TOKEN", ""))
+                ios_p, android_p = platform_perf.get("ios", {}), platform_perf.get("android", {})
+                if (ios_p.get("leads", 0) >= 3 and android_p.get("leads", 0) >= 3
+                        and ios_p.get("cpl_inr") and android_p.get("cpl_inr")):
+                    cheaper, pricier = (("iOS", "Android") if ios_p["cpl_inr"] < android_p["cpl_inr"]
+                                        else ("Android", "iOS"))
+                    cheap_cpl = min(ios_p["cpl_inr"], android_p["cpl_inr"])
+                    dear_cpl = max(ios_p["cpl_inr"], android_p["cpl_inr"])
+                    if dear_cpl >= cheap_cpl * 1.4:  # meaningfully worse, not noise
+                        add("set_platform", 5, "approve",
+                            f"Restrict to {cheaper} — enquiries cost {round(dear_cpl / cheap_cpl, 1)}× less there",
+                            f"Over the last 30 days, {cheaper} enquiries cost ₹{round(cheap_cpl):,} vs "
+                            f"₹{round(dear_cpl):,} on {pricier}. Restricting delivery to {cheaper} only "
+                            "stops spend on the pricier platform — reach shrinks, but so does waste.",
+                            "set_platform",
+                            {"adset_id": adset_id, "platform_os": cheaper.lower()})
+        except Exception:
+            pass  # never let this rung break the ladder
 
     # Rung 6 (APPROVE) — broaden radius.
     cur_radius = (geo.get("cities") or [{}])[0].get("radius") if geo.get("cities") else None
@@ -825,6 +866,15 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
                 new_t.setdefault("geo_locations", {})["cities"] = cities
                 mt.update_adset_targeting(adset_id, new_t, token)
             undo = {"action": "restore_targeting", "adset_id": adset_id, "targeting": before}
+        elif action == "set_platform":
+            from . import deploy_service as ds
+            before = ds.live_adset_targeting(adset_id, token)
+            new_t = dict(before)
+            platform_os = (params.get("platform_os") or "").strip().lower()
+            new_t["user_os"] = ["iOS"] if platform_os == "ios" else ["Android"]
+            mt.update_adset_targeting(adset_id, new_t, token)
+            undo = {"action": "restore_targeting", "adset_id": adset_id, "targeting": before}
+            impact = {"summary": f"Restricted delivery to {platform_os.upper() if platform_os == 'ios' else platform_os.capitalize()}"}
         elif action == "add_interests":
             from . import deploy_service as ds
             before = ds.live_adset_targeting(adset_id, token)

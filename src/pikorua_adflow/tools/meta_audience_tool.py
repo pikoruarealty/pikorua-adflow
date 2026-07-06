@@ -225,6 +225,24 @@ def _load_leads(crm_path: pathlib.Path) -> list[dict]:
     return leads
 
 
+def _registry_lookup(name: str) -> str | None:
+    """Check the local audience registry (outputs/meta_audiences_registry.json)
+    for a name match before hitting the Meta API — saves a round-trip and catches
+    entries a paginated live search might miss. Returns None on any failure."""
+    try:
+        import json
+        registry_path = pathlib.Path(__file__).parent.parent.parent.parent / "outputs" / "meta_audiences_registry.json"
+        if not registry_path.exists():
+            return None
+        rows = json.loads(registry_path.read_text(encoding="utf-8"))
+        for row in rows:
+            if (row.get("name") or "").strip().lower() == name.strip().lower():
+                return str(row["id"])
+    except Exception:
+        pass
+    return None
+
+
 def find_existing_audience(base_url: str, headers: dict, name: str, requests_lib) -> str | None:
     """
     Return the id of an existing Custom Audience with this exact name, or None.
@@ -233,7 +251,15 @@ def find_existing_audience(base_url: str, headers: dict, name: str, requests_lib
     upload, leaving the account with 4× duplicate "Good Leads" / "Bad Leads" CAs and
     spreading the CRM data thin. Callers reuse the existing CA (and just refresh its
     members) instead of minting another. Never raises — returns None on any failure.
+
+    Checks the local registry first (fast, no API round-trip); falls back to a
+    live Meta lookup since the registry can drift from Meta's actual state (e.g.
+    an audience deleted directly in Ads Manager). If the registry has an entry
+    the live lookup doesn't confirm, that's logged as a possible deletion rather
+    than silently trusted.
     """
+    registry_id = _registry_lookup(name)
+
     try:
         resp = requests_lib.get(
             f"{base_url}/customaudiences",
@@ -241,13 +267,21 @@ def find_existing_audience(base_url: str, headers: dict, name: str, requests_lib
             headers=headers, timeout=30,
         )
         if not resp.ok:
-            return None
+            return registry_id
+        live_id = None
         for row in resp.json().get("data", []):
             if (row.get("name") or "").strip().lower() == name.strip().lower():
-                return str(row["id"])
+                live_id = str(row["id"])
+                break
+        if registry_id and live_id and registry_id != live_id:
+            print(f"[meta_audience_tool] Warning: registry id {registry_id} for "
+                  f"{name!r} does not match live Meta id {live_id} — using live id.")
+        if registry_id and not live_id:
+            print(f"[meta_audience_tool] Warning: registry has {name!r} as {registry_id} "
+                  f"but Meta's live list doesn't — it may have been deleted on Meta's side.")
+        return live_id or registry_id
     except Exception:
-        pass
-    return None
+        return registry_id
 
 
 def _create_custom_audience(base_url: str, headers: dict, name: str, description: str,
@@ -368,8 +402,18 @@ def upload_crm_lookalike(
     if err:
         return {"error": err}
 
+    lal_name = f"PIKORUA Lookalike — All Contacts — {','.join(target_countries)}"
+    existing_lal = find_existing_audience(base_url, headers, lal_name, requests)
+    if existing_lal:
+        return {
+            "custom_audience_id": ca_id,
+            "lookalike_audience_id": existing_lal,
+            "leads_uploaded": count,
+            "target_countries": target_countries,
+        }
+
     lal_payload = {
-        "name": f"PIKORUA Lookalike — All Contacts — {','.join(target_countries)}",
+        "name": lal_name,
         "subtype": "LOOKALIKE",
         "origin_audience_id": ca_id,
         "lookalike_spec": {

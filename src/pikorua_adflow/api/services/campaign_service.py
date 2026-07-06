@@ -722,11 +722,118 @@ def _collect_prior_visual_state(property_name: str) -> dict:
 
 # ── Pipeline ─────────────────────────────────────────────────────────────────
 
+def _pipeline_state_path(run_id: str) -> Path:
+    return OUTPUT_DIR / f"pipeline_state_{run_id}.json"
+
+
+def _load_pipeline_state(run_id: str) -> dict | None:
+    p = _pipeline_state_path(run_id)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _save_pipeline_state(run_id: str, state: dict) -> None:
+    try:
+        p = _pipeline_state_path(run_id)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(state, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _clear_pipeline_state(run_id: str) -> None:
+    p = _pipeline_state_path(run_id)
+    try:
+        p.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _run_content_stage(run_id: str, brief: CampaignBrief, inputs: dict):
+    """Stage 2: ContentCrew + save_for_review. Shared by run_pipeline and resume_pipeline."""
+    from pikorua_adflow.crews.content_crew.content_crew import ContentCrew
+    from pikorua_adflow.utils.output_saver import save_for_review
+
+    inputs.setdefault("company_name", "")
+    inputs.setdefault("property_type", "")
+    inputs.setdefault("daily_budget_inr", "1000")
+    inputs.setdefault("cta", "GET_QUOTE")
+    inputs.setdefault("sample_ready", "no")
+    inputs.setdefault("cheque_only", "no")
+    inputs.setdefault("clientele_type", "hni_nri")
+    inputs.setdefault("standout_feature", "none provided — use the thin-brief fallback")
+
+    try:
+        from pikorua_adflow.tools.memory_tool import get_fewshot_context
+        inputs["past_campaigns"] = get_fewshot_context({
+            "property_name": brief.property_name,
+            "property_type": brief.property_type,
+            "city": brief.city,
+            "buyer_type": brief.buyer_type,
+            "goal": brief.goal,
+        })
+    except Exception:
+        inputs["past_campaigns"] = ""
+
+    try:
+        with RUNS_LOCK:
+            RUNS[run_id]["status"] = "running_stage2"
+        prior_visual_state = _collect_prior_visual_state(brief.property_name)
+        # B3: read per-clientele creative priors (palette/recipe that won before).
+        # {} on first run — no prior knowledge, no bias.
+        try:
+            from pikorua_adflow.analytics import creative_learning as _cl
+            creative_priors = _cl.get_priors(brief.clientele_type or "")
+        except Exception:
+            creative_priors = {}
+        content_result = ContentCrew(
+            prior_visual_state=prior_visual_state,
+            creative_priors=creative_priors,
+        ).crew().kickoff(inputs=inputs)
+        review_folder = save_for_review(content_result, audience_result=inputs.get("_audience_output"))
+        summary = None
+        if COPY_SCORECARD_PATH.exists():
+            text = COPY_SCORECARD_PATH.read_text(encoding="utf-8")
+            summary = next(
+                (l.strip() for l in reversed(text.splitlines()) if l.strip() and ("passed" in l or "flagged" in l)),
+                None,
+            )
+        with RUNS_LOCK:
+            RUNS[run_id]["status"] = "complete"
+            RUNS[run_id]["review_folder"] = str(review_folder)
+            if summary:
+                RUNS[run_id]["copy_scorecard_summary"] = summary
+        save_runs()
+        _clear_pipeline_state(run_id)
+    except Exception as exc:
+        with RUNS_LOCK:
+            RUNS[run_id]["status"] = "failed"
+            RUNS[run_id]["error"] = str(exc)
+        save_runs()
+
+
+def resume_pipeline(run_id: str):
+    """Resume a run whose ContentCrew stage failed, skipping AudienceCrew via its checkpoint."""
+    state = _load_pipeline_state(run_id)
+    if not state or state.get("stage") != "audience_done":
+        raise ValueError("No resumable checkpoint found for this run.")
+    brief_data = RUNS[run_id].get("brief", {})
+    brief = CampaignBrief(**brief_data)
+    os.chdir(REPO_ROOT)
+    with RUNS_LOCK:
+        RUNS[run_id]["status"] = "running_stage2"
+        RUNS[run_id].pop("error", None)
+    save_runs()
+    _run_content_stage(run_id, brief, state["inputs"])
+
+
 def run_pipeline(run_id: str, brief: CampaignBrief):
     """Runs both crews in a background thread and updates the run registry."""
     from pikorua_adflow.crews.audience_crew.audience_crew import AudienceCrew
-    from pikorua_adflow.crews.content_crew.content_crew import ContentCrew
-    from pikorua_adflow.utils.output_saver import save_for_review
     from pikorua_adflow.utils.crm_analyser import analyse as crm_analyse
 
     sys.stdout.reconfigure(encoding="utf-8")
@@ -814,65 +921,13 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
         if trend_hooks_path.exists():
             inputs["trends"] = trend_hooks_path.read_text(encoding="utf-8")[:800]
         time.sleep(8)
+        inputs["_audience_output"] = audience_output
         with RUNS_LOCK:
             RUNS[run_id]["status"] = "running_stage2"
+        _save_pipeline_state(run_id, {"stage": "audience_done", "inputs": inputs})
     except Exception as exc:
         with RUNS_LOCK:
             RUNS[run_id]["stage1_warning"] = str(exc)
             RUNS[run_id]["status"] = "running_stage2"
 
-    inputs.setdefault("company_name", "")
-    inputs.setdefault("property_type", "")
-    inputs.setdefault("daily_budget_inr", "1000")
-    inputs.setdefault("cta", "GET_QUOTE")
-    inputs.setdefault("sample_ready", "no")
-    inputs.setdefault("cheque_only", "no")
-    inputs.setdefault("clientele_type", "hni_nri")
-    inputs.setdefault("standout_feature", "none provided — use the thin-brief fallback")
-
-    try:
-        from pikorua_adflow.tools.memory_tool import get_fewshot_context
-        inputs["past_campaigns"] = get_fewshot_context({
-            "property_name": brief.property_name,
-            "property_type": brief.property_type,
-            "city": brief.city,
-            "buyer_type": brief.buyer_type,
-            "goal": brief.goal,
-        })
-    except Exception:
-        inputs["past_campaigns"] = ""
-
-    try:
-        with RUNS_LOCK:
-            RUNS[run_id]["status"] = "running_stage2"
-        prior_visual_state = _collect_prior_visual_state(brief.property_name)
-        # B3: read per-clientele creative priors (palette/recipe that won before).
-        # {} on first run — no prior knowledge, no bias.
-        try:
-            from pikorua_adflow.analytics import creative_learning as _cl
-            creative_priors = _cl.get_priors(brief.clientele_type or "")
-        except Exception:
-            creative_priors = {}
-        content_result = ContentCrew(
-            prior_visual_state=prior_visual_state,
-            creative_priors=creative_priors,
-        ).crew().kickoff(inputs=inputs)
-        review_folder = save_for_review(content_result, audience_result=audience_output)
-        summary = None
-        if COPY_SCORECARD_PATH.exists():
-            text = COPY_SCORECARD_PATH.read_text(encoding="utf-8")
-            summary = next(
-                (l.strip() for l in reversed(text.splitlines()) if l.strip() and ("passed" in l or "flagged" in l)),
-                None,
-            )
-        with RUNS_LOCK:
-            RUNS[run_id]["status"] = "complete"
-            RUNS[run_id]["review_folder"] = str(review_folder)
-            if summary:
-                RUNS[run_id]["copy_scorecard_summary"] = summary
-        save_runs()
-    except Exception as exc:
-        with RUNS_LOCK:
-            RUNS[run_id]["status"] = "failed"
-            RUNS[run_id]["error"] = str(exc)
-        save_runs()
+    _run_content_stage(run_id, brief, inputs)

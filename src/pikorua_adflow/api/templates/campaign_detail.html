@@ -39,34 +39,6 @@
   <button class="absolute top-4 right-4 text-white material-symbols-outlined text-[32px] hover:text-on-surface-variant transition-colors" onclick="closeLightbox()">close</button>
 </div>
 
-<!-- Inpaint brush-edit modal -->
-<div id="inpaint-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4">
-  <div class="bg-surface border border-outline-variant flex flex-col gap-3 p-4 w-full max-w-md" onclick="event.stopPropagation()">
-    <div class="flex items-center justify-between">
-      <span class="label-caps text-[11px]">Brush Edit — paint the area to change</span>
-      <button onclick="closeInpaint()" class="material-symbols-outlined text-[20px] text-on-surface-variant hover:text-on-surface">close</button>
-    </div>
-    <!-- Canvas overlay on top of image -->
-    <div id="inpaint-canvas-wrap" class="relative w-full bg-surface-container-low overflow-hidden" style="aspect-ratio:3/4">
-      <img id="inpaint-src-img" src="" class="absolute inset-0 w-full h-full object-cover pointer-events-none"/>
-      <canvas id="inpaint-canvas" class="absolute inset-0 w-full h-full cursor-crosshair"></canvas>
-    </div>
-    <div class="flex items-center gap-3">
-      <label class="label-caps text-[9px] text-on-surface-variant whitespace-nowrap">Brush size</label>
-      <input type="range" id="inpaint-brush-size" min="10" max="120" value="40" class="flex-1 accent-primary h-1"/>
-      <button onclick="clearInpaintMask()" class="label-caps text-[9px] border border-outline rounded px-2 py-1 hover:bg-surface-container-low transition-colors whitespace-nowrap">Clear mask</button>
-    </div>
-    <textarea id="inpaint-prompt" rows="3" placeholder="Describe the change — e.g. 'move the price badge lower, use a bold gold pill with more spacing from the BHK'" class="w-full text-xs border border-outline-variant rounded bg-surface p-2 font-body resize-none"></textarea>
-    <div class="flex gap-2">
-      <button onclick="applyInpaint()" class="flex-1 bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5">
-        <span class="material-symbols-outlined text-[14px]">auto_fix_high</span> Apply
-      </button>
-      <button onclick="closeInpaint()" class="px-4 py-2 border border-outline rounded label-caps text-[10px] hover:bg-surface-container-low transition-colors">Cancel</button>
-    </div>
-    <p id="inpaint-status" class="text-xs text-on-surface-variant hidden"></p>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
@@ -158,6 +130,9 @@ function renderCopy() {
         '<button onclick="rewriteField(' + v.variant + ',\'body\',this)" class="label-caps text-primary rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-primary/10 transition-colors" title="AI rewrite body"><span class="material-symbols-outlined text-[15px]">restart_alt</span> Body</button>' +
         '<button onclick="rescore(' + v.variant + ',this)" class="label-caps text-primary rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-primary/10 transition-colors" title="Re-score this variant"><span class="material-symbols-outlined text-[15px]">score</span> Score</button>' +
         '<button onclick="dupVariant(' + v.variant + ')" class="label-caps text-on-surface-variant rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-surface-container-low transition-colors" title="Duplicate variant"><span class="material-symbols-outlined text-[15px]">content_copy</span></button>' +
+        (d.has_live_ads && !(d.meta_ads || []).some(a => a.variant === v.variant)
+          ? '<button onclick="publishAdditionalVariant(' + v.variant + ',this)" class="label-caps text-primary rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-primary/10 transition-colors" title="Publish this variant into the already-live campaign"><span class="material-symbols-outlined text-[15px]">publish</span> Add to live campaign</button>'
+          : '') +
         '<button onclick="delVariant(' + v.variant + ')" class="label-caps text-error rounded px-2 py-1.5 inline-flex items-center gap-1 hover:bg-error/10 transition-colors ml-auto" title="Delete variant"><span class="material-symbols-outlined text-[15px]">delete</span></button>' +
       '</div>' +
       '<div id="score-' + v.variant + '" class="mt-2 text-sm"></div>' +
@@ -264,6 +239,16 @@ function revertChannel(ch) {
     body: JSON.stringify({ channel: ch }) }).then(d => { document.getElementById('ch-' + ch).textContent = d.text || ''; }).catch(e => showError(e.message));
 }
 function reloadCopy() { loadDetail(); }
+function publishAdditionalVariant(v, btn) {
+  if (!confirm('Publish version ' + v + ' as a new ad set on the already-live campaign?')) return;
+  const origHtml = btn ? btn.innerHTML : null;
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Publishing…'; btn.classList.add('cursor-not-allowed', 'opacity-60'); }
+  api('/publish-additional-variant/' + RUN_ID + '/' + v, { method: 'POST' })
+    .then(() => { toast('Variant ' + v + ' published to live campaign'); reloadCopy(); })
+    .catch(e => showError(e.message))
+    .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = origHtml; btn.classList.remove('cursor-not-allowed', 'opacity-60'); } });
+}
 function dupVariant(v) {
   api('/duplicate-variant/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ channel: 'meta', variant: v }) }).then(() => reloadCopy()).catch(e => showError(e.message));
@@ -396,7 +381,6 @@ function renderVisuals() {
           (hasImage ? '<button onclick="addVariantImage(' + p.num + ')" ' + (isGen ? 'disabled ' : '') + 'class="flex-[2] px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center" title="Generate a new variant"><span class="material-symbols-outlined text-[16px]">add_photo_alternate</span></button>' : '') +
           '<input type="file" id="upl-' + p.num + '" class="hidden" accept="image/png,image/jpeg,image/webp" onchange="uploadImg(' + p.num + ',this)"/>' +
           '<button onclick="document.getElementById(\'upl-' + p.num + '\').click()" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Upload your own image"><span class="material-symbols-outlined text-[16px]">upload</span></button>' +
-          (hasImage ? '<button onclick="openInpaint(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Brush edit — repaint a region"><span class="material-symbols-outlined text-[16px]">brush</span></button>' : '') +
           '<button onclick="togglePrompt(' + p.num + ')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Edit prompt"><span class="material-symbols-outlined text-[16px]">edit_note</span></button>' +
         '</div>' +
         (hasImage ? '<div class="flex gap-1">' +
@@ -428,7 +412,7 @@ function renderVisuals() {
       const m = fname.match(/^image_r(\d+)/);
       const k = m ? m[1] : '?';
       const meta = refVarMeta[k] || {};
-      const modeTag = meta.mode === 'new_scene' ? ' · new scene' : meta.mode === 'remix' ? ' · remix' : '';
+      const modeTag = meta.mode === 'change_scene' ? ' · change scene' : meta.mode === 'change_elements' ? ' · change elements' : meta.mode === 'text_only' ? ' · text only' : '';
       const refLabel = meta.reference_filename ? 'Based on: ' + esc(meta.reference_filename) + modeTag : 'Ref variant';
       html += '<div class="border border-outline-variant flex flex-col bg-surface-container-lowest">' +
         '<div class="aspect-[3/4] bg-surface-container-low overflow-hidden">' +
@@ -440,7 +424,6 @@ function renderVisuals() {
             '<input type="file" id="upl-r' + k + '" class="hidden" accept="image/png,image/jpeg,image/webp" onchange="uploadRefVariant(\'' + fname + '\',this)"/>' +
             '<button onclick="document.getElementById(\'upl-r' + k + '\').click()" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Upload replacement"><span class="material-symbols-outlined text-[16px]">upload</span></button>' +
             '<button onclick="revertRefVariantLogo(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Remove logo"><span class="material-symbols-outlined text-[16px]">hide_image</span></button>' +
-            '<button onclick="openInpaintFile(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center justify-center" title="Brush edit"><span class="material-symbols-outlined text-[16px]">brush</span></button>' +
             '<button onclick="deleteRefVariantImage(\'' + fname + '\')" class="flex-1 px-2 py-1.5 rounded border border-outline text-error hover:bg-error hover:text-on-error hover:border-error transition-[background-color,border-color] flex items-center justify-center" title="Delete"><span class="material-symbols-outlined text-[16px]">delete</span></button>' +
           '</div>' +
         '</div>' +
@@ -496,15 +479,18 @@ function renderRefImages(images) {
         '<div id="refpanel-' + esc(img.filename) + '" class="hidden mt-2 flex flex-col gap-2">' +
           // Mode selector
           '<div class="flex gap-1">' +
-            '<button id="refmode-remix-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'remix\')" ' +
-              'class="flex-1 label-caps text-[9px] py-1 border rounded border-primary bg-primary text-on-primary transition-colors">Match ref layout</button>' +
-            '<button id="refmode-new-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'new_scene\')" ' +
-              'class="flex-1 label-caps text-[9px] py-1 border rounded border-outline text-on-surface-variant hover:border-primary hover:text-primary transition-colors">New scene, ref layout</button>' +
+            '<button id="refmode-text_only-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'text_only\')" ' +
+              'class="flex-1 label-caps text-[9px] py-1 border rounded border-primary bg-primary text-on-primary transition-colors">Text only</button>' +
+            '<button id="refmode-change_scene-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'change_scene\')" ' +
+              'class="flex-1 label-caps text-[9px] py-1 border rounded border-outline text-on-surface-variant hover:border-primary hover:text-primary transition-colors">Change scene</button>' +
+            '<button id="refmode-change_elements-' + esc(img.filename) + '" onclick="setRefMode(\'' + esc(img.filename) + '\',\'change_elements\')" ' +
+              'class="flex-1 label-caps text-[9px] py-1 border rounded border-outline text-on-surface-variant hover:border-primary hover:text-primary transition-colors">Change elements</button>' +
           '</div>' +
-          // No extra controls needed for remix mode now (layout + scene extracted automatically)
-          '<div id="refcontrols-remix-' + esc(img.filename) + '" class="hidden"></div>' +
-          // New-scene controls (hidden by default)
-          '<div id="refcontrols-new-' + esc(img.filename) + '" class="hidden">' +
+          // No extra controls needed for text_only / change_elements modes
+          '<div id="refcontrols-text_only-' + esc(img.filename) + '" class="hidden"></div>' +
+          '<div id="refcontrols-change_elements-' + esc(img.filename) + '" class="hidden"></div>' +
+          // Change-scene controls (hidden by default)
+          '<div id="refcontrols-change_scene-' + esc(img.filename) + '" class="hidden">' +
             '<label class="label-caps text-[9px] text-on-surface-variant">Lifestyle scene</label>' +
             '<select id="refscene-' + esc(img.filename) + '" class="w-full text-xs border border-outline rounded bg-surface px-2 py-1 text-on-surface mt-0.5">' +
               '<option value="lifestyle_private_retreat">Private Retreat</option>' +
@@ -541,46 +527,50 @@ function toggleRefVariantPanel(filename) {
   const panel = document.getElementById('refpanel-' + filename);
   if (panel) panel.classList.toggle('hidden');
 }
+const REF_MODES = ['text_only', 'change_scene', 'change_elements'];
 function setRefMode(filename, mode) {
-  const remixBtn = document.getElementById('refmode-remix-' + filename);
-  const newBtn = document.getElementById('refmode-new-' + filename);
-  const remixCtrl = document.getElementById('refcontrols-remix-' + filename);
-  const newCtrl = document.getElementById('refcontrols-new-' + filename);
-  if (!remixBtn || !newBtn) return;
-  if (mode === 'remix') {
-    remixBtn.className = remixBtn.className.replace('border-outline text-on-surface-variant hover:border-primary hover:text-primary', 'bg-primary text-on-primary border-primary');
-    newBtn.className = newBtn.className.replace('bg-primary text-on-primary border-primary', 'border-outline text-on-surface-variant hover:border-primary hover:text-primary');
-    if (remixCtrl) remixCtrl.classList.remove('hidden');
-    if (newCtrl) newCtrl.classList.add('hidden');
-  } else {
-    newBtn.className = newBtn.className.replace('border-outline text-on-surface-variant hover:border-primary hover:text-primary', 'bg-primary text-on-primary border-primary');
-    remixBtn.className = remixBtn.className.replace('bg-primary text-on-primary border-primary', 'border-outline text-on-surface-variant hover:border-primary hover:text-primary');
-    if (newCtrl) newCtrl.classList.remove('hidden');
-    if (remixCtrl) remixCtrl.classList.add('hidden');
-  }
+  const btns = {};
+  const ctrls = {};
+  let anyMissing = false;
+  REF_MODES.forEach(m => {
+    btns[m] = document.getElementById('refmode-' + m + '-' + filename);
+    ctrls[m] = document.getElementById('refcontrols-' + m + '-' + filename);
+    if (!btns[m]) anyMissing = true;
+  });
+  if (anyMissing) return;
+  REF_MODES.forEach(m => {
+    if (m === mode) {
+      btns[m].className = btns[m].className.replace('border-outline text-on-surface-variant hover:border-primary hover:text-primary', 'bg-primary text-on-primary border-primary');
+      if (ctrls[m]) ctrls[m].classList.remove('hidden');
+    } else {
+      btns[m].className = btns[m].className.replace('bg-primary text-on-primary border-primary', 'border-outline text-on-surface-variant hover:border-primary hover:text-primary');
+      if (ctrls[m]) ctrls[m].classList.add('hidden');
+    }
+  });
 }
 function _getRefMode(filename) {
-  const remixBtn = document.getElementById('refmode-remix-' + filename);
-  if (!remixBtn) return 'remix';
-  return remixBtn.className.includes('bg-primary') ? 'remix' : 'new_scene';
+  for (const m of REF_MODES) {
+    const btn = document.getElementById('refmode-' + m + '-' + filename);
+    if (btn && btn.className.includes('bg-primary')) return m;
+  }
+  return 'text_only';
 }
 function genRefVariant(filename, btn) {
   const mode = _getRefMode(filename);
-  const weightEl = document.getElementById('refweight-' + filename);
   const speedEl = document.getElementById('refspeed-' + filename);
   const sceneEl = document.getElementById('refscene-' + filename);
   const promptEl = document.getElementById('refprompt-' + filename);
   const statusEl = document.getElementById('refpanel-status-' + filename);
-  const imageWeight = (mode === 'remix' && weightEl) ? (100 - parseInt(weightEl.value, 10)) / 100 : 0.5;
   const speed = speedEl ? speedEl.value : 'DEFAULT';
-  const sceneVariant = (sceneEl && mode === 'new_scene') ? sceneEl.value : 'lifestyle_private_retreat';
+  const sceneVariant = (sceneEl && mode === 'change_scene') ? sceneEl.value : 'lifestyle_private_retreat';
   const customPrompt = promptEl ? promptEl.value.trim() : '';
   const origHtml = btn ? btn.innerHTML : '';
   const spin = '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span>';
   if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Generating…'; }
-  const statusMsg = mode === 'new_scene' ? 'Extracting layout + generating scene…' : 'Extracting layout + scene from reference…';
+  const statusMsg = mode === 'change_scene' ? 'Extracting layout + generating scene…' :
+    mode === 'change_elements' ? 'Restyling ad elements…' : 'Editing copy on reference image…';
   if (statusEl) { statusEl.textContent = statusMsg; statusEl.classList.remove('hidden'); }
-  const body = { reference_filename: filename, mode: mode, image_weight: imageWeight, speed: speed, scene_variant: sceneVariant };
+  const body = { reference_filename: filename, mode: mode, speed: speed, scene_variant: sceneVariant };
   if (customPrompt) body.custom_prompt = customPrompt;
   api('/generate-reference-variant/' + RUN_ID, {
     method: 'POST',
@@ -589,7 +579,8 @@ function genRefVariant(filename, btn) {
   }).then(d => {
     if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
     if (d.mock) {
-      const modeLabel = d.mode === 'new_scene' ? 'New-scene prompt' : 'Remix prompt';
+      const modeLabels = { text_only: 'Text-only instruction', change_scene: 'Change-scene prompt', change_elements: 'Change-elements instruction' };
+      const modeLabel = modeLabels[d.mode] || 'Prompt';
       if (statusEl) statusEl.textContent = modeLabel + ': ' + (d.prompt_sent || '');
       return;
     }
@@ -642,19 +633,6 @@ function deleteRefVariantImage(fname) {
   api('/image/' + RUN_ID + '/' + fname, { method: 'DELETE' })
     .then(() => loadDetail().then(renderVisuals))
     .catch(e => showError(e.message));
-}
-function openInpaintFile(fname) {
-  // Open the inpaint modal directly for a known filename (used for reference variants)
-  const m = fname.match(/^image_(r\d+)/);
-  if (!m) { showError('Cannot open brush edit for this file.'); return; }
-  _inpaintPromptNum = m[1];
-  _inpaintSourceFile = fname;
-  const srcUrl = '/image/' + RUN_ID + '/' + fname + '?t=' + Date.now();
-  document.getElementById('inpaint-src-img').src = srcUrl;
-  clearInpaintMask();
-  document.getElementById('inpaint-prompt').value = '';
-  document.getElementById('inpaint-status').classList.add('hidden');
-  document.getElementById('inpaint-modal').classList.remove('hidden');
 }
 function writeAndGenImage(n) {
   generating.add(n);
@@ -953,6 +931,7 @@ function rerenderAssignment() {
 /* ── Audience & Deploy tab ── */
 let AUD_STATE = null;
 let AUD_POOL = null;
+let AUD_GEO_SUGGEST = null;
 
 function renderAudience() {
   loaded.audience = true;
@@ -962,11 +941,18 @@ function renderAudience() {
     api('/audience/' + RUN_ID),
     api('/meta-saved-audiences').catch(() => ({ audiences: [] })),
     api('/audience-pool').catch(() => ({ work_positions: {}, income_clusters: [], industries: [] })),
-  ]).then(([d, metaD, pool]) => {
+    api('/lookalike-audiences').catch(() => ({ audiences: [], staleness: {} })),
+    api('/saved-target-audiences').catch(() => ({ audiences: [] })),
+  ]).then(([d, metaD, pool, lookalikeD, savedD]) => {
     const a = d.audience || {};
     AUD_POOL = pool;
     AUD_STATE = {
       city: a.city || '', city_key: a.city_key || null, region: a.region || '',
+      radius_km: a.radius_km || 25,
+      geo_mode: a.geo_mode || 'radius',
+      neighborhoods: (a.neighborhoods || []).slice(),
+      zips: (a.zips || []).slice(),
+      platform_os: a.platform_os || 'all',
       interests: (a.interests || []).slice(),
       behaviours: (a.behaviours || []).slice(),
       work_positions: (a.work_positions || []).slice(),
@@ -977,7 +963,13 @@ function renderAudience() {
       advantage_plus: a.advantage_plus !== false,
       clientele_type: a.clientele_type || '',
     };
-    const metaAudiences = metaD.audiences || [];
+    AUD_GEO_SUGGEST = null;
+    const allMetaAudiences = metaD.audiences || [];
+    const metaAudiences = allMetaAudiences.filter(m => m.subtype !== 'LOOKALIKE');
+    const lookalikeAudiences = allMetaAudiences.filter(m => m.subtype === 'LOOKALIKE');
+    const lookalikeRegistry = {};
+    (lookalikeD.audiences || []).forEach(r => { lookalikeRegistry[r.id] = r; });
+    const lookalikeStale = lookalikeD.staleness || {};
     const includedIds = new Set((a.included_custom_audiences || []).map(x => x.id));
     const excludedIds  = new Set((a.excluded_custom_audiences  || []).map(x => x.id));
     let html = '<div class="grid md:grid-cols-2 gap-8">';
@@ -987,10 +979,12 @@ function renderAudience() {
         '<button id="save-aud-btn" onclick="saveAudience()" disabled class="border border-outline rounded label-caps px-4 py-2 hover:bg-surface-container-low transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Save</button>' +
       '</div>' +
       '<div class="space-y-4">' +
-      field('City', 'aud-city', a.city || '') +
-      field('Radius (km)', 'aud-radius', a.radius_km || 25, 'number') +
-      field('Age min', 'aud-agemin', a.age_min || 28, 'number') +
-      field('Age max', 'aud-agemax', a.age_max || 65, 'number') +
+      '<div id="aud-geo"></div>' +
+      '<div class="grid grid-cols-2 gap-3">' +
+        field('Age min', 'aud-agemin', a.age_min || 28, 'number') +
+        field('Age max', 'aud-agemax', a.age_max || 65, 'number') +
+      '</div>' +
+      '<div id="aud-platform"></div>' +
       '<div id="aud-lists"></div>';
     if (metaAudiences.length) {
       html += '<div><p class="label-caps text-outline mb-2">Custom Meta audiences</p>' +
@@ -1016,6 +1010,60 @@ function renderAudience() {
       });
       html += '</div></div>';
     }
+    if (lookalikeAudiences.length) {
+      html += '<div class="mt-4"><p class="label-caps text-outline mb-2">Lookalike audiences</p>';
+      if (lookalikeStale.stale) {
+        html += '<p class="text-xs text-error mb-2">' + esc(lookalikeStale.reason || 'Seed may be stale.') + '</p>';
+      }
+      html += '<div class="space-y-1 max-h-48 overflow-y-auto pr-1">';
+      lookalikeAudiences.forEach(m => {
+        const cur = includedIds.has(m.id) ? 'include' : excludedIds.has(m.id) ? 'exclude' : '';
+        const btnCls = (val, label, first) => {
+          const base = 'aud-ma-btn text-[10px] label-caps px-2 py-0.5 transition-colors' + (first ? '' : ' border-l border-outline-variant');
+          const active = cur === val;
+          const accent = active && val === 'include' ? ' bg-primary text-on-primary'
+                       : active && val === 'exclude' ? ' bg-error/20 text-error border-error'
+                       : active ? ' bg-surface-container' : ' hover:bg-surface-container-low';
+          return base + accent;
+        };
+        const reg = lookalikeRegistry[m.id];
+        let metaLine = '';
+        if (reg) {
+          const built = reg.built_at ? new Date(reg.built_at).toLocaleDateString() : '';
+          metaLine = '<p class="text-[10px] text-on-surface-variant">Built ' + esc(built) +
+            (reg.seed_size ? ' · seed ' + reg.seed_size.toLocaleString() : '') +
+            (lookalikeStale.stale ? ' · <span class="text-error">stale</span>' : '') + '</p>';
+        }
+        html += '<div class="py-1 border-b border-outline-variant/30">' +
+          '<div class="flex items-center justify-between gap-2 text-sm">' +
+          '<span class="truncate">' + esc(m.name) + '</span>' +
+          '<div class="aud-meta-audience inline-flex rounded border border-outline-variant overflow-hidden flex-shrink-0"' +
+            ' data-id="' + esc(m.id) + '" data-name="' + esc(m.name) + '" data-val="' + esc(cur) + '">' +
+            '<button class="' + btnCls('include', 'Include', true) + '" data-val="include" onclick="toggleMetaAud(this)">Include</button>' +
+            '<button class="' + btnCls('exclude', 'Exclude', false) + '" data-val="exclude" onclick="toggleMetaAud(this)">Exclude</button>' +
+            '<button class="' + btnCls('', 'None', false) + '" data-val="" onclick="toggleMetaAud(this)">None</button>' +
+          '</div></div>' + metaLine +
+        '</div>';
+      });
+      html += '</div></div>';
+    }
+    const savedAudiences = savedD.audiences || [];
+    html += '<div class="mt-4"><p class="label-caps text-outline mb-2">Saved audiences (Meta targeting-spec)</p>' +
+      '<p class="text-xs text-on-surface-variant mb-2">A reusable Meta Saved Audience — distinct from Custom/Lookalike above, applies this run\'s full targeting spec directly to future ad sets.</p>';
+    if (savedAudiences.length) {
+      html += '<div class="space-y-1 max-h-32 overflow-y-auto pr-1 mb-2">';
+      savedAudiences.forEach(m => {
+        html += '<div class="flex items-center justify-between gap-2 text-sm py-1 border-b border-outline-variant/30">' +
+          '<span class="truncate">' + esc(m.name) + '</span>' +
+          '<span class="label-caps text-outline text-[10px] flex-shrink-0">' + (m.approximate_count || 0).toLocaleString() + '</span>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<div class="flex gap-2">' +
+      '<input id="saved-aud-name" type="text" placeholder="Name this targeting spec…" class="flex-1 border border-outline-variant rounded px-2 py-1.5 text-sm bg-transparent"/>' +
+      '<button onclick="saveTargetAudience()" class="label-caps border border-outline rounded px-3 py-1.5 hover:bg-surface-container-low transition-colors whitespace-nowrap">Save as new</button>' +
+    '</div></div>';
     html +=
       '<p class="text-sm text-on-surface-variant mt-2">' + esc(d.summary || '') + '</p>' +
       '</div></div>';
@@ -1038,13 +1086,150 @@ function renderAudience() {
       '<div id="deploy-status" class="mt-4 text-sm"></div></div>';
     html += '</div>';
     root.innerHTML = html;
+    renderAudGeo();
+    renderAudPlatform();
     renderAudLists();
+    loadGeoSuggestions();
     const b = (DETAIL && DETAIL.brief) || {};
     document.getElementById('dep-budget').textContent = fmtINR(b.daily_budget_inr) + '/day';
     document.getElementById('dep-dur').textContent = (b.campaign_duration_days || 30) + ' days';
     refreshCreativeModeUI();
     renderPublished();
   }).catch(e => { root.innerHTML = '<p class="text-error">' + e.message + '</p>'; });
+}
+
+/* ── Location: city-radius vs specific areas (neighbourhoods + pincodes) ──
+   The 25km city circle sweeps in wasteland near the city, so the user can flip
+   to "Specific areas only" and target exact neighbourhoods/pincodes instead.
+   Picking any area auto-flips the mode. Each area carries city_key so downstream
+   geo analysis maps it back to its city. ── */
+function renderAudGeo() {
+  const root = document.getElementById('aud-geo');
+  if (!root || !AUD_STATE) return;
+  const mode = AUD_STATE.geo_mode || 'radius';
+  const modeBtn = (val, label) =>
+    '<button type="button" onclick="setGeoMode(\'' + val + '\')" class="text-xs label-caps px-3 py-2 transition-colors' +
+      (val === 'areas' ? ' border-l border-outline-variant' : '') +
+      (mode === val ? ' bg-primary text-on-primary' : ' hover:bg-surface-container-low') + '">' + label + '</button>';
+  let html = '<div class="flex justify-between items-center mb-2">' +
+      '<label class="label-caps text-outline">Location — ' + esc(AUD_STATE.city || 'city') + '</label>' +
+      '<div class="inline-flex rounded border border-outline-variant overflow-hidden">' +
+        modeBtn('radius', 'City radius') + modeBtn('areas', 'Specific areas') +
+      '</div>' +
+    '</div>';
+  if (mode === 'radius') {
+    html += '<div><label class="text-xs text-on-surface-variant block mb-1">Radius around ' + esc(AUD_STATE.city || 'the city') + ' (km)</label>' +
+      '<input id="aud-radius" type="number" value="' + esc(AUD_STATE.radius_km || 25) + '" min="17" max="80" oninput="AUD_STATE.radius_km=parseInt(this.value,10)||25; enableSaveAudience();" ' +
+      'class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0"/>' +
+      '<p class="text-xs text-on-surface-variant mt-1">Reaches everyone within this circle — simplest, but includes low-value areas on the city’s edge.</p></div>';
+  } else {
+    html += geoAreaEditor('Neighbourhoods', 'neighborhoods', 'neighborhood') +
+            '<div class="mt-3">' + geoAreaEditor('Pincodes', 'zips', 'zip') + '</div>' +
+            '<p class="text-xs text-on-surface-variant mt-2">Delivery is confined to exactly these areas — no city-edge wasteland.</p>';
+  }
+  root.innerHTML = html;
+}
+function geoAreaEditor(label, category, searchType) {
+  const list = AUD_STATE[category] || [];
+  const sugg = AUD_GEO_SUGGEST ? (AUD_GEO_SUGGEST[category] || []) : null;
+  const chosen = new Set(list.map(x => x.key));
+  let sHtml = '';
+  if (sugg && sugg.length) {
+    const avail = sugg.filter(s => !chosen.has(s.key)).slice(0, 12);
+    if (avail.length) {
+      sHtml = '<div class="mt-1.5"><p class="text-[10px] label-caps text-outline mb-1">Suggested for ' + esc(AUD_STATE.city || 'city') + '</p>' +
+        '<div class="flex flex-wrap gap-1.5">' +
+        avail.map(s => '<button type="button" onclick=\'addGeoArea("' + category + '",' + JSON.stringify(s).replace(/'/g, "&#39;") + ')\' ' +
+          'class="text-xs border border-outline-variant rounded-full px-2.5 py-1 hover:bg-primary hover:text-on-primary transition-colors">+ ' + esc(s.name) + '</button>').join('') +
+        '</div></div>';
+    }
+  } else if (sugg === null) {
+    sHtml = '<p class="text-[10px] text-on-surface-variant mt-1">Loading suggestions…</p>';
+  }
+  return '<div>' +
+    '<p class="label-caps text-outline mb-1">' + label + ' (' + list.length + ')</p>' +
+    '<div class="flex flex-wrap gap-2 mb-2">' +
+      (list.map((it, i) => chip(it.name || it.key, "removeGeoArea('" + category + "'," + i + ")")).join('') || '<span class="text-sm text-on-surface-variant">None selected</span>') +
+    '</div>' +
+    '<div class="relative">' +
+      '<input type="text" placeholder="Search to add ' + esc(label.toLowerCase()) + '…" oninput="geoSearchInput(this,\'' + category + '\',\'' + searchType + '\')" ' +
+        'class="w-full text-sm border-0 border-b border-outline-variant bg-transparent py-1.5 focus:border-primary focus:ring-0"/>' +
+      '<div class="aud-search-results absolute z-10 w-full bg-surface-container border border-outline-variant shadow-lg max-h-48 overflow-y-auto hidden"></div>' +
+    '</div>' +
+    sHtml +
+  '</div>';
+}
+function setGeoMode(mode) {
+  AUD_STATE.geo_mode = mode;
+  enableSaveAudience();
+  renderAudGeo();
+}
+
+/* ── Platform: restrict ad delivery to iOS only / Android only / all devices.
+   Maps to Meta's targeting.user_os field (distinct from publisher_platforms,
+   which controls FB/IG placement, not device OS). AutoOptimiser can surface a
+   suggested default here (based on which platform's CPL is actually cheaper on
+   this campaign) but never applies it — the user always picks. */
+function renderAudPlatform() {
+  const root = document.getElementById('aud-platform');
+  if (!root || !AUD_STATE) return;
+  const mode = AUD_STATE.platform_os || 'all';
+  const opt = (val, label) =>
+    '<button type="button" onclick="setPlatformOs(\'' + val + '\')" class="px-3 py-1.5 text-xs rounded label-caps border ' +
+    (mode === val ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant hover:bg-surface-container-low') +
+    '">' + label + '</button>';
+  root.innerHTML =
+    '<div><label class="label-caps text-outline block mb-1">Devices</label>' +
+    '<div class="flex gap-2">' + opt('all', 'All devices') + opt('ios', 'iOS only') + opt('android', 'Android only') + '</div>' +
+    '</div>';
+}
+function setPlatformOs(mode) {
+  AUD_STATE.platform_os = mode;
+  enableSaveAudience();
+  renderAudPlatform();
+}
+function addGeoArea(category, item) {
+  if (!item || !item.key) return;
+  if ((AUD_STATE[category] || []).some(x => x.key === item.key)) return;
+  AUD_STATE[category].push({ key: item.key, name: item.name || item.key,
+                             city_key: item.city_key || AUD_STATE.city_key || '' });
+  AUD_STATE.geo_mode = 'areas';   // picking an area implies areas mode
+  enableSaveAudience();
+  renderAudGeo();
+}
+function removeGeoArea(category, idx) {
+  AUD_STATE[category].splice(idx, 1);
+  enableSaveAudience();
+  renderAudGeo();
+}
+let GEO_SEARCH_TIMER = null;
+function geoSearchInput(input, category, searchType) {
+  const box = input.nextElementSibling;
+  const q = input.value.trim();
+  clearTimeout(GEO_SEARCH_TIMER);
+  if (q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  GEO_SEARCH_TIMER = setTimeout(() => {
+    const region = encodeURIComponent(AUD_STATE.region || '');
+    api('/audience-search?type=' + searchType + '&q=' + encodeURIComponent(q) + '&region=' + region).then(d => {
+      const results = (d.results || []).slice(0, 10);
+      if (!results.length) { box.innerHTML = '<div class="px-3 py-2 text-sm text-on-surface-variant">No matches</div>'; box.classList.remove('hidden'); return; }
+      box.innerHTML = results.map(r => {
+        const item = { key: r.key, name: r.name, city_key: AUD_STATE.city_key || '' };
+        const sub = r.region ? r.region : (r.primary_city || '');
+        return '<button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-surface-container-low" ' +
+          'onclick=\'addGeoArea("' + category + '",' + JSON.stringify(item).replace(/'/g, "&#39;") + '); this.closest(".aud-search-results").classList.add("hidden"); this.closest(".relative").querySelector("input").value="";\'>' +
+          esc(r.name) + (sub ? ' <span class="text-xs text-on-surface-variant">' + esc(sub) + '</span>' : '') + '</button>';
+      }).join('');
+      box.classList.remove('hidden');
+    }).catch(() => {});
+  }, 300);
+}
+function loadGeoSuggestions() {
+  if (AUD_GEO_SUGGEST) { return; }
+  api('/audience-geo-suggest/' + RUN_ID).then(d => {
+    AUD_GEO_SUGGEST = { neighborhoods: d.neighborhoods || [], zips: d.zips || [] };
+    if ((AUD_STATE.geo_mode || 'radius') === 'areas') renderAudGeo();
+  }).catch(() => { AUD_GEO_SUGGEST = { neighborhoods: [], zips: [] }; });
 }
 
 /* ── Structured, editable targeting lists (interests/behaviours/job titles/
@@ -1149,17 +1334,55 @@ function renderAudLists() {
       incomePool.map(e => poolCheckbox(e.name, 'income_clusters', e)).join('') +
       industryPool.map(e => poolCheckbox(e.name, 'industries', e)).join('') +
     '</div></details>';
-  html += '<details class="border-t border-outline-variant/40 pt-3"><summary class="label-caps text-outline cursor-pointer select-none">NRI geography &amp; reach settings</summary>' +
+  const relPool = (AUD_POOL && AUD_POOL.relationship_statuses) || { Married: 3 };
+  const relCount = (AUD_STATE.relationship_statuses || []).length;
+  html += '<details ' + (relCount ? 'open ' : '') + 'class="border-t border-outline-variant/40 pt-3"><summary class="label-caps text-outline cursor-pointer select-none">Life stage' + (relCount ? ' (' + relCount + ')' : '') + '</summary>' +
+    '<div class="mt-3 space-y-2">' +
+      Object.keys(relPool).map(name => relCheckbox(name, relPool[name])).join('') +
+      '<p class="text-xs text-on-surface-variant">Luxury / family buyers usually skew married.</p>' +
+    '</div></details>';
+  const nriSugg = (AUD_POOL && AUD_POOL.nri_suggestions) || [];
+  const nriChosen = new Set(AUD_STATE.nri_countries.map(c => (c || '').toUpperCase()));
+  html += '<details ' + (AUD_STATE.nri_countries.length ? 'open ' : '') + 'class="border-t border-outline-variant/40 pt-3"><summary class="label-caps text-outline cursor-pointer select-none">NRI geography &amp; reach settings' + (AUD_STATE.nri_countries.length ? ' (' + AUD_STATE.nri_countries.length + ')' : '') + '</summary>' +
     '<div class="mt-3 space-y-3">' +
+      (nriSugg.length ? '<div><p class="text-[10px] label-caps text-outline mb-1">High Gujarati / NRI diaspora — tap to add</p>' +
+        '<div class="flex flex-wrap gap-1.5">' +
+          nriSugg.map(s => '<button type="button" onclick="addNri(\'' + esc(s.code) + '\')" ' +
+            'class="text-xs border rounded-full px-2.5 py-1 transition-colors ' +
+            (nriChosen.has(s.code.toUpperCase()) ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant hover:bg-surface-container-low') + '">' +
+            (nriChosen.has(s.code.toUpperCase()) ? '✓ ' : '+ ') + esc(s.label) + '</button>').join('') +
+        '</div></div>' : '') +
       '<div><label class="label-caps text-outline block mb-1">NRI countries (comma-separated codes, e.g. US, AE)</label>' +
-        '<input id="aud-nri" type="text" value="' + esc(AUD_STATE.nri_countries.join(', ')) + '" oninput="enableSaveAudience()" ' +
+        '<input id="aud-nri" type="text" value="' + esc(AUD_STATE.nri_countries.join(', ')) + '" oninput="AUD_STATE.nri_countries=this.value.split(\',\').map(s=>s.trim().toUpperCase()).filter(Boolean); enableSaveAudience()" ' +
         'class="w-full text-sm border-0 border-b border-outline-variant bg-transparent py-1.5 focus:border-primary focus:ring-0"/></div>' +
       '<label class="flex items-center gap-2 text-sm cursor-pointer">' +
-        '<input id="aud-adv" type="checkbox" ' + (AUD_STATE.advantage_plus ? 'checked' : '') + ' onchange="enableSaveAudience()" class="text-primary"/> ' +
+        '<input id="aud-adv" type="checkbox" ' + (AUD_STATE.advantage_plus ? 'checked' : '') + ' onchange="AUD_STATE.advantage_plus=this.checked; enableSaveAudience()" class="text-primary"/> ' +
         'Let Meta auto-expand beyond selected targeting (Advantage+)</label>' +
     '</div></details>';
   html += '</div>';
   root.innerHTML = html;
+}
+function relCheckbox(name, status) {
+  const on = (AUD_STATE.relationship_statuses || []).includes(status);
+  return '<label class="flex items-center gap-2 text-sm cursor-pointer">' +
+    '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="toggleRelationship(' + status + ')" class="text-primary"/> ' +
+    esc(name) + '</label>';
+}
+function toggleRelationship(status) {
+  const arr = AUD_STATE.relationship_statuses || (AUD_STATE.relationship_statuses = []);
+  const i = arr.indexOf(status);
+  if (i >= 0) arr.splice(i, 1); else arr.push(status);
+  enableSaveAudience();
+  renderAudLists();
+}
+function addNri(code) {
+  code = (code || '').toUpperCase();
+  if (!code) return;
+  const arr = AUD_STATE.nri_countries;
+  const i = arr.map(c => c.toUpperCase()).indexOf(code);
+  if (i >= 0) arr.splice(i, 1); else arr.push(code);   // tap toggles
+  enableSaveAudience();
+  renderAudLists();
 }
 const CREATIVE_MODE_HINTS = {
   curated: 'Each variant deploys as its own ad with its own paired image, headline, and body — best for comparing which variant wins.',
@@ -1219,15 +1442,19 @@ function saveAudience() {
     if (v === 'include') included.push(entry);
     else if (v === 'exclude') excluded.push(entry);
   });
-  const cityVal = document.getElementById('aud-city').value;
-  const cityUnchanged = cityVal.trim().toLowerCase() === (AUD_STATE.city || '').trim().toLowerCase();
-  const nriVal = (document.getElementById('aud-nri') || {}).value || AUD_STATE.nri_countries.join(', ');
-  const advVal = document.getElementById('aud-adv') ? document.getElementById('aud-adv').checked : AUD_STATE.advantage_plus;
+  // City is fixed per campaign (set at creation) — the Location block only edits how
+  // it's targeted (radius vs specific areas), so city/city_key/region come from state.
+  const radiusEl = document.getElementById('aud-radius');
+  const nri = (AUD_STATE.nri_countries || []).map(s => (s || '').trim().toUpperCase()).filter(s => /^[A-Z]{2}$/.test(s));
   const payload = {
-    city: cityVal,
-    city_key: cityUnchanged ? AUD_STATE.city_key : null,
-    region: cityUnchanged ? AUD_STATE.region : '',
-    radius_km: parseInt(document.getElementById('aud-radius').value, 10) || 25,
+    city: AUD_STATE.city || '',
+    city_key: AUD_STATE.city_key,
+    region: AUD_STATE.region || '',
+    radius_km: radiusEl ? (parseInt(radiusEl.value, 10) || 25) : (AUD_STATE.radius_km || 25),
+    geo_mode: AUD_STATE.geo_mode || 'radius',
+    neighborhoods: AUD_STATE.neighborhoods || [],
+    zips: AUD_STATE.zips || [],
+    platform_os: AUD_STATE.platform_os || 'all',
     age_min: parseInt(document.getElementById('aud-agemin').value, 10) || 28,
     age_max: parseInt(document.getElementById('aud-agemax').value, 10) || 65,
     interests: AUD_STATE.interests,
@@ -1236,17 +1463,26 @@ function saveAudience() {
     income_clusters: AUD_STATE.income_clusters,
     industries: AUD_STATE.industries,
     relationship_statuses: AUD_STATE.relationship_statuses,
-    nri_countries: nriVal.split(',').map(s => s.trim().toUpperCase()).filter(s => /^[A-Z]{2}$/.test(s)),
-    advantage_plus: advVal,
+    nri_countries: nri,
+    advantage_plus: AUD_STATE.advantage_plus,
     clientele_type: AUD_STATE.clientele_type,
     included_custom_audiences: included,
     excluded_custom_audiences: excluded,
   };
-  if (!cityUnchanged) {
-    toast('City text changed but not re-matched to a Meta location yet — geo targeting may fall back to country-level. Re-select the city via a fresh campaign if you need a different city.');
+  if (payload.geo_mode === 'areas' && !payload.neighborhoods.length && !payload.zips.length) {
+    toast('Specific-areas mode is on but no areas/pincodes are selected — Meta will fall back to the city radius. Add areas or switch back to City radius.');
   }
   api('/audience/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     .then(() => { toast('Audience saved'); enableSaveAudience(); document.getElementById('save-aud-btn').disabled = true; })
+    .catch(e => showError(e.message));
+}
+function saveTargetAudience() {
+  const nameEl = document.getElementById('saved-aud-name');
+  const name = (nameEl ? nameEl.value : '').trim();
+  if (!name) { toast('Enter a name first'); return; }
+  api('/save-target-audience/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }) })
+    .then(() => { toast('Saved audience "' + name + '" created'); renderAudience(); })
     .catch(e => showError(e.message));
 }
 function deploy() {
@@ -1463,151 +1699,5 @@ loadDetail().then(() => { renderVisuals(); showTab('copy'); }).catch(e => {
   document.getElementById('d-sub').textContent = e.message;
 });
 
-// ── Inpaint brush tool ────────────────────────────────────────────────────────
-let _inpaintPromptNum = null;
-let _inpaintSourceFile = null;
-let _inpaintDrawing = false;
-
-function openInpaint(n) {
-  _inpaintPromptNum = n;
-  // Find the currently displayed image file for this prompt
-  const mainImg = document.getElementById('main-img-' + n);
-  if (!mainImg) return;
-  const srcUrl = mainImg.src;
-  // Extract filename from URL like /image/{run_id}/image_4_v2.png?t=...
-  const match = srcUrl.match(/\/image\/[^/]+\/([^?]+)/);
-  _inpaintSourceFile = match ? match[1] : null;
-
-  const srcImg = document.getElementById('inpaint-src-img');
-  srcImg.src = srcUrl;
-
-  clearInpaintMask();
-  document.getElementById('inpaint-prompt').value = '';
-  document.getElementById('inpaint-status').classList.add('hidden');
-
-  const modal = document.getElementById('inpaint-modal');
-  modal.classList.remove('hidden');
-
-  // Size canvas to match the wrap container
-  srcImg.onload = _sizeInpaintCanvas;
-  if (srcImg.complete) _sizeInpaintCanvas();
-}
-
-function _sizeInpaintCanvas() {
-  const wrap = document.getElementById('inpaint-canvas-wrap');
-  const canvas = document.getElementById('inpaint-canvas');
-  canvas.width = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
-  _attachInpaintListeners();
-}
-
-function _attachInpaintListeners() {
-  const canvas = document.getElementById('inpaint-canvas');
-  // Remove old listeners by replacing with clone
-  const fresh = canvas.cloneNode(true);
-  canvas.parentNode.replaceChild(fresh, canvas);
-  const c = document.getElementById('inpaint-canvas');
-
-  function getPos(e) {
-    const r = c.getBoundingClientRect();
-    const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - r.left, y: src.clientY - r.top };
-  }
-  function startDraw(e) { _inpaintDrawing = true; draw(e); }
-  function stopDraw() { _inpaintDrawing = false; }
-  function draw(e) {
-    if (!_inpaintDrawing) return;
-    e.preventDefault();
-    const ctx = c.getContext('2d');
-    const pos = getPos(e);
-    const r = parseInt(document.getElementById('inpaint-brush-size').value) / 2;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(255, 100, 30, 0.55)';
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  c.addEventListener('mousedown', startDraw);
-  c.addEventListener('mousemove', draw);
-  c.addEventListener('mouseup', stopDraw);
-  c.addEventListener('mouseleave', stopDraw);
-  c.addEventListener('touchstart', startDraw, { passive: false });
-  c.addEventListener('touchmove', draw, { passive: false });
-  c.addEventListener('touchend', stopDraw);
-}
-
-function clearInpaintMask() {
-  const canvas = document.getElementById('inpaint-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-
-function closeInpaint() {
-  document.getElementById('inpaint-modal').classList.add('hidden');
-  _inpaintPromptNum = null;
-  _inpaintSourceFile = null;
-}
-
-function applyInpaint() {
-  const prompt = document.getElementById('inpaint-prompt').value.trim();
-  if (!prompt) { alert('Please describe the change you want.'); return; }
-  if (_inpaintPromptNum === null) return;
-
-  // Build mask PNG: white where user painted, black elsewhere
-  const drawCanvas = document.getElementById('inpaint-canvas');
-  const maskCanvas = document.createElement('canvas');
-  maskCanvas.width = drawCanvas.width;
-  maskCanvas.height = drawCanvas.height;
-  const mCtx = maskCanvas.getContext('2d');
-  mCtx.fillStyle = 'black';
-  mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-  // For each painted pixel, write white
-  const src = drawCanvas.getContext('2d').getImageData(0, 0, drawCanvas.width, drawCanvas.height);
-  const dst = mCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-  for (let i = 0; i < src.data.length; i += 4) {
-    if (src.data[i + 3] > 30) { // painted
-      dst.data[i] = 255; dst.data[i+1] = 255; dst.data[i+2] = 255; dst.data[i+3] = 255;
-    }
-  }
-  mCtx.putImageData(dst, 0, 0);
-
-  maskCanvas.toBlob(async (blob) => {
-    const status = document.getElementById('inpaint-status');
-    status.textContent = 'Sending to Ideogram — this takes 30–60 s…';
-    status.classList.remove('hidden');
-
-    const fd = new FormData();
-    fd.append('mask_png', blob, 'mask.png');
-    fd.append('edit_prompt', prompt);
-    if (_inpaintSourceFile) fd.append('source_file', _inpaintSourceFile);
-
-    try {
-      const resp = await fetch('/inpaint/' + RUN_ID + '/' + _inpaintPromptNum, {
-        method: 'POST', body: fd
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-        throw new Error(err.detail || resp.statusText);
-      }
-      const data = await resp.json();
-      if (data.mock) {
-        // Mock mode — show the prompt that would have been sent to Ideogram
-        status.innerHTML =
-          '<strong>MOCK — prompt that would be sent to Ideogram:</strong><br>' +
-          '<pre style="white-space:pre-wrap;font-size:10px;margin-top:4px;max-height:200px;overflow-y:auto;background:var(--md-sys-color-surface-container-low);padding:8px;border-radius:4px">' +
-          data.prompt_sent.replace(/</g,'&lt;') + '</pre>';
-        return; // keep modal open so user can read the prompt
-      }
-      status.textContent = 'Done — new variant saved.';
-      closeInpaint();
-      // Reload visuals so the new variant thumbnail appears
-      await loadDetail();
-      renderVisuals();
-    } catch (err) {
-      status.textContent = 'Error: ' + err.message;
-    }
-  }, 'image/png');
-}
 </script>
 {% endblock %}

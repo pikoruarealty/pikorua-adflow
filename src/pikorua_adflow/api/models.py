@@ -114,6 +114,13 @@ class AudienceSave(BaseModel):
     region: str = ""
     country: str = "IN"
     radius_km: int = 25
+    # Geo model: "radius" (city+radius circle) or "areas" (specific neighbourhoods/
+    # pincodes only). neighborhoods/zips entries are {key,name,city_key}.
+    geo_mode: str = "radius"
+    neighborhoods: list[dict] = Field(default_factory=list)
+    zips: list[dict] = Field(default_factory=list)
+    # Device/OS restriction: "all" (default) | "ios" | "android".
+    platform_os: str = "all"
     age_min: int = 28
     age_max: int = 65
     interests: list[dict] = Field(default_factory=list)
@@ -168,19 +175,19 @@ class CreativeModeReq(BaseModel):
 class GenerateRefVariantPayload(BaseModel):
     reference_filename: str
     mode: str = Field(
-        "remix",
+        "text_only",
         description=(
-            '"remix" — Ideogram remix: preserve reference composition, adapt text. '
-            '"new_scene" — extract reference ad layout, apply to a fresh lifestyle scene.'
+            '"text_only" — edit the reference image in place, changing only headline/price/'
+            'CTA copy; same photo, same scene, same elements. '
+            '"change_scene" — keep the reference ad layout (extracted via vision) but generate '
+            'a brand-new photographic scene. '
+            '"change_elements" — edit the reference image in place, keeping the photo/scene '
+            'but varying secondary elements (badge, CTA style, accent colour, footer).'
         ),
-    )
-    image_weight: float = Field(
-        0.5, ge=0.0, le=1.0,
-        description="remix mode only: 0.0 = ignore reference; 1.0 = maximally preserve layout",
     )
     scene_variant: str = Field(
         "lifestyle_private_retreat",
-        description="new_scene mode only: which lifestyle variant to use for the fresh scene.",
+        description="change_scene mode only: which lifestyle variant to use for the fresh scene.",
     )
     speed: str = "DEFAULT"
     aspect: str = "4x5"

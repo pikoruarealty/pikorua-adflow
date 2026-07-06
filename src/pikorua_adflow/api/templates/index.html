@@ -230,7 +230,7 @@ function poll(runId) {
       setStatus('✓ Your campaign is ready to review.' + sc, 'ok');
       btn.disabled = false;
       loadResults(runId);
-    } else if (s === 'failed') {
+    } else if (s === 'failed' || s === 'failed_resumable') {
       clearInterval(pollTimer);
       setStatus('✗ Something went wrong: ' + esc(data.error || 'unknown error') + '. Please try again.', 'fail');
       btn.disabled = false;

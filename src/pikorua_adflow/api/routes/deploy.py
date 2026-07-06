@@ -171,6 +171,85 @@ def deploy_to_meta(run_id: str):
     return {"run_id": run_id, "deployed": results, "errors": errors, "dropped_locations": dropped}
 
 
+@router.post("/publish-additional-variant/{run_id}/{variant}")
+def publish_additional_variant(run_id: str, variant: int):
+    """Publish one more variant into an already-live campaign as a new ad set.
+
+    Unlike /deploy-to-meta (which always creates a brand-new campaign), this reuses
+    the campaign_id from a prior deploy on this run — for adding creatives/variants
+    added after the campaign already went live, without spinning up a duplicate
+    campaign. Only usable once run["meta_ads"] is non-empty (i.e. already published).
+    """
+    run = cs.require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    brief = run.get("brief", {})
+
+    existing_ads = run.get("meta_ads") or []
+    if not existing_ads:
+        raise HTTPException(status_code=400, detail="This run hasn't been published yet — use Publish campaign first.")
+    existing_campaign_id = next((a.get("campaign_id") for a in existing_ads if a.get("campaign_id")), "")
+    if not existing_campaign_id:
+        raise HTTPException(status_code=400, detail="No campaign_id found on this run's published ads.")
+    if any(a.get("variant") == variant for a in existing_ads):
+        raise HTTPException(status_code=400, detail=f"Variant {variant} is already published on this campaign.")
+
+    meta_copy = cs.effective_meta(review_folder)
+    if variant not in meta_copy:
+        raise HTTPException(status_code=404, detail=f"Variant {variant} not found in this run's copy.")
+
+    from pikorua_adflow.tools.meta_tool import deploy_ad
+    from pikorua_adflow.tools import meta_targeting as _mt
+
+    copy = meta_copy[variant]
+    headline = copy.get("headline", "")
+    body_text = copy.get("body", "")
+
+    v_edits = cs.load_edits(review_folder).get("meta", {}).get(str(variant), {})
+    assigned = v_edits.get("image_num")
+    image_path = None
+    if assigned and (review_folder / "images" / f"image_{assigned}.png").exists():
+        image_path = review_folder / "images" / f"image_{assigned}.png"
+    elif (review_folder / "images" / f"image_{variant}.png").exists():
+        image_path = review_folder / "images" / f"image_{variant}.png"
+
+    audience = cs.effective_audience(review_folder, brief)
+    targeting_spec = _mt.build_targeting_spec(audience)
+    audience_label = _mt.audience_summary(audience)
+    end_time = audience.get("end_time", "")
+
+    try:
+        result = deploy_ad(
+            variant=variant, headline=headline, body=body_text, image_path=image_path,
+            campaign_name=brief.get("property_name", "Pikorua Campaign"),
+            city=brief.get("city", "India"),
+            landing_page_url=brief.get("landing_page_url", "https://pikorua.in/"),
+            daily_budget_inr=int(brief.get("daily_budget_inr", 1000)),
+            cta=brief.get("cta", "GET_QUOTE"),
+            targeting_spec=targeting_spec, audience_label=audience_label, end_time=end_time,
+            campaign_id=existing_campaign_id, adset_id="",
+        )
+    except Exception as exc:
+        from pikorua_adflow.tools.errors import explain_and_log
+        friendly = explain_and_log(f"Publish additional variant {variant}", exc)
+        raise HTTPException(status_code=502, detail=friendly["message"])
+
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    if not dry_run and image_path and image_path.exists():
+        try:
+            import shutil as _shutil
+            REFERENCE_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+            dest = REFERENCE_IMAGES_DIR / f"published_{run_id}_v{variant}.png"
+            _shutil.copy2(image_path, dest)
+            imgs.analyze_reference_image(dest)
+        except Exception:
+            pass
+
+    with RUNS_LOCK:
+        RUNS[run_id].setdefault("meta_ads", []).append(result)
+    save_runs()
+    return {"run_id": run_id, "variant": variant, "deployed": result}
+
+
 @router.post("/refresh-creatives/{run_id}")
 def refresh_creatives(run_id: str, ab: bool = False):
     """
