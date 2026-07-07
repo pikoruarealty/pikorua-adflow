@@ -996,7 +996,7 @@ def _sanitize_targeting_for_write(spec: dict) -> dict:
     geo = out.get("geo_locations")
     if isinstance(geo, dict):
         geo = dict(geo)
-        for geo_type in ("cities", "zips", "regions"):
+        for geo_type in ("cities", "zips", "regions", "neighborhoods"):
             entries = geo.get(geo_type)
             if entries:
                 geo[geo_type] = [{k: v for k, v in e.items()
@@ -1300,6 +1300,27 @@ def add_geo_city(adset_id: str, city_name: str, token: str, *,
     cities.append({"key": str(city["key"]), "radius": int(radius_km),
                    "distance_unit": "kilometer"})
     geo["cities"] = cities
+    new_targeting = dict(live)
+    new_targeting["geo_locations"] = geo
+    return update_adset_targeting(adset_id, new_targeting, token)
+
+
+def add_geo_areas(adset_id: str, areas: list[dict], token: str) -> bool:
+    """Union specific neighbourhood keys into an ad set's existing geo_locations,
+    without touching any city/place/custom_location entries already there. Used by
+    autooptimiser's area-level geo 'add'/'expand' decisions — targets exact localities
+    proven by CRM data instead of a whole city radius. `areas` is [{key, name}, ...]
+    (only `key` is required). Raises on hard PATCH failure."""
+    live = _get(adset_id, token, {"fields": "targeting"}).get("targeting", {}) or {}
+    geo = dict(live.get("geo_locations", {}) or {})
+    existing = list(geo.get("neighborhoods") or [])
+    existing_keys = {str(n.get("key")) for n in existing}
+    for a in areas:
+        k = str(a.get("key") or "")
+        if k and k not in existing_keys:
+            existing.append({"key": k})
+            existing_keys.add(k)
+    geo["neighborhoods"] = existing
     new_targeting = dict(live)
     new_targeting["geo_locations"] = geo
     return update_adset_targeting(adset_id, new_targeting, token)

@@ -566,10 +566,23 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
                            "keep_countries": geo.get("countries", [])})
     for a in georecs.get("add", []):
         slug = a["city"].lower().replace(" ", "_")
-        add(f"add_geo_{slug}", 1, "approve",
-            f"Add {a['city']} — proven buyers you're not targeting",
-            a["reason"],
-            "add_geo_city", {"adset_id": adset_id, "city_name": a["city"]})
+        areas = a.get("suggested_areas") or []
+        if areas:
+            add(f"add_geo_{slug}", 1, "approve",
+                f"Add areas in {a['city']} — proven buyers you're not targeting",
+                a["reason"],
+                "add_geo_areas", {"adset_id": adset_id, "areas": areas, "city_name": a["city"]})
+        else:
+            add(f"add_geo_{slug}", 1, "approve",
+                f"Add {a['city']} — proven buyers you're not targeting",
+                a["reason"],
+                "add_geo_city", {"adset_id": adset_id, "city_name": a["city"]})
+    for e in georecs.get("expand", []):
+        slug = "expand_" + e["city"].lower().replace(" ", "_")
+        add(slug, 1, "approve",
+            f"Target more of {e['city']} — proven areas you're missing",
+            e["reason"],
+            "add_geo_areas", {"adset_id": adset_id, "areas": e["areas"], "city_name": e["city"]})
 
     # Rung 2 (AUTO) — wire the CRM bad-leads exclusion if it exists and isn't attached.
     excl_id = registry.get("exclusion_id")
@@ -846,6 +859,14 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
             mt.add_geo_city(adset_id, params["city_name"], token)
             undo = {"action": "restore_targeting", "adset_id": adset_id, "targeting": before}
             impact = {"summary": f"Added {params['city_name']} to the geo"}
+        elif action == "add_geo_areas":
+            from . import deploy_service as ds
+            before = ds.live_adset_targeting(adset_id, token)
+            areas = params.get("areas", [])
+            mt.add_geo_areas(adset_id, areas, token)
+            undo = {"action": "restore_targeting", "adset_id": adset_id, "targeting": before}
+            area_names = ", ".join(a.get("name", "") for a in areas if a.get("name"))
+            impact = {"summary": f"Added areas: {area_names}" if area_names else "Added areas"}
         elif action == "add_nri":
             from . import deploy_service as ds
             before = ds.live_adset_targeting(adset_id, token)

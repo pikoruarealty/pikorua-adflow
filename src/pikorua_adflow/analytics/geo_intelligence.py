@@ -69,6 +69,99 @@ def performance_by_city(campaign_name: str, crm_leads: list[dict]) -> dict[str, 
     return out
 
 
+# ── Live signal 1b: proven performance per LOCALITY within a city (from your CRM) ──
+def performance_by_area(campaign_name: str, crm_leads: list[dict]) -> dict[str, dict]:
+    """
+    Like performance_by_city but one level finer — groups by (city, current_area)
+    using the lead's own locality field. Only rows carrying a non-empty area are
+    counted, so this naturally returns {} for campaigns/CRMs with no locality data
+    rather than guessing.
+
+    Returns {"{city_norm}::{area_norm}": {"city": str, "area": str, "leads": int, "quality": int}}.
+    """
+    from pikorua_adflow.analytics import crm_analytics as ca
+
+    matched = ca.match_meta_leads(crm_leads, campaign_name)
+    out: dict[str, dict] = {}
+    for raw in matched:
+        norm_row = ca._normalize([raw])[0]
+        city = norm_row.get("city", "").strip()
+        area = norm_row.get("currentarea", "").strip()
+        if not city or not area:
+            continue
+        key = f"{_norm(city)}::{_norm(area)}"
+        bucket = out.setdefault(key, {"city": city.title(), "area": area.title(), "leads": 0, "quality": 0})
+        bucket["leads"] += 1
+        if ca._is_quality(norm_row):
+            bucket["quality"] += 1
+    return out
+
+
+def covered_area_keys(targeting: dict) -> set[str]:
+    """Bare Meta keys of every specifically-targeted area (neighbourhood/zip/place) in a
+    live spec — used so an area-level suggestion never re-offers one already targeted."""
+    geo = (targeting or {}).get("geo_locations", {}) or {}
+    keys: set[str] = set()
+    for coll_name in ("neighborhoods", "zips", "places"):
+        for a in (geo.get(coll_name) or []):
+            k = a.get("key")
+            if k:
+                keys.add(str(k))
+    return keys
+
+
+def area_add_candidates(city_name: str, city_key: str, region: str, campaign_name: str,
+                        crm_leads: list[dict], covered_areas: set[str], token: str,
+                        *, perf_area: dict | None = None, min_quality: int = 1,
+                        max_areas: int = 5) -> list[dict]:
+    """
+    Specific areas to target within `city_name` instead of the whole city. Prefers
+    real CRM-proven localities (from each lead's own `current_area`), resolved to a
+    Meta neighbourhood key and filtered to ones not already covered. When the CRM has
+    no locality data for this city, falls back to Meta's own well-known neighbourhoods
+    for it (flagged source="meta" — a lower-confidence, non-CRM suggestion) rather than
+    returning nothing.
+
+    Returns [{key, name, type, leads, quality, source: "crm"|"meta"}].
+    """
+    from pikorua_adflow.tools import meta_targeting as mt
+
+    perf_area = perf_area if perf_area is not None else performance_by_area(campaign_name, crm_leads)
+    prefix = _norm(city_name) + "::"
+    city_areas = [(k, p) for k, p in perf_area.items()
+                  if k.startswith(prefix) and p["quality"] >= min_quality]
+    city_areas.sort(key=lambda kp: (kp[1]["quality"], kp[1]["leads"]), reverse=True)
+
+    out: list[dict] = []
+    if token and city_areas:
+        cache = mt._load_cache()
+        for _, p in city_areas[: max_areas * 2]:
+            try:
+                hits = mt.search_neighborhoods(p["area"], token, region=region, strict=True, limit=3)
+            except Exception:
+                hits = []
+            hit = hits[0] if hits else None
+            if not hit or str(hit["key"]) in covered_areas:
+                continue
+            out.append({"key": hit["key"], "name": hit["name"], "type": "neighborhood",
+                        "leads": p["leads"], "quality": p["quality"], "source": "crm"})
+            if len(out) >= max_areas:
+                break
+        mt._save_cache(cache)
+    if out:
+        return out
+
+    if token and city_key:
+        try:
+            fallback = mt.suggest_neighborhoods_for_city(city_name, region, city_key, token, limit=max_areas)
+        except Exception:
+            fallback = []
+        out = [{"key": f["key"], "name": f["name"], "type": "neighborhood",
+                "leads": 0, "quality": 0, "source": "meta"} for f in fallback
+               if str(f["key"]) not in covered_areas]
+    return out[:max_areas]
+
+
 # ── Live signal 2: reachable demand for a city (Meta reach estimate) ───────────
 def reach_for_city(city_name: str, base_audience: dict, token: str, account: str,
                    cache: dict | None = None) -> int:
@@ -125,15 +218,26 @@ def covered_city_keys(targeting: dict, saved_audience: dict | None = None) -> se
     "Ahmedabad shown as untargeted while its areas are selected" bug.
 
     Meta's live targeting read gives geo keys, not names, and area-level targeting
-    puts coverage under `neighborhoods`/`zips` (no city entry at all). This unions:
-      • directly-targeted city keys,
+    puts coverage under several different geo_locations collections depending on
+    HOW the areas were picked, not just `neighborhoods`/`zips`. This unions:
+      • directly-targeted city keys (`geo_locations.cities[].key`),
+      • `geo_locations.places[].primary_city_id` — Meta's landmark/POI-radius
+        targeting (e.g. "Paldi, Ahmedabad", "Ambli Bopal Road, Ahmedabad"). This is
+        what Ads-Manager-native "drop a pin on a locality" area picks use, and it
+        carries the covering city's id directly — no AdFlow overlay needed.
+      • `geo_locations.custom_locations[].primary_city_id` — Meta's lat/long-circle
+        targeting, same city-id field.
       • the city_key stamped on each targeted neighbourhood/zip in the saved audience
-        (build_default_audience/audience.json carry it), and
-      • primary_city_id-style hints where present.
+        (build_default_audience/audience.json carry it) — AdFlow's own area picker.
     Callers compare a CRM city's resolved key against this set.
     """
     geo = (targeting or {}).get("geo_locations", {}) or {}
     keys: set[str] = {str(c.get("key")) for c in (geo.get("cities") or []) if c.get("key")}
+    for coll in (geo.get("places") or [], geo.get("custom_locations") or []):
+        for a in coll:
+            ck = a.get("primary_city_id")
+            if ck:
+                keys.add(str(ck))
     # Areas in the live spec are bare keys; the campaign's saved audience is where the
     # area→city_key mapping lives (stamped at selection time).
     aud = saved_audience or {}
@@ -172,10 +276,19 @@ def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
     """
     Produce geo suggestions for one campaign. Returns:
       {
-        "trim": [{city, key, leads, quality, spend_wasted, reason}],  # REVIEW only
-        "add":  [{city, leads, quality, reach, reason}],               # opportunity
+        "trim":   [{city, key, leads, quality, spend_wasted, reason}],           # REVIEW only
+        "add":    [{city, leads, quality, reach, reason, suggested_areas}],       # new-city opportunity
+        "expand": [{city, areas, reason}],                                       # more areas in an
+                                                                                  # already-targeted city
         "has_data": bool,
       }
+
+    Both "add" and "expand" prefer suggesting SPECIFIC areas (neighbourhoods) over a
+    whole city — "add" is for a city not targeted at all; "expand" is for a city
+    that's already covered only through specific areas/places (never a plain city
+    circle), where CRM shows quality leads from OTHER localities in that same city
+    you haven't picked yet. suggested_areas may be empty (no CRM/Meta area resolvable)
+    — the caller falls back to whole-city add in that case.
 
     When campaign_id is supplied, trim cards are enriched with spend_wasted (₹ actually
     spent on that region with no quality result) sourced from Meta's region breakdown.
@@ -190,7 +303,7 @@ def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
     campaign_id = campaign_id or campaign.get("id", "")
     base_audience = base_audience or {}
     perf = performance_by_city(campaign.get("name", ""), crm_leads)
-    result: dict = {"trim": [], "add": [], "has_data": bool(perf)}
+    result: dict = {"trim": [], "add": [], "expand": [], "has_data": bool(perf)}
     if not perf:
         return result  # cold start — stay inclusive, suggest nothing
 
@@ -205,6 +318,7 @@ def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
     country = base_audience.get("country", "IN")
     resolve_cache = None
     key_for_city: dict[str, str] = {}
+    region_for_city: dict[str, str] = {}
     if token:
         from pikorua_adflow.tools import meta_targeting as mt
         resolve_cache = mt._load_cache()
@@ -215,6 +329,7 @@ def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
                 hit = None
             if hit and hit.get("key"):
                 key_for_city[_ck] = str(hit["key"])
+                region_for_city[_ck] = hit.get("region", "")
         mt._save_cache(resolve_cache)
 
     # TRIM (review-only): a TARGETED city with enough leads but zero quality. Framed as a
@@ -257,17 +372,67 @@ def geo_recommendations(campaign: dict, targeting: dict, brief: dict | None,
         and key in key_for_city and key_for_city[key] not in covered
     ]
     add_candidates.sort(key=lambda kp: (kp[1]["quality"], kp[1]["leads"]), reverse=True)
+    perf_area = performance_by_area(campaign.get("name", ""), crm_leads)
+    covered_areas = covered_area_keys(targeting)
     for key, p in add_candidates:
         reach = 0
         if token and account and probes < GEO_MAX_PROBES:
             reach = reach_for_city(p["display"], base_audience, token, account, reach_cache)
             probes += 1
+        suggested_areas = []
+        if token and key_for_city.get(key):
+            try:
+                suggested_areas = area_add_candidates(
+                    p["display"], key_for_city[key], region_for_city.get(key, ""),
+                    campaign.get("name", ""), crm_leads, covered_areas, token,
+                    perf_area=perf_area)
+            except Exception:
+                suggested_areas = []
+        area_note = (f" Proven areas within {p['display']}: "
+                     + ", ".join(a["name"] for a in suggested_areas) + "."
+                     if suggested_areas else "")
         result["add"].append({
             "city": p["display"], "leads": p["leads"], "quality": p["quality"],
-            "reach": reach,
+            "reach": reach, "suggested_areas": suggested_areas,
             "reason": (f"{p['quality']} quality enquir{'y' if p['quality'] == 1 else 'ies'} "
                        f"already came from {p['display']}, but the campaign isn't targeting it. "
                        + (f"~{reach:,} reachable there. " if reach else "")
-                       + "Adding it could open a proven, untapped buyer pool."),
+                       + "Adding it could open a proven, untapped buyer pool."
+                       + area_note),
         })
+
+    # EXPAND: a city already covered, but ONLY through specific areas/places (never a
+    # plain city-radius circle) — check whether CRM shows quality leads from OTHER
+    # localities in that same city that aren't in the currently-targeted area set.
+    # This is the "the property's own city, but more of it" case: it never fires for
+    # a city targeted via a full radius circle, since the whole city is already covered.
+    geo = (targeting or {}).get("geo_locations", {}) or {}
+    direct_city_keys = {str(c.get("key")) for c in (geo.get("cities") or []) if c.get("key")}
+    area_only_city_keys = covered - direct_city_keys
+    city_for_key: dict[str, str] = {}
+    for _ck, _k in key_for_city.items():
+        city_for_key.setdefault(_k, _ck)
+    for area_only_key in area_only_city_keys:
+        city_norm = city_for_key.get(area_only_key)
+        if not city_norm or city_norm not in perf:
+            continue
+        city_display = perf[city_norm]["display"]
+        region = region_for_city.get(city_norm, "")
+        try:
+            candidates = area_add_candidates(
+                city_display, area_only_key, region, campaign.get("name", ""),
+                crm_leads, covered_areas, token, perf_area=perf_area, max_areas=3)
+        except Exception:
+            candidates = []
+        # Only worth surfacing when it's a real CRM-proven gap, not the generic
+        # Meta fallback (that would just be noise for a city you already target).
+        candidates = [c for c in candidates if c.get("source") == "crm"]
+        if candidates:
+            result["expand"].append({
+                "city": city_display, "areas": candidates,
+                "reason": (f"{city_display} is already targeted through specific areas — "
+                           f"your CRM shows quality buyers in {len(candidates)} more "
+                           f"localit{'y' if len(candidates) == 1 else 'ies'} "
+                           f"({', '.join(c['name'] for c in candidates)}) you haven't picked yet."),
+            })
     return result
