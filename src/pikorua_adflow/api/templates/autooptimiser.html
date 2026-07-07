@@ -91,7 +91,7 @@
 
   <div class="flex justify-end items-center gap-3">
     <p id="ap-last-run" class="text-xs text-outline"></p>
-    <button id="ap-refresh" class="label-caps text-xs text-primary border border-primary/30 px-3 py-1.5 hover:bg-primary/5">Refresh data</button>
+    <button id="ap-refresh" class="btn btn-outline">Refresh data</button>
   </div>
 </div>
 {% endblock %}
@@ -241,9 +241,8 @@ function render(d) {
         <p class="font-headline text-xl mb-2">${esc(s.title || '')}</p>
         <p class="text-sm text-on-surface-variant mb-4">${esc(s.detail || '')}</p>
         <div class="flex flex-wrap gap-3 items-center">
-          <button class="bg-error text-on-error label-caps px-5 py-2 hover:opacity-90"
-                  data-strat-approve="${idx}">Approve &amp; Apply</button>
-          <button class="label-caps text-outline hover:text-on-surface" data-dismiss="1">Not now</button>
+          <button class="btn btn-danger" data-strat-approve="${idx}">Approve &amp; Apply</button>
+          <button class="btn btn-ghost" data-dismiss="1">Not now</button>
         </div>`;
       riskyEl.appendChild(card);
     });
@@ -304,7 +303,7 @@ function render(d) {
       const areasBlock = areas.length
         ? `<div class="mb-4 flex flex-wrap gap-2">${chips}</div>`
         : '';
-      actHtml = areasBlock + `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Add these areas</button>`;
+      actHtml = areasBlock + `<button class="btn btn-primary" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Add these areas</button>`;
     } else if (f.action === 'fresh_creative') {
       let freshHref, freshLabel;
       if (f.params && f.params.run_id) {
@@ -316,7 +315,7 @@ function render(d) {
         freshHref = '/portal?mode=rebuild' + adsetParam + nameParam;
         freshLabel = 'Rebuild in AdFlow';
       }
-      actHtml = `<a href="${esc(freshHref)}" class="bg-primary text-on-primary label-caps px-5 py-2 inline-block hover:bg-surface-tint">${esc(freshLabel)}</a>`;
+      actHtml = `<a href="${esc(freshHref)}" class="btn btn-primary">${esc(freshLabel)}</a>`;
     } else if (f.action === 'dayparting') {
       const topDays = (f.params && f.params.top_day_names || []).join(', ');
       const quietDays = (f.params && f.params.quiet_day_names || []).join(', ');
@@ -329,7 +328,7 @@ function render(d) {
         <div class="flex justify-between"><span class="text-on-surface-variant">Based on</span><span class="text-outline">${sample ? sample + ' leads' : '—'}</span></div>
       </div>`;
       card.dataset.breakdown = '1';
-      actHtml = breakdown + `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Apply schedule</button>`;
+      actHtml = breakdown + `<button class="btn btn-primary" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Apply schedule</button>`;
     } else if (f.action === 'lookalike_refresh') {
       const p = f.params || {};
       const meta = `<div class="mb-4 text-sm border border-outline-variant/50 bg-surface-container-low p-3 grid gap-1">
@@ -338,16 +337,16 @@ function render(d) {
         ${p.current_crm_count ? `<div class="flex justify-between"><span class="text-on-surface-variant">CRM today</span><span class="font-medium">${p.current_crm_count.toLocaleString('en-IN')} contacts</span></div>` : ''}
         ${p.growth_pct ? `<div class="flex justify-between"><span class="text-on-surface-variant">Growth</span><span class="font-medium text-ok">+${p.growth_pct}%</span></div>` : ''}
       </div>`;
-      actHtml = meta + `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Refresh now</button>`;
+      actHtml = meta + `<button class="btn btn-primary" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Refresh now</button>`;
     } else {
-      actHtml = `<button class="bg-primary text-on-primary label-caps px-5 py-2 hover:bg-surface-tint" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Do it</button>`;
+      actHtml = `<button class="btn btn-primary" data-apply="${esc(f.campaign_id)}|${esc(f.fix_type)}">Do it</button>`;
     }
 
     card.innerHTML = `
       <p class="font-headline text-xl mb-2">${esc(f.title)}</p>
       <p class="text-sm text-on-surface-variant mb-4">${esc(f.detail)}</p>
       <div class="flex flex-wrap gap-3 items-center">${actHtml}
-        <button class="label-caps text-outline hover:text-on-surface" data-dismiss="1">Not now</button></div>`;
+        <button class="btn btn-ghost" data-dismiss="1">Not now</button></div>`;
     return card;
   }
 
@@ -377,8 +376,8 @@ function render(d) {
     const card = document.createElement('div');
     card.className = 'border border-ok/40 bg-ok/5 p-4 flex justify-between items-start gap-4';
     const undoBtn = e.undoable
-      ? `<button class="label-caps text-outline hover:text-error shrink-0 text-right" title="${esc(UNDO_LABEL[e.fix_type] || 'Undo')}" data-undo="${esc(e.campaign_id)}|${esc(e.fix_type)}">Undo</button>`
-      : `<span class="label-caps text-outline/40 shrink-0 cursor-default" title="This action can't be reversed automatically">Can't undo</span>`;
+      ? `<button class="btn btn-ghost shrink-0 hover:!text-error" title="${esc(UNDO_LABEL[e.fix_type] || 'Undo')}" data-undo="${esc(e.campaign_id)}|${esc(e.fix_type)}">Undo</button>`
+      : `<span class="btn btn-ghost shrink-0 opacity-40 cursor-default" title="This action can't be reversed automatically">Can't undo</span>`;
     const campaignTag = e.campaign_id === '__account__' ? 'Account-wide' : esc(e.campaign_name || e.campaign_id);
     const sourceTag = e.source === 'llm_strategist' ? ' <span class="label-caps text-primary/60 ml-1">AI</span>' : '';
     card.innerHTML = `<div class="min-w-0">
