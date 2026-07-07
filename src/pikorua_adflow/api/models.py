@@ -24,6 +24,7 @@ class CampaignBrief(BaseModel):
     property_description: str = Field("", description="Free-text description of the whole property the user typed. Source for GPT extraction; kept for reference.")
     amenities: list[str] = Field(default_factory=list, description="Concrete, depictable property features (pool, clubhouse, landscaped garden, 4 towers, gold court, spacious 4/5 BHK). Distributed across image variants so each scene shows a different real feature.")
     buyer_type: str = Field("HNI/NRI", description="Target buyer segment: 'HNI', 'NRI', or 'HNI/NRI'")
+    target_clienteles: str = Field("", description="Free-text, client-named buyer segments/professions to GUARANTEE in targeting (e.g. 'NRI investors, doctors, IT professionals'), on top of the automatic targeting logic. Optional.")
     nri_geographies: str = Field("", description="NRI diaspora locations if relevant, e.g. 'UAE, US, UK'")
     campaign_duration_days: int = Field(30, gt=0, description="Campaign flight duration in days")
     landing_page_url: str = Field("https://pikorua.in/", description="URL shown on Lead Gen form Thank You screen")

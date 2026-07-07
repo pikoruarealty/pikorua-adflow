@@ -27,8 +27,11 @@ import re
 _VARIANT_INTENT = {
     "lifestyle_private_retreat":
         "an intimate interior lifestyle moment (a couple/small group at ease); best for "
-        "a private, calm feature — a spacious living room, private terrace, study, or "
-        "a garden/skyline seen through the home's glazing.",
+        "a private, calm feature — a spacious living room, private terrace, study, or a "
+        "balcony overlooking the grounds. If a ground-level feature (garden/pool) is the "
+        "setting, the vantage is a balcony/terrace looking DOWN at it, or the skyline "
+        "through glazing — never a ground-level garden at eye height outside an "
+        "upper-floor window.",
     "lifestyle_social_home":
         "a warm social scene with 2-4 people; best for shared/community amenities — "
         "a clubhouse, lounge, party lawn, dining, rooftop gathering space.",
@@ -99,8 +102,10 @@ def _fallback(amenities: list[str], variant_keys: list[str]) -> dict:
             target = min(order, key=lambda vk: len(assigned.get(vk, [])))
             assigned.setdefault(target, []).append(amen)
     return {
-        vk: f"Build this scene around the property's {', '.join(feats)}. Make it the clear "
-            f"hero of the photograph — a real, specific, on-brief feature, not a generic room."
+        vk: f"Set this scene in or against the property's {', '.join(feats)} — residents "
+            f"enjoying an aspirational moment there, with the feature recognisable as the "
+            f"setting (not a bare facilities shot, and placed with plausible geometry "
+            f"for where it physically sits)."
         for vk, feats in assigned.items()
     }
 
@@ -118,15 +123,26 @@ def _llm(amenities: list[str], variant_keys: list[str], brief: dict) -> dict:
     system = (
         "You are an art-direction planner for a luxury real-estate ad campaign. A property "
         "has several concrete, depictable amenities. You must spread them across the ad "
-        "variants so EACH variant's photograph features a DIFFERENT real amenity — never "
-        "the same feature twice, never a generic scene when a real amenity fits. "
+        "variants so EACH variant's photograph is set in or against a DIFFERENT real "
+        "amenity — never the same feature twice.\n\n"
+        "CRITICAL FRAMING RULE: we are advertising the PROPERTY and the aspirational LIFE "
+        "of its residents — the amenities are supporting evidence, never the subject. "
+        "Every directive you write must describe a resident lifestyle moment WITH the "
+        "amenity as its setting or backdrop, in full luxury styling. "
+        "Write 'a couple at golden hour on their furnished deck, the landscaped garden "
+        "stretching behind them', NOT 'the landscaped garden with children playing'. "
+        "Never produce a directive that reads like a facilities catalogue shot.\n\n"
+        "SPATIAL LOGIC: respect where each feature physically sits. Ground-level features "
+        "(podium garden, ground-floor pool) are seen from within/beside them, or from a "
+        "balcony looking DOWN — never at eye level through an upper-floor window.\n\n"
         "Return ONLY valid JSON: an object mapping each variant_key to one short scene "
-        "directive (1-2 sentences) naming the specific amenity that variant must feature "
-        "and how to shoot it. Match each amenity to the variant best suited to show it "
-        "(see the intents). If there are more variants than amenities, give the extra "
-        "variants a distinct on-brief scene derived from the property type — never repeat "
-        "an amenity. If an amenity clearly suits no listed variant, still place it on its "
-        "closest match. Never invent amenities that are not in the list."
+        "directive (1-2 sentences) naming the specific amenity as the setting of that "
+        "variant's lifestyle moment and how to shoot it. Match each amenity to the "
+        "variant best suited to show it (see the intents). If there are more variants "
+        "than amenities, give the extra variants a distinct on-brief aspirational scene "
+        "derived from the property type — never repeat an amenity. If an amenity clearly "
+        "suits no listed variant, still place it on its closest match. Never invent "
+        "amenities that are not in the list."
     )
     user = (
         f"Property type: {prop_type}\n"

@@ -400,6 +400,7 @@ def effective_audience(review_folder, brief: dict) -> dict:
             nri_geographies=brief.get("nri_geographies", ""),
             clientele_type=brief.get("clientele_type", ""),
             llm_selection=llm_selection,
+            must_include_text=brief.get("target_clienteles", ""),
         )
     except Exception as exc:
         audience = {
@@ -642,11 +643,21 @@ def get_run_detail(run_id: str) -> dict:
 
     images_dir = review_folder / "images"
     existing_images = []
+    image_versions: dict[str, int] = {}
     if images_dir.exists():
-        existing_images = sorted(
-            f.name for f in images_dir.iterdir()
+        img_files = sorted(
+            f for f in images_dir.iterdir()
             if re.match(r"image_(?:\d+(?:_v\d+)?|r\d+(?:_v\d+)?)\.png$", f.name)
         )
+        existing_images = [f.name for f in img_files]
+        # mtime-based cache keys: the frontend appends ?t=<mtime> instead of
+        # Date.now(), so a re-render only re-downloads images that actually
+        # changed on disk (fixes "every generate reloads all other images").
+        for f in img_files:
+            try:
+                image_versions[f.name] = int(f.stat().st_mtime)
+            except OSError:
+                image_versions[f.name] = 0
 
     audience = effective_audience(review_folder, brief)
 
@@ -670,6 +681,7 @@ def get_run_detail(run_id: str) -> dict:
         "email": {"text": email_text, "edited": email_edited},
         "image_prompts": image_prompts,
         "existing_images": existing_images,
+        "image_versions": image_versions,
         "reference_variants": reference_variants,
         "persona_html": md_to_html(persona_text) if persona_text else "",
         "targeting_html": md_to_html(targeting_text) if targeting_text else "",
@@ -888,6 +900,7 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
         "sample_ready": "yes" if brief.sample_ready else "no",
         "cheque_only": "yes" if brief.cheque_only else "no",
         "clientele_type": brief.clientele_type,
+        "target_clienteles": brief.target_clienteles or "none named — use CRM signal / balanced default as today",
         "standout_feature": brief.standout_feature or "none provided — use the thin-brief fallback",
         "amenities": ", ".join(amenities_list) if amenities_list else "none provided",
         "company_name": company_str,

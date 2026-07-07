@@ -102,7 +102,15 @@ DEFAULT_BEHAVIOURS: list[str] = [
 
 # Income cluster — present in ALL 4 active Pikorua campaigns.  The single
 # highest-leverage filter for luxury real estate: India's top-10% earners.
+# NOTE: user_adclusters is now WRITE-DEPRECATED by Meta (subcode 1487122 "invalid
+# broad categories" on any create/update). Kept here for audience-panel display and
+# intent; build_targeting_spec substitutes AFFLUENCE_PROXY_BEHAVIOUR at write time.
 _INCOME_TOP_10 = [{"id": "6661019705983", "name": "Household income (India): Top 10%"}]
+
+# Writable stand-in for the retired income cluster — verified behaviour id that
+# resolves live ("People in India who prefer high-value goods", affluence proxy).
+AFFLUENCE_PROXY_BEHAVIOUR = {"id": "6028974370383",
+                             "name": "People in India who prefer high-value goods"}
 
 # Owner / founder work positions — from the BEST bungalow campaign (₹220/lead).
 # IDs 138434539530345 and 149598488387016 were verified in the ₹220 CPL ad set.
@@ -256,7 +264,7 @@ CLIENTELE_TARGETING_MAP: dict[str, dict] = {
             {"id": "149657818421934",  "name": "Director (business)"},
         ],
         "income_clusters": _INCOME_TOP_10,
-        "age_min": 42, "age_max": 68,
+        "age_min": 42, "age_max": 65,
     },
 
     "nri_investment": {
@@ -457,7 +465,7 @@ CLIENTELE_TARGETING_MAP: dict[str, dict] = {
         "work_positions": _WORK_POSITIONS_OWNERS,
         "industries": _INDUSTRIES_ENTERPRISE,
         "income_clusters": _INCOME_TOP_10,
-        "age_min": 28, "age_max": 68,
+        "age_min": 28, "age_max": 65,
     },
 
     "nri": {
@@ -514,7 +522,7 @@ CLIENTELE_TARGETING_MAP: dict[str, dict] = {
         "work_positions": _WORK_POSITIONS_OWNERS,
         "industries": _INDUSTRIES_ENTERPRISE,
         "income_clusters": _INCOME_TOP_10,
-        "age_min": 28, "age_max": 68,
+        "age_min": 28, "age_max": 65,
     },
 }
 DEFAULT_CLIENTELE = "hni"
@@ -657,11 +665,15 @@ def search_neighborhoods(query: str, token: str, region: str = "", limit: int = 
         the UI shows each result's region so the user disambiguates — Meta sometimes
         mis-tags a valid area's region, e.g. Ahmedabad's "Satellite", so we don't drop).
     """
+    # Over-fetch from Meta: common area names ("Nehru Nagar", "Prahlad Nagar") exist
+    # in a dozen states, and Meta's top-N by its own ranking often EXCLUDES the
+    # campaign's own state entirely — sorting a starved page can't fix that. Pull a
+    # deep page, then rank same-region hits first, then cut to `limit`.
     params = {
         "type": "adgeolocation",
         "location_types": json.dumps(["neighborhood"]),
         "q": query,
-        "limit": limit,
+        "limit": max(limit * 5, 60),
     }
     rl = (region or "").strip().lower()
     out = []
@@ -678,11 +690,13 @@ def search_neighborhoods(query: str, token: str, region: str = "", limit: int = 
         })
     if rl and not strict:
         out.sort(key=lambda n: n.get("region", "").lower() != rl)  # same-region first
-    return out
+    return out[:limit]
 
 
 def search_zips(query: str, token: str, limit: int = 15) -> list[dict]:
-    """Pincode candidates: [{key, name, primary_city, primary_city_id}] (India only)."""
+    """Pincode candidates: [{key, name, area, primary_city, primary_city_id}] (India only).
+    `area` is the locality name(s) served by that pincode (India Post data, cached) —
+    Meta only knows the primary city, which isn't enough to pick between pincodes."""
     params = {
         "type": "adgeolocation",
         "location_types": json.dumps(["zip"]),
@@ -699,7 +713,73 @@ def search_zips(query: str, token: str, limit: int = 15) -> list[dict]:
             "primary_city": d.get("primary_city", ""),
             "primary_city_id": str(d.get("primary_city_id") or ""),
         })
+    _attach_pincode_areas(out)
     return out
+
+
+# ── Pincode → area names (India Post public API, disk-cached) ────────────────
+_PIN_AREA_CACHE_PATH = pathlib.Path("outputs") / "pincode_area_cache.json"
+_PIN_AREA_LOCK = None  # lazily created threading.Lock
+
+
+def _pincode_area_lookup(pin: str) -> str:
+    """Locality names served by an Indian pincode, e.g. 'Nehru Nagar · Ambawadi'.
+    Empty string when the lookup fails — never raises."""
+    url = f"https://api.postalpincode.in/pincode/{urllib.parse.quote(pin)}"
+    try:
+        with urllib.request.urlopen(url, timeout=6) as resp:
+            data = json.loads(resp.read())
+        offices = (data[0].get("PostOffice") or []) if isinstance(data, list) and data else []
+        names: list[str] = []
+        for po in offices:
+            nm = str(po.get("Name") or "").strip()
+            # strip qualifiers India Post appends ("Nehru Nagar (Ahmedabad) S.O")
+            nm = re.sub(r"\s*\((?:[^)]*)\)\s*$", "", nm).strip()
+            if nm and nm not in names:
+                names.append(nm)
+            if len(names) >= 3:
+                break
+        return " · ".join(names)
+    except Exception:
+        return ""
+
+
+def _attach_pincode_areas(zips: list[dict]) -> None:
+    """Stamp an `area` field on each pincode row in place (parallel, cached)."""
+    if not zips:
+        return
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    global _PIN_AREA_LOCK
+    if _PIN_AREA_LOCK is None:
+        _PIN_AREA_LOCK = threading.Lock()
+    try:
+        cache = json.loads(_PIN_AREA_CACHE_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        cache = {}
+
+    pins = []
+    for z in zips:
+        pin = re.sub(r"\D", "", z.get("name", ""))[-6:]
+        z["_pin"] = pin if len(pin) == 6 else ""
+        if z["_pin"] and z["_pin"] not in cache:
+            pins.append(z["_pin"])
+    pins = list(dict.fromkeys(pins))
+    if pins:
+        with ThreadPoolExecutor(max_workers=min(8, len(pins))) as ex:
+            for pin, area in zip(pins, ex.map(_pincode_area_lookup, pins)):
+                if area:  # only cache successes so a transient failure retries later
+                    cache[pin] = area
+        with _PIN_AREA_LOCK:
+            try:
+                _PIN_AREA_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+                _PIN_AREA_CACHE_PATH.write_text(json.dumps(cache, indent=1, ensure_ascii=False),
+                                                encoding="utf-8")
+            except OSError:
+                pass
+    for z in zips:
+        z["area"] = cache.get(z.pop("_pin", ""), "")
 
 
 def suggest_neighborhoods_for_city(city_name: str, region: str, city_key: str,
@@ -756,7 +836,8 @@ def suggest_zips_for_city(city_name: str, city_key: str, region: str, token: str
         for z in hits:
             if z["primary_city_id"] == str(city_key) and z["key"] not in seen:
                 seen.add(z["key"])
-                out.append({"key": z["key"], "name": z["name"], "city_key": str(city_key)})
+                out.append({"key": z["key"], "name": z["name"], "city_key": str(city_key),
+                            "area": z.get("area", "")})
     return sorted(out, key=lambda z: z["name"])[:max_zips]
 
 
@@ -810,7 +891,8 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
                            country: str = "IN",
                            nri_geographies: str = "",
                            clientele_type: str = "",
-                           llm_selection: dict | None = None) -> dict:
+                           llm_selection: dict | None = None,
+                           must_include_text: str = "") -> dict:
     """
     Resolve the curated starting audience for a campaign.
 
@@ -825,6 +907,14 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
     commercial_office) picks the interest/behaviour/age profile so a bungalow HNI
     audience never leaks into a flat campaign. When omitted, the generic
     DEFAULT_INTERESTS list is used (backward-compatible with pre-clientele runs).
+
+    `must_include_text` — a client's free-text named target segments (e.g. "NRI
+    investors, doctors, IT professionals"), typically lifted straight from the
+    property-description prompt. Resolved via resolve_named_segments() and
+    UNIONED into the final interests/behaviours/work_positions as a guaranteed
+    floor — it never replaces the clientele_type/llm_selection targeting, only
+    adds to it. Optional; omitted or unrecognised text leaves the audience
+    exactly as before.
 
     Returns an editable audience dict:
       {city, city_key, region, radius_km, age_min, age_max,
@@ -880,6 +970,24 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
 
         _save_cache(cache)
 
+    if must_include_text:
+        must_include = resolve_named_segments(must_include_text, token)
+        seen_interest_ids = {i["id"] for i in interests}
+        for hit in must_include.get("interests", []):
+            if hit["id"] not in seen_interest_ids:
+                interests.append(hit)
+                seen_interest_ids.add(hit["id"])
+        seen_behaviour_ids = {b["id"] for b in behaviours}
+        for hit in must_include.get("behaviours", []):
+            if hit["id"] not in seen_behaviour_ids:
+                behaviours.append(hit)
+                seen_behaviour_ids.add(hit["id"])
+        seen_wp_ids = {w["id"] for w in work_positions}
+        for wp in must_include.get("work_positions", []):
+            if wp["id"] not in seen_wp_ids:
+                work_positions.append(wp)
+                seen_wp_ids.add(wp["id"])
+
     nri_countries = parse_nri_countries(nri_geographies) if nri_geographies else []
 
     return {
@@ -909,6 +1017,7 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
         "advantage_plus": advantage_plus,
         "nri_countries": nri_countries,
         "clientele_type": (clientele_type or "").strip().lower() or DEFAULT_CLIENTELE,
+        "target_clienteles": (must_include_text or "").strip(),
     }
 
 
@@ -923,17 +1032,33 @@ def build_targeting_spec(audience: dict) -> dict:
     """
     age_min = int(audience.get("age_min") or DEFAULT_AGE_MIN)
     age_max = int(audience.get("age_max") or DEFAULT_AGE_MAX)
+    # Meta's writable range is 18–65 (65 = "65+"); age_max 66+ fails the ad-set
+    # create with INVALID_AGE_MAX (verified live 2026-07-06 with age_max 68).
+    age_min = max(18, min(age_min, 65))
+    age_max = max(age_min, min(age_max, 65))
     country = audience.get("country") or "IN"
 
+    # Advantage+ on by default — Meta expands on interests to find converters.
+    # affordable_luxury profile explicitly sets advantage_plus=False to prevent
+    # cheap form-fillers in that younger/broader audience segment.
+    advantage = 1 if audience.get("advantage_plus", True) else 0
+
     spec: dict[str, Any] = {
-        "age_min": age_min,
-        "age_max": age_max,
-        # Advantage+ on by default — Meta expands on interests to find converters.
-        # Verified safe: ₹220 CPL bungalow uses advantage_audience=1 without locks.
-        # affordable_luxury profile explicitly sets advantage_plus=False to prevent
-        # cheap form-fillers in that younger/broader audience segment.
-        "targeting_automation": {"advantage_audience": 1 if audience.get("advantage_plus", True) else 0},
+        "targeting_automation": {"advantage_audience": advantage},
     }
+    # With Advantage+ audience ON, Meta rejects a hard age_min control above 25
+    # (subcode 1870188, verified live 2026-07-06). The correct API shape — the one
+    # Ads Manager itself writes (see the ₹220 CPL bungalow ad set: age_min 25 +
+    # age_range [35,52]) — is a 25–65 control plus the desired range passed as an
+    # `age_range` SUGGESTION that Meta optimises around. With Advantage+ off, the
+    # range stays a strict control.
+    if advantage and age_min > 25:
+        spec["age_min"] = 25
+        spec["age_max"] = 65
+        spec["age_range"] = [age_min, age_max]
+    else:
+        spec["age_min"] = age_min
+        spec["age_max"] = age_max
 
     city_key = audience.get("city_key")
     nri_countries = [c for c in (audience.get("nri_countries") or []) if c]
@@ -987,11 +1112,17 @@ def build_targeting_spec(audience: dict) -> dict:
     if work_positions:
         group["work_positions"] = work_positions
 
-    # user_adclusters — Meta income / lifestyle clusters; pre-resolved {id, name} dicts.
-    income_clusters = [{"id": str(u["id"]), "name": u.get("name", "")}
-                       for u in audience.get("income_clusters", []) if u.get("id")]
+    # income_clusters (user_adclusters / "Broad Category Clusters") are WRITE-DEPRECATED:
+    # Meta returns them on legacy ad sets but rejects any create/update payload that
+    # contains them with subcode 1487122 "invalid broad categories" (verified live
+    # 2026-07-06 via paused-adset bisect — the id itself still passes /targetingvalidation,
+    # which is why this looked like a placement conflict for so long). We substitute the
+    # closest writable affluence signal instead of silently losing the income filter.
+    income_clusters = [u for u in audience.get("income_clusters", []) if u.get("id")]
     if income_clusters:
-        group["user_adclusters"] = income_clusters
+        existing_ids = {b["id"] for b in group.get("behaviors", [])}
+        if AFFLUENCE_PROXY_BEHAVIOUR["id"] not in existing_ids:
+            group.setdefault("behaviors", []).append(dict(AFFLUENCE_PROXY_BEHAVIOUR))
 
     # industries — Facebook industry segments; pre-resolved {id, name} dicts.
     industries = [{"id": str(ind["id"]), "name": ind.get("name", "")}
@@ -1139,10 +1270,52 @@ _WORK_POSITION_BY_NAME: dict[str, dict] = {
 }
 _CSUITE_TIER_NAMES: set[str] = {w["name"] for w in WORK_POSITION_POOL["csuite_tier"]}
 
-MAX_LLM_INTERESTS = 10
-MAX_LLM_BEHAVIOURS = 4
+MAX_LLM_INTERESTS = 12
+MAX_LLM_BEHAVIOURS = 5
 MAX_CSUITE_WORK_POSITIONS = 2
 MAX_LLM_WORK_POSITIONS = 3
+
+# Floors — an audience thinner than this over-narrows delivery and starves the
+# ad set (the "only 3-4 items per category" complaint). When the LLM's usable
+# picks come in under these, we top up from the baseline lists below.
+MIN_LLM_INTERESTS = 8
+MIN_LLM_BEHAVIOURS = 3
+
+# Signals common to essentially every luxury-property buyer on this account —
+# safe to include in any campaign regardless of clientele. Used to backfill a
+# too-thin LLM selection up to the floors above (order = priority).
+BASELINE_INTERESTS: list[str] = [
+    "Property investing (investing)",
+    "Luxury goods (retail)",
+    "Luxury vehicle (vehicles)",
+    "Luxury Lifestyle (website)",
+    "Investment (business and finance)",
+    "First-class travel (travel and tourism business)",
+    "Apartment (property)",
+    "Gated community (property)",
+    "Investor (investing)",
+    "Wealth management (banking)",
+]
+BASELINE_BEHAVIOURS: list[str] = [
+    "Frequent international travellers",
+    "Engaged shoppers",
+    "People in India who prefer high-value goods",
+]
+
+# Canonical (parenthetical-stripped, lowercased) name → verbatim pool name.
+# The LLM routinely writes "Wealth management" / "Property investing" / "Villa"
+# instead of the pool's "Wealth management (banking)" etc. — a strict verbatim
+# filter silently discarded those picks, which is why final audiences kept
+# coming out much thinner than the LLM's actual selection.
+def _canon_name(name: str) -> str:
+    return re.sub(r"\s*\([^)]*\)\s*$", "", str(name)).strip().lower()
+
+_POOL_INTEREST_BY_CANON: dict[str, str] = {}
+for _nm in (n for names in INTEREST_POOL.values() for n in names):
+    _POOL_INTEREST_BY_CANON.setdefault(_canon_name(_nm), _nm)
+_POOL_BEHAVIOUR_BY_CANON: dict[str, str] = {}
+for _nm in (n for names in BEHAVIOUR_POOL.values() for n in names):
+    _POOL_BEHAVIOUR_BY_CANON.setdefault(_canon_name(_nm), _nm)
 
 # Relationship-status axis (Meta's top-level `relationship_statuses` enum) — an
 # LLM-selectable + UI-editable lever, not a hardcoded default. Luxury real-estate
@@ -1216,9 +1389,24 @@ def resolve_llm_targeting(selection: dict | None, token: str) -> dict | None:
     if not selection:
         return None
 
-    picked_interests = [n for n in (selection.get("interests") or []) if n in _ALL_POOL_INTERESTS]
-    picked_behaviours = [n for n in (selection.get("behaviours") or []) if n in _ALL_POOL_BEHAVIOURS]
-    picked_positions_raw = [n for n in (selection.get("work_positions") or []) if n in _WORK_POSITION_BY_NAME]
+    # Canonical matching: accept a pick when its parenthetical-stripped, lowercased
+    # form matches a pool entry ("Wealth management" → "Wealth management (banking)").
+    # Strict verbatim matching silently discarded most shorthand picks and produced
+    # audiences far thinner than the LLM actually selected.
+    picked_interests = [
+        _POOL_INTEREST_BY_CANON[c] for n in (selection.get("interests") or [])
+        if (c := _canon_name(n)) in _POOL_INTEREST_BY_CANON
+    ]
+    picked_behaviours = [
+        _POOL_BEHAVIOUR_BY_CANON[c] for n in (selection.get("behaviours") or [])
+        if (c := _canon_name(n)) in _POOL_BEHAVIOUR_BY_CANON
+    ]
+    _positions_by_lower = {k.lower(): k for k in _WORK_POSITION_BY_NAME}
+    picked_positions_raw = [
+        _positions_by_lower[str(n).strip().lower()]
+        for n in (selection.get("work_positions") or [])
+        if str(n).strip().lower() in _positions_by_lower
+    ]
 
     if not picked_interests and not picked_behaviours and not picked_positions_raw:
         return None  # nothing usable came back — treat as no selection
@@ -1226,6 +1414,19 @@ def resolve_llm_targeting(selection: dict | None, token: str) -> dict | None:
     # dedupe, preserving order
     picked_interests = list(dict.fromkeys(picked_interests))[:MAX_LLM_INTERESTS]
     picked_behaviours = list(dict.fromkeys(picked_behaviours))[:MAX_LLM_BEHAVIOURS]
+
+    # Backfill to the floors with baseline signals every luxury buyer shares, so a
+    # sparse LLM selection can never ship an over-narrowed audience.
+    for nm in BASELINE_INTERESTS:
+        if len(picked_interests) >= MIN_LLM_INTERESTS:
+            break
+        if nm not in picked_interests:
+            picked_interests.append(nm)
+    for nm in BASELINE_BEHAVIOURS:
+        if len(picked_behaviours) >= MIN_LLM_BEHAVIOURS:
+            break
+        if nm not in picked_behaviours:
+            picked_behaviours.append(nm)
 
     # cap csuite_tier picks at MAX_CSUITE_WORK_POSITIONS, non-csuite picks pass through
     work_positions: list[dict] = []
@@ -1376,6 +1577,185 @@ def interests_from_crm_profiles(top_profiles: list[dict], token: str,
             break
     _save_cache(cache)
     return out
+
+
+# ── Client-named target segment floor (guarantee explicit buyer types) ──────
+# A client's free-text prompt can name specific buyer segments/professions
+# ("target NRI investors, doctors, IT professionals"). These must be a GUARANTEED
+# floor in the final audience — unioned into whatever the automatic clientele
+# profile / AudienceCrew LLM pick already selected, never a replacement for it.
+# Deterministic keyword routing only (no LLM): the client named these segments
+# literally, so resolution should be literal too, not a probabilistic re-guess.
+_SEGMENT_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "IT/Tech": ("it professional", "tech professional", "software engineer", "techie"),
+    "Finance/Banking": ("banker", "banking professional", "finance professional", "financial services"),
+    "Business/Entrepreneur": ("business owner", "entrepreneur", "promoter", "founder", "businessman", "businesswoman"),
+    "Medical/Healthcare": ("doctor", "physician", "surgeon", "medical professional", "healthcare"),
+    "Real Estate": ("real estate", "realtor", "property dealer", "builder"),
+    "Trader/Industrialist": ("trader", "industrialist", "manufacturer", "exporter"),
+    "Government/PSU": ("government employee", "psu employee", "bureaucrat", "civil servant"),
+    "NRI": ("nri", "non-resident indian", "diaspora", "expat", "overseas indian"),
+    "Retired": ("retired", "retiree", "senior citizen"),
+}
+
+# Direct aliases onto WORK_POSITION_POOL names — plural/synonym forms the exact
+# pool names wouldn't otherwise match via substring.
+_SEGMENT_WORK_POSITION_ALIASES: dict[str, str] = {
+    "doctor": "Doctor", "doctors": "Doctor", "physician": "Medical Doctor (MD)",
+    "lawyer": "Lawyer", "lawyers": "Lawyer", "advocate": "Advocate", "advocates": "Advocate",
+    "chartered accountant": "Chartered accountant", "ca ": "Chartered accountant",
+    "government employee": "Government Employee", "government employees": "Government Employee",
+    "cio": "Chief information officer", "it director": "Information Technology Director",
+}
+
+
+def resolve_named_segments(text: str, token: str) -> dict:
+    """
+    Deterministically map a client's free-text named target segments to a
+    targeting FLOOR — interests/behaviours/work_positions that must be present
+    in the final audience regardless of what the automatic clientele/LLM
+    targeting already picked. Callers UNION this into the resolved audience,
+    they never replace it with this.
+
+    Keyword routing only (no LLM) — the client typed these segments literally,
+    so matching should be literal too. Returns {} if `text` is empty or nothing
+    recognisable is named. Never raises.
+    """
+    low = (text or "").strip().lower()
+    if not low:
+        return {}
+
+    interest_names: list[str] = []
+    for industry, kws in _SEGMENT_KEYWORDS.items():
+        if any(kw in low for kw in kws):
+            for nm in _INDUSTRY_TO_INTERESTS.get(industry, []):
+                if nm not in interest_names:
+                    interest_names.append(nm)
+
+    work_position_names: list[str] = []
+    for name in _WORK_POSITION_BY_NAME:
+        if name.lower() in low and name not in work_position_names:
+            work_position_names.append(name)
+    for alias, wp_name in _SEGMENT_WORK_POSITION_ALIASES.items():
+        if alias in low and wp_name in _WORK_POSITION_BY_NAME and wp_name not in work_position_names:
+            work_position_names.append(wp_name)
+
+    behaviour_names: list[str] = []
+    if any(kw in low for kw in _SEGMENT_KEYWORDS["NRI"]):
+        behaviour_names.append("Lived in India (formerly Expats – India)")
+
+    if not interest_names and not work_position_names and not behaviour_names:
+        return {}
+
+    cache = _load_cache()
+    interests: list[dict] = []
+    for nm in interest_names:
+        hit = _best_interest(nm, token, cache)
+        if hit and hit not in interests:
+            interests.append(hit)
+    behaviours: list[dict] = []
+    for nm in behaviour_names:
+        try:
+            hit = _best_behaviour(nm, token, cache)
+        except RuntimeError:
+            hit = None
+        if hit and hit not in behaviours:
+            behaviours.append(hit)
+    _save_cache(cache)
+
+    work_positions: list[dict] = []
+    seen_wp_ids: set[str] = set()
+    for nm in work_position_names:
+        wp = _WORK_POSITION_BY_NAME[nm]
+        if wp["id"] not in seen_wp_ids:
+            work_positions.append(wp)
+            seen_wp_ids.add(wp["id"])
+
+    return {"interests": interests, "behaviours": behaviours, "work_positions": work_positions}
+
+
+def audience_from_targeting_spec(spec: dict, base: dict) -> dict:
+    """
+    Reverse-map a Meta targeting spec (e.g. from a Saved Audience) onto an editable
+    audience dict, starting from `base` (the run's current audience) so anything the
+    spec doesn't carry is preserved. Used by the audience panel's "Apply" action on
+    saved audiences.
+    """
+    aud = dict(base)
+    spec = spec or {}
+
+    # Ages: prefer the Advantage+ age_range suggestion (the real intended range)
+    # over the relaxed 25–65 control.
+    age_range = spec.get("age_range") or []
+    if isinstance(age_range, list) and len(age_range) == 2:
+        aud["age_min"], aud["age_max"] = int(age_range[0]), int(age_range[1])
+    else:
+        if spec.get("age_min"):
+            aud["age_min"] = int(spec["age_min"])
+        if spec.get("age_max"):
+            aud["age_max"] = int(spec["age_max"])
+
+    flex = spec.get("flexible_spec") or []
+    group = flex[0] if flex and isinstance(flex[0], dict) else {}
+
+    def _pairs(items):
+        return [{"id": str(i.get("id")), "name": i.get("name", "")}
+                for i in (items or []) if i.get("id")]
+
+    if group.get("interests"):
+        aud["interests"] = _pairs(group["interests"])
+    if group.get("behaviors"):
+        aud["behaviours"] = _pairs(group["behaviors"])
+    if group.get("work_positions"):
+        aud["work_positions"] = _pairs(group["work_positions"])
+    if group.get("industries"):
+        aud["industries"] = _pairs(group["industries"])
+
+    rel = spec.get("relationship_statuses") or group.get("relationship_statuses")
+    if rel:
+        aud["relationship_statuses"] = [int(r) for r in rel if str(r).isdigit()]
+
+    user_os = [str(o).lower() for o in (spec.get("user_os") or [])]
+    if "ios" in user_os:
+        aud["platform_os"] = "ios"
+    elif "android" in user_os:
+        aud["platform_os"] = "android"
+
+    ta = spec.get("targeting_automation") or {}
+    if "advantage_audience" in ta:
+        aud["advantage_plus"] = bool(ta.get("advantage_audience"))
+
+    geo = spec.get("geo_locations") or {}
+    cities = geo.get("cities") or []
+    if cities:
+        c = cities[0]
+        aud["city_key"] = str(c.get("key", "")) or aud.get("city_key")
+        if c.get("name"):
+            aud["city"] = c["name"]
+        if c.get("region"):
+            aud["region"] = c["region"]
+        if c.get("radius"):
+            aud["radius_km"] = int(c["radius"])
+    nbh = [{"key": str(n.get("key")), "name": n.get("name", str(n.get("key", "")))}
+           for n in (geo.get("neighborhoods") or []) if n.get("key")]
+    zps = [{"key": str(z.get("key")), "name": z.get("name", str(z.get("key", "")))}
+           for z in (geo.get("zips") or []) if z.get("key")]
+    if nbh or zps:
+        aud["neighborhoods"] = nbh
+        aud["zips"] = zps
+        aud["geo_mode"] = "areas"
+    elif cities:
+        aud["geo_mode"] = "radius"
+    countries = [c for c in (geo.get("countries") or []) if c and c != "IN"]
+    if countries:
+        aud["nri_countries"] = countries
+
+    if spec.get("custom_audiences"):
+        aud["included_custom_audiences"] = _pairs(spec["custom_audiences"])
+    if spec.get("excluded_custom_audiences"):
+        aud["excluded_custom_audiences"] = _pairs(spec["excluded_custom_audiences"])
+
+    return aud
 
 
 def audience_summary(audience: dict) -> str:

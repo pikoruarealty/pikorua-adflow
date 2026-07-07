@@ -42,7 +42,7 @@ COPY_SCORECARD_PATH = OUTPUT_DIR / "copy_scorecard.md"
 TARGETING_BRIEF_PATH = OUTPUT_DIR / "targeting_brief.md"
 
 # Brand/reference example imagery shipped with the repo
-LOGO_DIR = REPO_ROOT / "project_context" / "ad_images_examples"
+LOGO_DIR = STATIC_DIR
 
 # ── Currency ─────────────────────────────────────────────────────────────────
 # Meta Ads insights are returned in USD; the portal shows INR everywhere.

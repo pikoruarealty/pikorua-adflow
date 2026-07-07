@@ -32,6 +32,9 @@
   <section id="tab-audience" class="tab-panel hidden"></section>
   <section id="tab-optimise" class="tab-panel hidden"></section>
 
+  <!-- Persistent next-step footer (lives outside the panels so re-renders can't wipe it) -->
+  <div id="tab-nav" class="mt-10 pt-4 border-t border-outline-variant flex justify-between items-center"></div>
+
 </div>
 
 <div id="lightbox" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center" onclick="closeLightbox()">
@@ -48,8 +51,37 @@ let DETAIL = null;
 const selected = new Set();
 const loaded = {};
 const generating = new Set();
+const PAGE_TS = Date.now();
+
+/* Image URL with an mtime-based cache key: the URL only changes when the file
+   actually changed on disk, so re-rendering the tab (after a generate or an
+   assignment) does NOT force the browser to re-download every other image. */
+function imgUrl(fname) {
+  const v = (DETAIL && DETAIL.image_versions && DETAIL.image_versions[fname]) || PAGE_TS;
+  return '/image/' + RUN_ID + '/' + fname + '?t=' + v;
+}
 
 /* ── Tabs ── */
+const TAB_ORDER = ['copy', 'visuals', 'audience', 'optimise'];
+const TAB_LABELS = { copy: 'Copy', visuals: 'Visuals', audience: 'Audience & Deploy', optimise: 'Optimise' };
+function renderTabNav(name) {
+  const nav = document.getElementById('tab-nav');
+  if (!nav) return;
+  const i = TAB_ORDER.indexOf(name);
+  const prev = i > 0 ? TAB_ORDER[i - 1] : null;
+  const next = i >= 0 && i < TAB_ORDER.length - 1 ? TAB_ORDER[i + 1] : null;
+  nav.innerHTML =
+    (prev
+      ? '<button onclick="showTab(\'' + prev + '\'); window.scrollTo({top:0,behavior:\'smooth\'});" ' +
+        'class="label-caps border border-outline rounded px-4 py-2 hover:bg-surface-container-low transition-colors inline-flex items-center gap-1.5">' +
+        '<span class="material-symbols-outlined text-[15px]">arrow_back</span> ' + TAB_LABELS[prev] + '</button>'
+      : '<span></span>') +
+    (next
+      ? '<button onclick="showTab(\'' + next + '\'); window.scrollTo({top:0,behavior:\'smooth\'});" ' +
+        'class="label-caps bg-primary text-on-primary rounded px-5 py-2 hover:bg-surface-tint transition-colors inline-flex items-center gap-1.5">' +
+        'Next: ' + TAB_LABELS[next] + ' <span class="material-symbols-outlined text-[15px]">arrow_forward</span></button>'
+      : '<span></span>');
+}
 function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
   document.getElementById('tab-' + name).classList.remove('hidden');
@@ -60,6 +92,7 @@ function showTab(name) {
     t.classList.toggle('border-primary', on);
     t.classList.toggle('text-on-surface-variant', !on);
   });
+  renderTabNav(name);
   if (name === 'audience' && !loaded.audience) renderAudience();
   if (name === 'optimise' && !loaded.optimise) renderOptimise();
   if (name === 'visuals') rerenderAssignment();
@@ -325,7 +358,7 @@ function renderVisuals() {
     const isOptIn = !!p.opt_in;
     html += '<div class="border ' + (isOptIn ? 'border-outline border-dashed' : 'border-outline-variant') + ' flex flex-col bg-surface-container-lowest">' +
       '<div id="img-wrap-' + p.num + '" class="aspect-[3/4] bg-surface-container-low overflow-hidden relative">' +
-        (latestFile ? '<img id="main-img-' + p.num + '" src="/image/' + RUN_ID + '/' + latestFile + '?t=' + Date.now() + '" onclick="openLightbox(this.src, ' + p.num + ')" class="w-full h-full object-cover cursor-zoom-in"/>'
+        (latestFile ? '<img id="main-img-' + p.num + '" src="' + imgUrl(latestFile) + '" onclick="openLightbox(this.src, ' + p.num + ')" class="w-full h-full object-cover cursor-zoom-in"/>'
                     : '<div class="w-full h-full flex flex-col items-center justify-center gap-1.5 label-caps text-outline text-[10px]">' +
                       (isOptIn ? '<span class="material-symbols-outlined text-[20px] text-outline">add_photo_alternate</span><span>Optional — select to generate</span>' : 'No image yet') +
                       '</div>') +
@@ -338,7 +371,7 @@ function renderVisuals() {
       // Show base image as first thumb when variants exist so user can navigate back to it
       if (has) {
         html += '<div class="relative group w-10 h-12 shrink-0" data-file="' + imgName + '">' +
-          '<img src="/image/' + RUN_ID + '/' + imgName + '?t=' + Date.now() + '" onclick="swapMainImg(' + p.num + ',\'' + imgName + '\')" class="w-full h-full object-cover border border-outline-variant cursor-pointer hover:opacity-90 transition-opacity" title="Original"/>' +
+          '<img src="' + imgUrl(imgName) + '" onclick="swapMainImg(' + p.num + ',\'' + imgName + '\')" class="w-full h-full object-cover border border-outline-variant cursor-pointer hover:opacity-90 transition-opacity" title="Original"/>' +
           (sortedVariants.length ? '<button onclick="deleteVariantImage(\'' + imgName + '\')" title="Delete original" ' +
             'class="absolute -top-1 -right-1 w-4 h-4 bg-surface border border-outline-variant text-error flex items-center justify-center text-[9px] leading-none opacity-0 group-hover:opacity-100 transition-opacity">×</button>' : '') +
         '</div>';
@@ -346,7 +379,7 @@ function renderVisuals() {
       sortedVariants.forEach(vf => {
         const isSelected = vf === latestFile;
         html += '<div class="relative group w-10 h-12 shrink-0" data-file="' + vf + '">' +
-          '<img src="/image/' + RUN_ID + '/' + vf + '?t=' + Date.now() + '" onclick="swapMainImg(' + p.num + ',\'' + vf + '\')" class="w-full h-full object-cover border cursor-pointer hover:opacity-90 transition-opacity ' + (isSelected ? 'border-primary ring-1 ring-primary' : 'border-outline-variant') + '"/>' +
+          '<img src="' + imgUrl(vf) + '" onclick="swapMainImg(' + p.num + ',\'' + vf + '\')" class="w-full h-full object-cover border cursor-pointer hover:opacity-90 transition-opacity ' + (isSelected ? 'border-primary ring-1 ring-primary' : 'border-outline-variant') + '"/>' +
           '<button onclick="deleteVariantImage(\'' + vf + '\')" title="Remove variant" ' +
             'class="absolute -top-1 -right-1 w-4 h-4 bg-surface border border-outline-variant text-error flex items-center justify-center text-[9px] leading-none opacity-0 group-hover:opacity-100 transition-opacity">×</button>' +
         '</div>';
@@ -416,7 +449,7 @@ function renderVisuals() {
       const refLabel = meta.reference_filename ? 'Based on: ' + esc(meta.reference_filename) + modeTag : 'Ref variant';
       html += '<div class="border border-outline-variant flex flex-col bg-surface-container-lowest">' +
         '<div class="aspect-[3/4] bg-surface-container-low overflow-hidden">' +
-          '<img src="/image/' + RUN_ID + '/' + fname + '?t=' + Date.now() + '" onclick="openLightbox(this.src)" class="w-full h-full object-cover cursor-zoom-in"/>' +
+          '<img src="' + imgUrl(fname) + '" onclick="openLightbox(this.src)" class="w-full h-full object-cover cursor-zoom-in"/>' +
         '</div>' +
         '<div class="p-3 flex flex-col gap-1.5">' +
           '<p class="label-caps text-outline text-[10px] truncate" title="' + refLabel + '">' + refLabel + '</p>' +
@@ -692,7 +725,7 @@ function deleteMainImage(n) {
 }
 function swapMainImg(n, fname) {
   const main = document.getElementById('main-img-' + n);
-  if (main) main.src = '/image/' + RUN_ID + '/' + fname + '?t=' + Date.now();
+  if (main) main.src = imgUrl(fname);
   document.querySelectorAll('#thumbs-' + n + ' img').forEach(t => {
     t.classList.remove('ring-1', 'ring-primary', 'border-primary');
     t.classList.add('border-outline-variant');
@@ -903,7 +936,7 @@ function buildAssignmentInner() {
       h += '<div class="border border-outline-variant bg-surface-container-lowest p-3 flex gap-3 items-start">' +
         '<div class="w-14 h-[72px] shrink-0 bg-surface-container-low border border-outline-variant overflow-hidden">' +
           (imgExists
-            ? '<img src="/image/' + RUN_ID + '/' + imgName + '?t=' + Date.now() + '" class="w-full h-full object-cover cursor-zoom-in" onclick="openLightbox(this.src)"/>'
+            ? '<img src="' + imgUrl(imgName) + '" class="w-full h-full object-cover cursor-zoom-in" onclick="openLightbox(this.src)"/>'
             : '<div class="w-full h-full flex items-center justify-center"><span class="material-symbols-outlined text-outline text-[20px]">image_not_supported</span></div>') +
         '</div>' +
         '<div class="flex-1 min-w-0">' +
@@ -964,7 +997,24 @@ function renderAudience() {
       clientele_type: a.clientele_type || '',
     };
     AUD_GEO_SUGGEST = null;
-    const allMetaAudiences = metaD.audiences || [];
+    // Relevance: an audience whose name shares tokens with this campaign's
+    // city/locality/property is almost certainly the one meant for it.
+    const briefB = (DETAIL && DETAIL.brief) || {};
+    const briefTokens = [briefB.city, briefB.locality, briefB.property_name, briefB.property_type,
+                         AUD_STATE.clientele_type]
+      .filter(Boolean).join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 3);
+    const relevance = name => {
+      const n = (name || '').toLowerCase();
+      return briefTokens.some(t => n.includes(t));
+    };
+    const roleHint = m =>
+      m.role === 'exclusion' ? '<span class="label-caps text-[9px] text-error ml-1">bad leads — suggest Exclude</span>'
+      : m.role === 'lookalike' ? '<span class="label-caps text-[9px] text-ok ml-1">expansion — suggest Include</span>'
+      : m.role === 'seed' ? '<span class="label-caps text-[9px] text-on-surface-variant ml-1">CRM seed</span>' : '';
+    const matchChip = m => relevance(m.name)
+      ? '<span class="label-caps text-[9px] text-primary ml-1">★ matches campaign</span>' : '';
+    const bySuggested = (x, y) => (relevance(y.name) - relevance(x.name));
+    const allMetaAudiences = (metaD.audiences || []).slice().sort(bySuggested);
     const metaAudiences = allMetaAudiences.filter(m => m.subtype !== 'LOOKALIKE');
     const lookalikeAudiences = allMetaAudiences.filter(m => m.subtype === 'LOOKALIKE');
     const lookalikeRegistry = {};
@@ -1000,7 +1050,8 @@ function renderAudience() {
           return base + accent;
         };
         html += '<div class="flex items-center justify-between gap-2 text-sm py-1 border-b border-outline-variant/30">' +
-          '<span class="truncate">' + esc(m.name) + ' <span class="label-caps text-outline text-[10px]">' + esc(m.subtype) + '</span></span>' +
+          '<span class="truncate">' + esc(m.name) + ' <span class="label-caps text-outline text-[10px]">' + esc(m.subtype) + '</span>' +
+            matchChip(m) + roleHint(m) + '</span>' +
           '<div class="aud-meta-audience inline-flex rounded border border-outline-variant overflow-hidden flex-shrink-0"' +
             ' data-id="' + esc(m.id) + '" data-name="' + esc(m.name) + '" data-val="' + esc(cur) + '">' +
             '<button class="' + btnCls('include', 'Include', true) + '" data-val="include" onclick="toggleMetaAud(this)">Include</button>' +
@@ -1036,7 +1087,7 @@ function renderAudience() {
         }
         html += '<div class="py-1 border-b border-outline-variant/30">' +
           '<div class="flex items-center justify-between gap-2 text-sm">' +
-          '<span class="truncate">' + esc(m.name) + '</span>' +
+          '<span class="truncate">' + esc(m.name) + matchChip(m) + roleHint(m) + '</span>' +
           '<div class="aud-meta-audience inline-flex rounded border border-outline-variant overflow-hidden flex-shrink-0"' +
             ' data-id="' + esc(m.id) + '" data-name="' + esc(m.name) + '" data-val="' + esc(cur) + '">' +
             '<button class="' + btnCls('include', 'Include', true) + '" data-val="include" onclick="toggleMetaAud(this)">Include</button>' +
@@ -1047,15 +1098,19 @@ function renderAudience() {
       });
       html += '</div></div>';
     }
-    const savedAudiences = savedD.audiences || [];
+    const savedAudiences = (savedD.audiences || []).slice().sort(bySuggested);
     html += '<div class="mt-4"><p class="label-caps text-outline mb-2">Saved audiences (Meta targeting-spec)</p>' +
-      '<p class="text-xs text-on-surface-variant mb-2">A reusable Meta Saved Audience — distinct from Custom/Lookalike above, applies this run\'s full targeting spec directly to future ad sets.</p>';
+      '<p class="text-xs text-on-surface-variant mb-2">Reusable Meta Saved Audiences — click Apply to load one\'s full targeting (interests, ages, geo, platform) into this campaign\'s audience for review before publish.</p>';
     if (savedAudiences.length) {
       html += '<div class="space-y-1 max-h-32 overflow-y-auto pr-1 mb-2">';
       savedAudiences.forEach(m => {
         html += '<div class="flex items-center justify-between gap-2 text-sm py-1 border-b border-outline-variant/30">' +
-          '<span class="truncate">' + esc(m.name) + '</span>' +
-          '<span class="label-caps text-outline text-[10px] flex-shrink-0">' + (m.approximate_count || 0).toLocaleString() + '</span>' +
+          '<span class="truncate">' + esc(m.name) + matchChip(m) + '</span>' +
+          '<span class="flex items-center gap-2 flex-shrink-0">' +
+            '<span class="label-caps text-outline text-[10px]">' + (m.approximate_count || 0).toLocaleString() + '</span>' +
+            '<button onclick="applySavedAudience(\'' + esc(m.id) + '\', this)" ' +
+              'class="label-caps text-[10px] border border-outline rounded px-2 py-0.5 hover:bg-primary hover:text-on-primary transition-colors">Apply</button>' +
+          '</span>' +
         '</div>';
       });
       html += '</div>';
@@ -1139,8 +1194,12 @@ function geoAreaEditor(label, category, searchType) {
     if (avail.length) {
       sHtml = '<div class="mt-1.5"><p class="text-[10px] label-caps text-outline mb-1">Suggested for ' + esc(AUD_STATE.city || 'city') + '</p>' +
         '<div class="flex flex-wrap gap-1.5">' +
-        avail.map(s => '<button type="button" onclick=\'addGeoArea("' + category + '",' + JSON.stringify(s).replace(/'/g, "&#39;") + ')\' ' +
-          'class="text-xs border border-outline-variant rounded-full px-2.5 py-1 hover:bg-primary hover:text-on-primary transition-colors">+ ' + esc(s.name) + '</button>').join('') +
+        avail.map(s => {
+          const sLabel = s.area ? s.name + ' — ' + s.area : s.name;
+          const sItem = Object.assign({}, s, { name: sLabel });
+          return '<button type="button" onclick=\'addGeoArea("' + category + '",' + JSON.stringify(sItem).replace(/'/g, "&#39;") + ')\' ' +
+            'class="text-xs border border-outline-variant rounded-full px-2.5 py-1 hover:bg-primary hover:text-on-primary transition-colors" title="' + esc(s.area || '') + '">+ ' + esc(sLabel) + '</button>';
+        }).join('') +
         '</div></div>';
     }
   } else if (sugg === null) {
@@ -1214,8 +1273,11 @@ function geoSearchInput(input, category, searchType) {
       const results = (d.results || []).slice(0, 10);
       if (!results.length) { box.innerHTML = '<div class="px-3 py-2 text-sm text-on-surface-variant">No matches</div>'; box.classList.remove('hidden'); return; }
       box.innerHTML = results.map(r => {
-        const item = { key: r.key, name: r.name, city_key: AUD_STATE.city_key || '' };
-        const sub = r.region ? r.region : (r.primary_city || '');
+        // Pincodes carry an `area` (locality names from India Post) — bake it into the
+        // saved chip's name so "380015 — Nehru Nagar" survives into the audience list.
+        const label = r.area ? r.name + ' — ' + r.area : r.name;
+        const item = { key: r.key, name: label, city_key: AUD_STATE.city_key || '' };
+        const sub = [r.area, r.region || r.primary_city].filter(Boolean).join(' · ');
         return '<button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-surface-container-low" ' +
           'onclick=\'addGeoArea("' + category + '",' + JSON.stringify(item).replace(/'/g, "&#39;") + '); this.closest(".aud-search-results").classList.add("hidden"); this.closest(".relative").querySelector("input").value="";\'>' +
           esc(r.name) + (sub ? ' <span class="text-xs text-on-surface-variant">' + esc(sub) + '</span>' : '') + '</button>';
@@ -1484,6 +1546,13 @@ function saveTargetAudience() {
     body: JSON.stringify({ name }) })
     .then(() => { toast('Saved audience "' + name + '" created'); renderAudience(); })
     .catch(e => showError(e.message));
+}
+function applySavedAudience(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
+  api('/apply-saved-audience/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }) })
+    .then(d => { toast('Applied "' + (d.applied || 'saved audience') + '" — review the fields, then Save'); renderAudience(); })
+    .catch(e => { if (btn) { btn.disabled = false; btn.textContent = 'Apply'; } showError(e.message); });
 }
 function deploy() {
   const el = document.getElementById('deploy-status');

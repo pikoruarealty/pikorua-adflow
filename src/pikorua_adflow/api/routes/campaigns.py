@@ -33,13 +33,14 @@ def extract_property_brief(payload: ExtractBriefReq):
 Extract these keys:
 - property_name: the project/building name if stated, else a short descriptive label (e.g. "4 & 5 BHK riverside apartments"). Never invent a brand.
 - property_type: the dwelling type as a short noun phrase (e.g. "luxury apartment", "4 BHK villa", "penthouse"). Include the BHK config here if mentioned.
-- city: the city, if stated.
-- locality: the specific area/neighbourhood within the city, if stated.
+- city: the city. If not stated directly, infer it from a named locality when the locality is unambiguous in India (e.g. "Nehrunagar" or "Satellite" → "Ahmedabad", "Bandra" → "Mumbai", "Koramangala" → "Bengaluru", "GIFT City" → "Gandhinagar"). Empty string only if genuinely unknown.
+- locality: the specific area/neighbourhood within the city. IMPORTANT: place names are often embedded in the project label — in "Nehrunagar apartments" or "Bopal 3 BHK flats", the first word is the LOCALITY, not (only) a brand. Always pull such an embedded place name out into this field (the label can still serve as property_name). Normalise spacing/casing (e.g. "nehrunagar" → "Nehru Nagar").
 - price_cr: price in crores as the user expressed it (e.g. "3.5", "3-4.5", "3 for 4 bhk and 4.5 for 5 bhk onwards"). Empty string if no price given.
 - standout_feature: the single most marketable differentiator in one short phrase.
 - amenities: an ARRAY of concrete, VISUALLY DEPICTABLE features — things a photograph could show. Each item is a short phrase. Examples: "rooftop infinity pool", "club-class amenities on ground floor", "landscaped garden between 4 towers", "30-storey towers", "gold/sports court", "spacious 4 & 5 BHK apartments", "double-height living room", "private terrace". Split compound descriptions into separate items. Exclude abstract selling points (e.g. "great investment", "prime location") — only physical, shootable features. Empty array if none.
 - sample_ready: true only if the text says a sample flat/show home is ready to view.
 - cheque_only: true only if the text says 100% cheque / white payment / no cash.
+- target_clienteles: a short comma-separated string naming any specific buyer segments/professions/communities the marketer explicitly wants targeted (e.g. "NRI investors, doctors, IT professionals, Gujarati diaspora"). Only include this if the text actually names who to target — do not infer a buyer persona from the property itself. Empty string if none mentioned.
 
 Never fabricate values that are not supported by the text. Use "" or [] or false when unknown."""
     model = os.getenv("MODEL", "openrouter/openai/gpt-4o-mini")
@@ -73,6 +74,7 @@ Never fabricate values that are not supported by the text. Use "" or [] or false
         "amenities": amenities,
         "sample_ready": bool(data.get("sample_ready", False)),
         "cheque_only": bool(data.get("cheque_only", False)),
+        "target_clienteles": _s("target_clienteles"),
     }
 
 

@@ -133,6 +133,10 @@
           <label class="label-caps text-outline block mb-1" for="nri_geographies">Which countries? <span class="text-outline-variant normal-case">(if NRI)</span></label>
           <input id="nri_geographies" name="nri_geographies" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. UAE, US, UK"/>
         </div>
+        <div class="md:col-span-2">
+          <label class="label-caps text-outline block mb-1" for="target_clienteles">Specific clienteles to target <span class="text-outline-variant normal-case">(optional — guaranteed included, on top of our automatic targeting)</span></label>
+          <input id="target_clienteles" name="target_clienteles" class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0" placeholder="e.g. NRI investors, doctors, IT professionals"/>
+        </div>
       </div>
     </section>
 
@@ -333,6 +337,7 @@ function extractBrief() {
       setVal('locality', d.locality);
       setVal('price_cr', d.price_cr);
       setVal('standout_feature', d.standout_feature);
+      setVal('target_clienteles', d.target_clienteles);
       if (Array.isArray(d.amenities)) document.getElementById('amenities').value = d.amenities.join('\n');
       document.getElementById('sample_ready').checked = !!d.sample_ready;
       document.getElementById('cheque_only').checked = !!d.cheque_only;
@@ -366,6 +371,7 @@ form.addEventListener('submit', function (e) {
     property_type: form.property_type.value.trim(), price_cr: form.price_cr.value.trim(),
     standout_feature: form.standout_feature.value.trim(), buyer_type: form.buyer_type.value,
     nri_geographies: form.nri_geographies.value.trim(),
+    target_clienteles: form.target_clienteles.value.trim(),
     campaign_duration_days: parseInt(form.campaign_duration_days.value, 10),
     landing_page_url: form.landing_page_url.value.trim() || 'https://pikorua.in/',
     daily_budget_inr: parseInt(form.daily_budget_inr.value, 10) || 1000,

@@ -141,6 +141,13 @@ select_targeting:
     ₹{price_cr} Cr in {city}{locality_suffix}, for buyer type {buyer_type}
     (goal: {goal}). 100% cheque payment only (no cash component accepted): {cheque_only}.
 
+    CLIENT-NAMED TARGET SEGMENTS (if any): {target_clienteles}
+    These are guaranteed to be added to the final audience separately by code —
+    you do not need to resolve them yourself. Your job is to make sure your OWN
+    picks below are consistent with them (e.g. don't pick a pure young-investor
+    age band if the client named "retired NRI buyers") and to layer on sensible
+    extra targeting around them, exactly as you would for any other campaign.
+
     You must choose ONLY from the candidate pool below — every name in it is
     verified to exist on Meta. Do not invent, rephrase, or abbreviate a name;
     copy it exactly as listed, or it will be discarded.
@@ -176,10 +183,15 @@ select_targeting:
       CPL on otherwise-similar audiences. Only reach for csuite_tier/it_tier/
       specialist_tier positions when CRM signal actually names that
       profession among converting leads — never infer it from property type.
-    - Pick 6-10 interests, not the whole pool — a focused set outperforms an
-      exhaustive one.
-    - Pick at most 3-4 behaviours; include an nri_diaspora/expat behaviour only
-      if buyer_type or nri_geographies indicates an NRI audience.
+    - Pick 8-12 interests — enough breadth that Meta's delivery isn't starved.
+      Always include the core luxury-property basics ("Property investing
+      (investing)", "Luxury goods (retail)", "Luxury vehicle (vehicles)",
+      "Luxury Lifestyle (website)"), then add the campaign-specific picks the
+      CRM signal supports. Never return fewer than 8.
+    - Pick 3-5 behaviours. Always include the affluence/travel basics
+      ("Frequent international travellers", "Engaged shoppers", "People in
+      India who prefer high-value goods"); add an nri_diaspora/expat behaviour
+      only if buyer_type or nri_geographies indicates an NRI audience.
     - Set age_min/age_max from CRM signal if it indicates an age skew;
       otherwise use a standard HNI/NRI luxury-buyer range rather than
       guessing from property type.

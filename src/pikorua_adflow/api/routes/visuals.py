@@ -523,8 +523,12 @@ def serve_image(run_id: str, filename: str):
     img_path = Path(run["review_folder"]) / "images" / filename
     if not img_path.exists():
         raise HTTPException(status_code=404, detail="Image not found.")
+    # The frontend cache-busts with the file's mtime (?t=<mtime> via imgUrl), so a
+    # URL uniquely identifies one version of the file — safe to cache hard. The old
+    # no-store header forced EVERY image to re-download on every tab re-render,
+    # which is what made a single generate/assign visibly reload all other images.
     return Response(content=img_path.read_bytes(), media_type="image/png",
-                    headers={"Cache-Control": "no-store"})
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @router.delete("/image/{run_id}/{fname}")

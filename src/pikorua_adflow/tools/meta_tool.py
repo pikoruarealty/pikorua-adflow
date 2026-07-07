@@ -214,13 +214,13 @@ def _create_adset(
             "targeting_automation": {"advantage_audience": 0},
         }
 
-    # Automatic placements include Audience Network, which Meta forbids combining
-    # with "Broad Category Cluster" detailed targeting (e.g. our income clusters /
-    # user_adclusters) — that combo is what throws "You have chosen invalid broad
-    # categories". Restricting to Facebook + Instagram avoids the conflict and is
-    # standard practice for Lead Gen ads anyway (Audience Network converts poorly
-    # on lead forms).
+    # Facebook + Instagram only — Audience Network converts poorly on lead forms.
     adset_targeting.setdefault("publisher_platforms", ["facebook", "instagram"])
+
+    # Strip write-deprecated fields (user_adclusters et al). user_adclusters in a
+    # create payload fails with subcode 1487122 "invalid broad categories" even
+    # though the ids validate — verified live 2026-07-06.
+    adset_targeting = _sanitize_targeting_for_write(adset_targeting)
 
     _geo = adset_targeting.get("geo_locations", {})
     _sg_via_country = "SG" in _geo.get("countries", [])
@@ -232,7 +232,13 @@ def _create_adset(
     adset_payload: dict[str, Any] = {
         "name": name,
         "campaign_id": campaign_id,
-        "optimization_goal": "LEAD_GENERATION",
+        # QUALITY_LEAD = Ads Manager's "Maximise number of qualified/conversion
+        # leads" performance goal — optimises for leads that later qualify (fed
+        # back via CAPI QualifiedLead events, see analytics/meta_capi.py) instead
+        # of raw form-fill volume. If the account/page hasn't completed Meta's
+        # conversion-leads setup the create fails; we then retry once with
+        # LEAD_GENERATION so a deploy never breaks over the optimisation goal.
+        "optimization_goal": "QUALITY_LEAD",
         "billing_event": "IMPRESSIONS",
         "destination_type": "ON_AD",
         "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
@@ -248,6 +254,7 @@ def _create_adset(
 
     dropped_locations: list[str] = []
     _compliance_retried = False
+    _goal_retried = False
     while True:
         ok, adset = _do_post(f"act_{ad_account_id}/adsets", adset_payload, token)
         if ok:
@@ -259,6 +266,15 @@ def _create_adset(
             f"{err.get('message', '')}".lower()
         )
         subcode = err.get("error_subcode")
+        # Qualified-leads goal not available on this account/page (conversion-leads
+        # setup incomplete) → fall back to volume optimisation once.
+        if (not _goal_retried
+                and adset_payload.get("optimization_goal") == "QUALITY_LEAD"
+                and ("optimization" in err_msg or "optimisation" in err_msg
+                     or "goal" in err_msg or "quality_lead" in err_msg)):
+            adset_payload["optimization_goal"] = "LEAD_GENERATION"
+            _goal_retried = True
+            continue
         if (subcode == 3858550 or "singapore_universal" in err_msg) and not _compliance_retried:
             cats = adset_payload.get("regional_regulated_categories", [])
             if "SINGAPORE_UNIVERSAL" not in cats:
@@ -391,7 +407,7 @@ def deploy_ad(
                 "image": str(image_path) if image_path else None,
                 "campaign": campaign_id or (f"(existing) {campaign_name}" if adset_id else f"(would create) {campaign_name}"),
                 "adset": adset_id or {
-                    "optimization_goal": "LEAD_GENERATION",
+                    "optimization_goal": "QUALITY_LEAD (falls back to LEAD_GENERATION)",
                     "billing_event": "IMPRESSIONS",
                     "daily_budget_inr": daily_budget_inr,
                     "daily_budget_paise": daily_budget_inr * 100,
@@ -589,7 +605,7 @@ def deploy_dynamic_ad(
                 "bodies": bodies,
                 "campaign": campaign_id or f"(would create) {campaign_name}",
                 "adset": {
-                    "optimization_goal": "LEAD_GENERATION",
+                    "optimization_goal": "QUALITY_LEAD (falls back to LEAD_GENERATION)",
                     "billing_event": "IMPRESSIONS",
                     "daily_budget_inr": daily_budget_inr,
                     "daily_budget_paise": daily_budget_inr * 100,
@@ -929,9 +945,19 @@ def _sanitize_targeting_for_write(spec: dict) -> dict:
         return spec
     out = dict(spec)
 
-    # age_range is a computed field (min–max pair). Meta returns it for display but
-    # does not accept it as an input — use age_min / age_max instead.
-    out.pop("age_range", None)
+    # age_range is the Advantage+ age SUGGESTION (writable when advantage_audience=1,
+    # verified live 2026-07-06). With Advantage+ off it isn't a valid input — Meta
+    # expects strict age_min/age_max controls — so only keep it when Advantage+ is on.
+    ta_probe = spec.get("targeting_automation") or {}
+    if not ta_probe.get("advantage_audience"):
+        out.pop("age_range", None)
+    # With Advantage+ ON, a hard age_min control above 25 is rejected (subcode
+    # 1870188): demote the range to a suggestion and relax the control, mirroring
+    # what Ads Manager writes.
+    elif int(out.get("age_min") or 0) > 25:
+        out.setdefault("age_range", [int(out.get("age_min") or 25), int(out.get("age_max") or 65)])
+        out["age_min"] = 25
+        out["age_max"] = 65
 
     # brand_safety_content_filter_levels is readable at the adset level but the
     # writable path is the campaign object. Sending it on a targeting PATCH is rejected.
@@ -943,6 +969,26 @@ def _sanitize_targeting_for_write(spec: dict) -> dict:
     ta = out.get("targeting_automation")
     if isinstance(ta, dict):
         out["targeting_automation"] = {"advantage_audience": ta.get("advantage_audience", 0)}
+
+    # user_adclusters ("Broad Category Clusters", e.g. Household income Top 10%) is
+    # write-deprecated: Meta still RETURNS it on legacy ad sets and even validates the
+    # id on /targetingvalidation, but ANY create/update payload containing it fails
+    # with subcode 1487122 "You have chosen invalid broad categories" (verified live
+    # 2026-07-06 via paused create bisect). Strip it from every flexible_spec group,
+    # and drop groups that become empty (Meta rejects empty flexible_spec entries).
+    flex = out.get("flexible_spec")
+    if isinstance(flex, list):
+        cleaned = []
+        for g in flex:
+            if not isinstance(g, dict):
+                continue
+            g2 = {k: v for k, v in g.items() if k != "user_adclusters"}
+            if g2:
+                cleaned.append(g2)
+        if cleaned:
+            out["flexible_spec"] = cleaned
+        else:
+            out.pop("flexible_spec", None)
 
     # Geo location entries include server-side metadata keys (primary_city_id,
     # region_id, country, latitude, longitude) that Meta returns for display but
@@ -1123,8 +1169,14 @@ def retarget_campaign_adsets(
     if interests:       group["interests"]       = interests
     if behaviours:      group["behaviors"]       = behaviours
     if work_positions:  group["work_positions"]  = work_positions
-    if income_clusters: group["user_adclusters"] = income_clusters
     if industries:      group["industries"]      = industries
+    # user_adclusters is write-deprecated (subcode 1487122 "invalid broad categories");
+    # swap the income-cluster intent for the writable affluence-proxy behaviour.
+    if income_clusters:
+        from pikorua_adflow.tools.meta_targeting import AFFLUENCE_PROXY_BEHAVIOUR
+        beh = group.setdefault("behaviors", [])
+        if all(b["id"] != AFFLUENCE_PROXY_BEHAVIOUR["id"] for b in beh):
+            beh.append(dict(AFFLUENCE_PROXY_BEHAVIOUR))
 
     adsets = fetch_campaign_adsets(campaign_id, token)
     updated: list[dict] = []

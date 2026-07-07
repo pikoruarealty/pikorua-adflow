@@ -122,9 +122,19 @@ def meta_saved_audiences():
             data.get("data", []),
             key=lambda x: (x.get("subtype") != "LOOKALIKE", x.get("name", "").lower()),
         )
+        # Join our registry so the UI can say WHY an audience exists (role:
+        # "seed" = CRM contacts, "lookalike" = expansion → suggest Include,
+        # "exclusion" = bad leads/brokers → suggest Exclude).
+        try:
+            registry = (json.loads(AUDIENCES_REGISTRY_PATH.read_text(encoding="utf-8"))
+                        if AUDIENCES_REGISTRY_PATH.exists() else [])
+        except (ValueError, OSError):
+            registry = []
+        role_by_id = {str(r.get("id")): r.get("role", "") for r in registry}
         return {"audiences": [
             {"id": str(a["id"]), "name": a.get("name", ""), "subtype": a.get("subtype", ""),
-             "approximate_count": a.get("approximate_count_lower_bound", 0)}
+             "approximate_count": a.get("approximate_count_lower_bound", 0),
+             "role": role_by_id.get(str(a["id"]), "")}
             for a in rows
         ]}
     except RuntimeError as exc:
@@ -147,11 +157,43 @@ def saved_target_audiences():
         rows = _mtt.list_saved_audiences(ad_account_id, token)
         return {"audiences": [
             {"id": str(a["id"]), "name": a.get("name", ""),
-             "approximate_count": a.get("approximate_count_lower_bound", 0)}
+             "approximate_count": a.get("approximate_count_lower_bound", 0),
+             "targeting": a.get("targeting") or {}}
             for a in rows
         ]}
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/apply-saved-audience/{run_id}")
+def apply_saved_audience(run_id: str, payload: dict):
+    """Apply a Meta Saved Audience's targeting spec to this run's audience.
+    payload: {"id": "<saved_audience_id>"}. The spec is reverse-mapped onto the
+    editable audience (interests, behaviours, ages, geo, platform, custom
+    audiences); anything the spec doesn't carry keeps its current value."""
+    saved_id = str((payload or {}).get("id", "")).strip()
+    if not saved_id:
+        raise HTTPException(status_code=400, detail="A saved audience id is required.")
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
+    ad_account_id = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+    run = cs.require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    from pikorua_adflow.tools import meta_targeting as _mt
+    from pikorua_adflow.tools import meta_tool as _mtt
+    try:
+        rows = _mtt.list_saved_audiences(ad_account_id, token)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    match = next((a for a in rows if str(a.get("id")) == saved_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Saved audience not found on this ad account.")
+    base = cs.effective_audience(review_folder, run.get("brief", {}))
+    audience = _mt.audience_from_targeting_spec(match.get("targeting") or {}, base)
+    cs.save_audience(review_folder, audience)
+    return {"run_id": run_id, "applied": match.get("name", saved_id),
+            "audience": audience, "summary": _mt.audience_summary(audience)}
 
 
 @router.post("/save-target-audience/{run_id}")

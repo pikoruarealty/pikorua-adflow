@@ -164,10 +164,10 @@ skeletons:
       side) is completely unobstructed — the cinematic scene breathes freely. A semi-
       transparent GLASSMORPHISM ground (frosted ~50% opacity, subtle inner highlight,
       photo visible through it) underpins the text stack where needed for legibility
-      without blocking the photo entirely. A PRICE CORNER STAMP (a bold rotated square
-      badge with the price, in strong contrast) may be placed at the opposite top corner
-      as a second visual anchor, balancing the composition.
-    discipline: "The opposite two-thirds of the photo must be COMPLETELY clean — no text, no ornament. The tight corner stack is the entire typography zone. The glassmorphism ground must never be a hard-edged solid panel — it is a soft frosted surface the photo shows through. The stack direction is always vertical, anchored to ONE corner only."
+      without blocking the photo entirely. The opposite corner and the rest of the frame
+      stay pure photograph — no second price, no second badge, no stamp of any kind;
+      every text string in this ad renders exactly once, inside the one corner stack.
+    discipline: "The opposite two-thirds of the photo must be COMPLETELY clean — no text, no ornament, no duplicate price stamp. The tight corner stack is the entire typography zone; the price appears there ONCE, nowhere else in the frame. The glassmorphism ground must never be a hard-edged solid panel — it is a soft frosted surface the photo shows through. The stack direction is always vertical, anchored to ONE corner only."
 
   - id: split_canvas
     name: "Left half pure photo / right half pure editorial page"
