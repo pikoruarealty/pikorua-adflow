@@ -118,9 +118,14 @@
         <a class="label-caps {{ 'text-primary border-b-2 border-primary pb-1' if active=='leads' else 'text-on-surface-variant hover:text-primary' }} transition-colors" href="/crm-dashboard">Lead Insights</a>
       </div>
     </div>
-    <button onclick="pikToggleTheme()" title="Toggle light / dark" class="text-on-surface-variant hover:text-primary hover:bg-surface-container-low p-2 rounded-full transition-colors">
-      <span class="material-symbols-outlined">contrast</span>
-    </button>
+    <div class="flex items-center gap-1">
+      <button onclick="pikToggleTheme()" title="Toggle light / dark" class="text-on-surface-variant hover:text-primary hover:bg-surface-container-low p-2 rounded-full transition-colors">
+        <span class="material-symbols-outlined">contrast</span>
+      </button>
+      <a href="/logout" title="Sign out" class="text-on-surface-variant hover:text-primary hover:bg-surface-container-low p-2 rounded-full transition-colors">
+        <span class="material-symbols-outlined">logout</span>
+      </a>
+    </div>
   </div>
 </nav>
 

@@ -25,12 +25,19 @@ litellm.request_timeout = 120
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import STATIC_DIR
 from .routes import (analytics, assets, audience, autooptimiser, campaigns, deploy,
                      pages, visuals, webhook)
+from .services import auth
+
+# Paths reachable with no session cookie: the login flow itself, static assets,
+# brand imagery, and the Meta webhook (an external service, not a browser session).
+_PUBLIC_PATH_PREFIXES = ("/login", "/static", "/logo/", "/favicon.ico",
+                         "/meta-lead-webhook", "/health")
 
 
 # ── Scheduled jobs ────────────────────────────────────────────────────────────
@@ -90,6 +97,22 @@ app = FastAPI(
     version="2.0.0",
     lifespan=_lifespan,
 )
+
+
+@app.middleware("http")
+async def require_session(request: Request, call_next):
+    """Single shared-password gate — no accounts, just a signed session cookie."""
+    path = request.url.path
+    if path == "/" or path.startswith(_PUBLIC_PATH_PREFIXES):
+        return await call_next(request)
+
+    if auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)):
+        return await call_next(request)
+
+    if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse(url=f"/login?next={path}")
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
 # Static assets (app.js, bundled CSS/icons). Created on first import if absent.
 STATIC_DIR.mkdir(parents=True, exist_ok=True)

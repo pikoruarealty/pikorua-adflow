@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette import status
 
 from ..config import TEMPLATES_DIR
+from ..services import auth
 from ..state import RUNS
 
 router = APIRouter()
@@ -18,6 +20,32 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 @router.get("/", response_class=RedirectResponse)
 def root():
     return RedirectResponse(url="/portal")
+
+
+@router.get("/login", response_class=HTMLResponse)
+def login_form(request: Request, next: str = "/portal"):
+    return templates.TemplateResponse(request, "login.html", {"next": next})
+
+
+@router.post("/login")
+def login_submit(request: Request, password: str = Form(...), next: str = Form("/portal")):
+    if not auth.check_password(password):
+        return templates.TemplateResponse(
+            request, "login.html", {"error": "Incorrect password.", "next": next},
+            status_code=status.HTTP_401_UNAUTHORIZED)
+    response = RedirectResponse(url=next or "/portal", status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        auth.COOKIE_NAME, auth.create_session_token(),
+        httponly=True, samesite="lax", max_age=60 * 60 * 24 * 14,
+    )
+    return response
+
+
+@router.get("/logout")
+def logout():
+    response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    response.delete_cookie(auth.COOKIE_NAME)
+    return response
 
 
 @router.get("/portal", response_class=HTMLResponse)
