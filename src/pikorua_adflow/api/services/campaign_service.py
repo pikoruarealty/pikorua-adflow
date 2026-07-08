@@ -22,7 +22,7 @@ from fastapi import HTTPException
 
 from ..config import COPY_SCORECARD_PATH, OUTPUT_DIR, REPO_ROOT, TARGETING_BRIEF_PATH, TREND_HOOKS_PATH, TREND_TTL_SECONDS
 from ..models import CampaignBrief
-from ..state import RUNS, RUNS_LOCK, save_runs
+from ..state import RUNS, RUNS_LOCK, clear_cancel, is_cancelled, save_runs
 from . import image_service
 
 
@@ -507,6 +507,114 @@ def effective_channel(review_folder, channel: str) -> tuple[str, bool]:
     return (ov, True) if ov is not None else (base, False)
 
 
+# ── On-demand channel generation (opt-in Google / WhatsApp / Email) ───────────
+# Channels are skipped during the run by default (see ContentCrew.channels). The
+# user generates the ones they want afterwards from the campaign page. Rather than
+# re-run the whole ContentCrew (which would regenerate Meta copy + scores), we call
+# the creative LLM directly with the channel task's own YAML prose — the three
+# channel tasks are standalone (no `context:` dependency on Meta output), so this
+# produces the same copy the crew would have.
+
+_CHANNEL_TO_TASK = {
+    "google": "write_google_ads",
+    "whatsapp": "write_whatsapp_script",
+    "email": "write_email",
+}
+
+
+def _content_tasks_config() -> dict:
+    import yaml
+    from pikorua_adflow.crews.content_crew import content_crew as _cc
+    cfg_path = Path(_cc.__file__).parent / "config" / "tasks.yaml"
+    return yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+
+
+def _channel_inputs(review_folder, brief: dict) -> dict:
+    """Reconstruct the {placeholder} inputs the channel tasks reference, matching
+    the dict built in run_pipeline(), and pull persona from the review folder."""
+    rf = Path(review_folder)
+    company_str = (brief.get("company_name") or "").strip()
+    locality = brief.get("locality", "") or ""
+    locality_str = f", {locality}" if locality else ""
+    feature = (brief.get("standout_feature") or "").strip()
+    feature_str = f" Standout feature: {feature}." if feature else ""
+    amenities_list = [a.strip() for a in (brief.get("amenities") or []) if a and a.strip()]
+    amenities_str = f" Key amenities/features: {', '.join(amenities_list)}." if amenities_list else ""
+    product = (
+        f"{'(' + company_str + ') — ' if company_str else ''}Luxury Real Estate Consultancy. "
+        f"Property: {brief.get('property_name', '')}, "
+        f"a {brief.get('property_type', '')} in {brief.get('city', '')}{locality_str} "
+        f"at ₹{brief.get('price_cr', '')} Cr.{feature_str}{amenities_str}"
+    )
+    target_audience = (
+        f"{brief.get('buyer_type', 'HNI/NRI')} buyers seeking premium "
+        f"{brief.get('property_type', '')} in {brief.get('city', '')}. "
+        f"Campaign goal: {brief.get('goal', '')}."
+    )
+    persona = ""
+    for name in ("persona.md",):
+        p = rf / name
+        if p.exists():
+            persona = p.read_text(encoding="utf-8")[:1500]
+            break
+    return {
+        "product": product,
+        "target_audience": target_audience,
+        "persona": persona or "No persona data available for this run.",
+        "company_name": company_str,
+        "city": brief.get("city", ""),
+        "price_cr": brief.get("price_cr", ""),
+    }
+
+
+def generate_channel_content(review_folder, brief: dict, channel: str) -> str:
+    """Generate Google / WhatsApp / Email copy on demand and store it in the edit
+    overlay so effective_channel() returns it. Returns the cleaned text."""
+    import litellm
+    from pikorua_adflow.utils.brand_voice_loader import load_brand_voice
+
+    channel = channel.lower().strip()
+    task_name = _CHANNEL_TO_TASK.get(channel)
+    if not task_name:
+        raise ValueError(f"Unknown channel '{channel}' (expected google/whatsapp/email).")
+
+    cfg = _content_tasks_config().get(task_name, {})
+    description = str(cfg.get("description", "")).strip()
+    expected = str(cfg.get("expected_output", "")).strip()
+    inputs = _channel_inputs(review_folder, brief)
+
+    def _fill(text: str) -> str:
+        for k, v in inputs.items():
+            text = text.replace("{" + k + "}", str(v))
+        return text
+
+    brand_voice = load_brand_voice() or ""
+    system_prompt = (
+        "You are PIKORUA's senior luxury real-estate copywriter.\n\n"
+        + (f"BRAND VOICE REFERENCE:\n{brand_voice}\n\n" if brand_voice else "")
+        + "Follow the task instructions exactly. Output ONLY the finished copy in the "
+          "requested format — no preamble, no commentary, no markdown bold."
+    )
+    user_prompt = _fill(description) + "\n\nOUTPUT FORMAT:\n" + _fill(expected)
+
+    model = os.getenv("CREATIVE_MODEL", "gemini/gemini-2.5-flash")
+    resp = litellm.completion(
+        model=model,
+        messages=[{"role": "system", "content": system_prompt},
+                  {"role": "user", "content": user_prompt}],
+        temperature=0.85, max_tokens=700,
+    )
+    text = (resp.choices[0].message.content or "").strip()
+    text = clean_copy(text)
+    if channel == "google":
+        text = clean_google_copy(text)
+
+    edits = load_edits(review_folder)
+    edits[channel] = text
+    save_edits(review_folder, edits)
+    return text
+
+
 # ── Detail payload for the campaign-detail page ──────────────────────────────
 
 def get_run_detail(run_id: str) -> dict:
@@ -675,10 +783,10 @@ def get_run_detail(run_id: str) -> dict:
         "scorecard_summary": run.get("copy_scorecard_summary", ""),
         "variants": variants,
         "deleted_variants": deleted_nums,
-        "google": {"text": google_text, "edited": google_edited,
+        "google": {"text": google_text, "edited": google_edited, "available": bool(google_text.strip()),
                    "issues": google_copy_issues(google_text, brief.get("city", ""))},
-        "whatsapp": {"text": whatsapp_text, "edited": whatsapp_edited},
-        "email": {"text": email_text, "edited": email_edited},
+        "whatsapp": {"text": whatsapp_text, "edited": whatsapp_edited, "available": bool(whatsapp_text.strip())},
+        "email": {"text": email_text, "edited": email_edited, "available": bool(email_text.strip())},
         "image_prompts": image_prompts,
         "existing_images": existing_images,
         "image_versions": image_versions,
@@ -765,10 +873,31 @@ def _clear_pipeline_state(run_id: str) -> None:
         pass
 
 
+def _mark_cancelled(run_id: str, resumable: bool) -> None:
+    """Flip a run to the cancelled state and clear its cancel flag. When a resume
+    checkpoint exists the UI offers Resume; otherwise it offers Start over."""
+    with RUNS_LOCK:
+        RUNS[run_id]["status"] = "cancelled"
+        RUNS[run_id]["resumable"] = resumable
+        RUNS[run_id]["error"] = (
+            "Cancelled — resumable from the audience-analysis checkpoint."
+            if resumable else "Cancelled before completion."
+        )
+    clear_cancel(run_id)
+    save_runs()
+
+
 def _run_content_stage(run_id: str, brief: CampaignBrief, inputs: dict):
     """Stage 2: ContentCrew + save_for_review. Shared by run_pipeline and resume_pipeline."""
     from pikorua_adflow.crews.content_crew.content_crew import ContentCrew
     from pikorua_adflow.utils.output_saver import save_for_review
+
+    # Cooperative cancel: if the user cancelled while stage 1 was running, stop
+    # here before spending stage-2 tokens. The audience checkpoint (if written)
+    # keeps the run resumable.
+    if is_cancelled(run_id):
+        _mark_cancelled(run_id, resumable=_load_pipeline_state(run_id) is not None)
+        return
 
     inputs.setdefault("company_name", "")
     inputs.setdefault("property_type", "")
@@ -802,9 +931,19 @@ def _run_content_stage(run_id: str, brief: CampaignBrief, inputs: dict):
             creative_priors = _cl.get_priors(brief.clientele_type or "")
         except Exception:
             creative_priors = {}
+        # Opt-in extra channels (Google / WhatsApp / Email) — only generate the ones
+        # the brief asked for; the rest are produced on demand from the portal later.
+        channels = {
+            ch for ch, flag in (
+                ("google", getattr(brief, "generate_google", False)),
+                ("whatsapp", getattr(brief, "generate_whatsapp", False)),
+                ("email", getattr(brief, "generate_email", False)),
+            ) if flag
+        }
         content_result = ContentCrew(
             prior_visual_state=prior_visual_state,
             creative_priors=creative_priors,
+            channels=channels,
         ).crew().kickoff(inputs=inputs)
         review_folder = save_for_review(content_result, audience_result=inputs.get("_audience_output"))
         summary = None
@@ -836,6 +975,7 @@ def resume_pipeline(run_id: str):
     brief_data = RUNS[run_id].get("brief", {})
     brief = CampaignBrief(**brief_data)
     os.chdir(REPO_ROOT)
+    clear_cancel(run_id)
     with RUNS_LOCK:
         RUNS[run_id]["status"] = "running_stage2"
         RUNS[run_id].pop("error", None)
@@ -853,6 +993,7 @@ def run_pipeline(run_id: str, brief: CampaignBrief):
     # Crews write output_file: paths relative to CWD — force repo root so the
     # portal and output_saver read/write one outputs/ dir.
     os.chdir(REPO_ROOT)
+    clear_cancel(run_id)
     outputs_dir = OUTPUT_DIR
 
     for stale in (

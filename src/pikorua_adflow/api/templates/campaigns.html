@@ -62,6 +62,7 @@
 const STATUS = {
   complete: ['Ready', 'text-ok'], failed: ['Failed', 'text-error'],
   failed_resumable: ['Failed — resumable', 'text-warn'],
+  cancelled: ['Cancelled', 'text-outline'], cancelling: ['Cancelling…', 'text-warn'],
   running_stage1: ['Researching', 'text-warn'], running_stage2: ['Writing', 'text-warn'],
   running_stage3: ['Polishing', 'text-warn'], queued: ['Starting', 'text-outline'],
 };
@@ -89,13 +90,16 @@ function render(rows) {
       if (s === 'failed' || s === 'failed_resumable') failed++;
       const meta = esc((b.city || '') + ' · ₹' + (b.price_cr || '') + ' Cr · ' + (b.platform || ''));
       let action = '';
+      const isRunning = s.startsWith('running_') || s === 'queued';
       if (s === 'complete') action = run.approved
         ? '<span class="text-ok label-caps">✓ Approved</span>'
         : '<button onclick="approveRun(\'' + id + '\')" class="border border-primary text-primary label-caps px-3 py-1 hover:bg-primary hover:text-on-primary transition-colors">Approve</button>';
-      else if (s === 'failed_resumable') action =
+      else if (isRunning) action =
+        '<button onclick="cancelRun(\'' + id + '\')" class="label-caps text-outline hover:text-error">Cancel</button>';
+      else if (s === 'failed_resumable' || (s === 'cancelled' && run.resumable)) action =
         '<button onclick="resumeRun(\'' + id + '\')" class="label-caps text-primary">Resume</button>' +
         '<button onclick="rerun(\'' + id + '\')" class="label-caps text-outline ml-2">Start over</button>';
-      else if (s === 'failed') action = '<button onclick="rerun(\'' + id + '\')" class="label-caps text-primary">Try again</button>';
+      else if (s === 'failed' || s === 'cancelled') action = '<button onclick="rerun(\'' + id + '\')" class="label-caps text-primary">Try again</button>';
       const view = s === 'complete' ? '<a href="/results/' + id + '" class="label-caps border border-primary text-primary px-3 py-1.5 hover:bg-primary hover:text-on-primary transition-colors">Open campaign</a>' : '';
       const del = (s.startsWith('running_') || s === 'queued') ? '' :
         '<button onclick="delRun(\'' + id + '\')" title="Remove" class="text-outline hover:text-error text-lg leading-none">×</button>';
@@ -127,6 +131,12 @@ function approveRun(id) {
 }
 function rerun(id) { api('/rerun/' + id, { method: 'POST' }).then(() => setTimeout(load, 600)).catch(e => alert(e.message)); }
 function resumeRun(id) { api('/resume-pipeline/' + id, { method: 'POST' }).then(() => setTimeout(load, 600)).catch(e => alert(e.message)); }
+function cancelRun(id) {
+  if (!confirm('Cancel this campaign? It stops at the next step — if research already finished, you can resume from there.')) return;
+  const cell = document.getElementById('status-' + id);
+  if (cell) cell.innerHTML = badge('cancelling');
+  api('/cancel-pipeline/' + id, { method: 'POST' }).then(() => setTimeout(load, 800)).catch(e => alert(e.message));
+}
 function delRun(id) {
   if (!confirm('Remove this campaign from the list? (Your files are kept on disk.)')) return;
   api('/run/' + id, { method: 'DELETE' }).then(() => document.getElementById('row-' + id)?.remove()).catch(e => alert(e.message));

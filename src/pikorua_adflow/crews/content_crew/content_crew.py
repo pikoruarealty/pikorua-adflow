@@ -12,6 +12,16 @@ from .task_composer import (
 # Canonical variant order matches list_variants() — used by output_saver
 VISUAL_TASK_NAMES = [f"{vk}_task" for vk in list_variants()]
 
+# Opt-in channel copy tasks: skipped unless explicitly requested via `channels`.
+# These are leaf tasks — evaluate/rewrite/format_for_api never take them as context —
+# so dropping them from the crew is safe. Keyed by the channel name used in the brief
+# (generate_google / generate_whatsapp / generate_email) and the portal.
+CHANNEL_TASK_NAMES = {
+    "google": "write_google_ads",
+    "whatsapp": "write_whatsapp_script",
+    "email": "write_email",
+}
+
 
 @CrewBase
 class ContentCrew:
@@ -19,8 +29,13 @@ class ContentCrew:
     tasks_config = "config/tasks.yaml"
 
     def __init__(self, prior_visual_state: dict | None = None,
-                 creative_priors: dict | None = None):
+                 creative_priors: dict | None = None,
+                 channels: set[str] | None = None):
         self._brand_voice = load_brand_voice()
+        # Opt-in extra copy channels ("google" | "whatsapp" | "email"). None → generate
+        # none of them (Meta copy is always produced). Their tasks are filtered out of the
+        # crew in crew() when not requested. The user generates them on demand afterwards.
+        self._channels: set[str] = set(channels or ())
         # prior_visual_state: {variant_key: {"scene": [...], "tone": [...]}}
         # Populated by campaign_service from past RUNS for the same property_name.
         self._prior_visual_state: dict = prior_visual_state or {}
@@ -182,6 +197,13 @@ class ContentCrew:
             # on demand from the portal via POST /generate-prompt/{run_id}/{prompt_num}.
             visual_names = set(VISUAL_TASK_NAMES)
             tasks = [t for t in tasks if getattr(t, "name", "") not in visual_names]
+        # Skip opt-in channel tasks (Google / WhatsApp / Email) that weren't requested —
+        # they're generated on demand later via POST /generate-channel/{run_id}/{channel}.
+        skip_channel_tasks = {
+            tname for ch, tname in CHANNEL_TASK_NAMES.items() if ch not in self._channels
+        }
+        if skip_channel_tasks:
+            tasks = [t for t in tasks if getattr(t, "name", "") not in skip_channel_tasks]
         return Crew(
             agents=self.agents,
             tasks=tasks,

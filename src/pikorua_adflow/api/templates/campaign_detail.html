@@ -182,16 +182,28 @@ function renderCopy() {
     });
     html += '</div></div>';
   }
-  // Other channels
+  // Other channels (Google / WhatsApp / Email) — opt-in, generated on demand
+  const CH_LABEL = { google: 'Google ads', whatsapp: 'WhatsApp message', email: 'Email' };
   ['google', 'whatsapp', 'email'].forEach(ch => {
     const c = d[ch] || {};
-    html += '<div class="mt-8"><div class="flex justify-between items-center mb-2">' +
-      '<h3 class="font-headline text-xl capitalize">' + ch + (c.edited ? ' <span class="label-caps text-warn">edited</span>' : '') + '</h3>' +
-      '<div class="flex gap-2"><button onclick="saveChannel(\'' + ch + '\')" class="label-caps border border-outline px-3 py-1">Save</button>' +
-      '<button onclick="revertChannel(\'' + ch + '\')" class="label-caps text-primary px-2 py-1">Revert</button></div></div>' +
-      '<pre contenteditable id="ch-' + ch + '" class="border border-outline-variant p-4 text-sm whitespace-pre-wrap font-body">' + esc(c.text || '') + '</pre>';
-    if (ch === 'google' && (c.issues || []).length)
-      html += '<ul class="mt-2 text-sm text-warn list-disc pl-5">' + c.issues.map(i => '<li>' + esc(i.line + ': ' + i.issue) + '</li>').join('') + '</ul>';
+    const label = CH_LABEL[ch] || ch;
+    html += '<div class="mt-8" id="chwrap-' + ch + '">';
+    if (!c.available) {
+      html += '<div class="flex justify-between items-center mb-2">' +
+        '<h3 class="font-headline text-xl">' + label + '</h3></div>' +
+        '<div class="border border-dashed border-outline-variant p-4 text-sm text-on-surface-variant flex items-center justify-between gap-4">' +
+        '<span>Not generated yet — this channel is optional.</span>' +
+        '<button id="chgen-' + ch + '" onclick="generateChannel(\'' + ch + '\')" class="label-caps border border-primary text-primary px-3 py-1.5 hover:bg-primary hover:text-on-primary transition-colors whitespace-nowrap">Generate now</button>' +
+        '</div>';
+    } else {
+      html += '<div class="flex justify-between items-center mb-2">' +
+        '<h3 class="font-headline text-xl">' + label + (c.edited ? ' <span class="label-caps text-warn">edited</span>' : '') + '</h3>' +
+        '<div class="flex gap-2"><button onclick="saveChannel(\'' + ch + '\')" class="label-caps border border-outline px-3 py-1">Save</button>' +
+        '<button onclick="revertChannel(\'' + ch + '\')" class="label-caps text-primary px-2 py-1">Revert</button></div></div>' +
+        '<pre contenteditable id="ch-' + ch + '" class="border border-outline-variant p-4 text-sm whitespace-pre-wrap font-body">' + esc(c.text || '') + '</pre>';
+      if (ch === 'google' && (c.issues || []).length)
+        html += '<ul class="mt-2 text-sm text-warn list-disc pl-5">' + c.issues.map(i => '<li>' + esc(i.line + ': ' + i.issue) + '</li>').join('') + '</ul>';
+    }
     html += '</div>';
   });
   root.innerHTML = html;
@@ -271,6 +283,17 @@ function saveChannel(ch) {
 function revertChannel(ch) {
   api('/revert-content/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ channel: ch }) }).then(d => { document.getElementById('ch-' + ch).textContent = d.text || ''; }).catch(e => showError(e.message));
+}
+function generateChannel(ch) {
+  const btn = document.getElementById('chgen-' + ch);
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Writing…'; btn.classList.add('cursor-not-allowed', 'opacity-60'); }
+  api('/generate-channel/' + RUN_ID + '/' + ch, { method: 'POST' })
+    .then(() => reloadCopy())
+    .catch(e => {
+      showError(e.message);
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Generate now'; btn.classList.remove('cursor-not-allowed', 'opacity-60'); }
+    });
 }
 function reloadCopy() { loadDetail(); }
 function publishAdditionalVariant(v, btn) {
@@ -798,7 +821,8 @@ function genImages(prompts, mode, exteriorBrief) {
     genAll.innerHTML = '<span class="inline-block w-2.5 h-2.5 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span> Generating…';
     genAll.classList.add('cursor-not-allowed');
   }
-  document.getElementById('gen-status').textContent = 'Generating… this can take a minute.';
+  document.getElementById('gen-status').innerHTML = 'Generating… this can take a minute.' +
+    '<button id="img-cancel-btn" onclick="cancelImages()" class="label-caps text-outline hover:text-error underline ml-3">Cancel</button>';
   const genRatio = (document.getElementById('gen-ratio') || {}).value || '4x5';
   const genQuality = (document.getElementById('gen-quality') || {}).value || 'high';
   const genBackend = (document.getElementById('gen-backend') || {}).value || 'ideogram';
@@ -811,7 +835,8 @@ function genImages(prompts, mode, exteriorBrief) {
     .then(d => {
       promptList.forEach(n => generating.delete(n));
       const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
-      const statusMsg = (d.generated || []).length + ' image(s) generated.' + (errs ? ' ' + errs : '');
+      const cancelNote = d.cancelled ? ' Cancelled — remaining images were not generated.' : '';
+      const statusMsg = (d.generated || []).length + ' image(s) generated.' + cancelNote + (errs ? ' ' + errs : '');
       return loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing(promptList); document.getElementById('gen-status').textContent = statusMsg; })
         .catch(e => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg + ' (view refresh failed: ' + e.message + ')'; });
     }).catch(e => {
@@ -826,6 +851,11 @@ function genImages(prompts, mode, exteriorBrief) {
       if (genAll) { genAll.disabled = false; genAll.innerHTML = 'Generate all'; genAll.classList.remove('cursor-not-allowed'); }
       document.getElementById('gen-status').textContent = 'Error: ' + e.message;
     });
+}
+function cancelImages() {
+  const cb = document.getElementById('img-cancel-btn');
+  if (cb) { cb.textContent = 'Cancelling…'; cb.disabled = true; cb.classList.add('opacity-60'); }
+  api('/cancel-images/' + RUN_ID, { method: 'POST' }).catch(e => showError(e.message));
 }
 function onExtBriefInput(n) {
   const ta = document.getElementById('ext-brief-' + n);
@@ -1041,7 +1071,15 @@ function renderAudience() {
         field('Age max', 'aud-agemax', a.age_max || 65, 'number') +
       '</div>' +
       '<div id="aud-platform"></div>' +
-      '<div id="aud-lists"></div>';
+      '<div id="aud-lists"></div>' +
+      '<div class="mt-2 border border-outline-variant rounded p-3">' +
+        '<div class="flex justify-between items-center">' +
+          '<div><p class="label-caps text-outline">Improve targeting</p>' +
+          '<p class="text-xs text-on-surface-variant">Keep what you have — get suggestions to add proven segments and drop irrelevant ones.</p></div>' +
+          '<button onclick="loadRetargetSuggestions()" class="label-caps border border-primary text-primary px-3 py-1.5 hover:bg-primary hover:text-on-primary transition-colors whitespace-nowrap">Suggest changes</button>' +
+        '</div>' +
+        '<div id="aud-retarget" class="mt-3"></div>' +
+      '</div>';
     if (metaAudiences.length) {
       html += '<div><p class="label-caps text-outline mb-2">Custom Meta audiences</p>' +
         '<div class="space-y-1 max-h-48 overflow-y-auto pr-1">';
@@ -1506,6 +1544,49 @@ function toggleMetaAud(btn) {
   });
   enableSaveAudience();
 }
+function loadRetargetSuggestions() {
+  const box = document.getElementById('aud-retarget');
+  if (!box) return;
+  box.innerHTML = '<p class="text-sm text-on-surface-variant">Analysing your CRM and profile…</p>';
+  api('/audience-retarget-suggestions/' + RUN_ID).then(d => {
+    const add = d.add || [], remove = d.remove || [];
+    if (!add.length && !remove.length) {
+      box.innerHTML = '<p class="text-sm text-ok">Your targeting already looks good — nothing to add or remove.</p>';
+      return;
+    }
+    let h = '';
+    if (add.length) {
+      h += '<p class="label-caps text-outline mb-1">Add these</p><div class="space-y-1 mb-3">';
+      add.forEach(s => {
+        h += '<div class="flex items-center justify-between gap-2 text-sm border-b border-outline-variant/30 py-1">' +
+          '<span><span class="font-medium">' + esc(s.name) + '</span> <span class="label-caps text-[10px] text-outline">' + esc(s.field) + '</span>' +
+          '<span class="block text-xs text-on-surface-variant">' + esc(s.reason) + '</span></span>' +
+          '<button onclick="applyRetarget(\'' + esc(s.field) + '\',\'' + esc(s.id) + '\',' + JSON.stringify(s.name) + ',\'add\')" ' +
+          'class="label-caps text-primary border border-primary px-2 py-0.5 hover:bg-primary hover:text-on-primary transition-colors whitespace-nowrap">Add</button></div>';
+      });
+      h += '</div>';
+    }
+    if (remove.length) {
+      h += '<p class="label-caps text-outline mb-1">Consider removing</p><div class="space-y-1">';
+      remove.forEach(s => {
+        h += '<div class="flex items-center justify-between gap-2 text-sm border-b border-outline-variant/30 py-1">' +
+          '<span><span class="font-medium">' + esc(s.name) + '</span> <span class="label-caps text-[10px] text-outline">' + esc(s.field) + '</span>' +
+          '<span class="block text-xs text-on-surface-variant">' + esc(s.reason) + '</span></span>' +
+          '<button onclick="applyRetarget(\'' + esc(s.field) + '\',\'' + esc(s.id) + '\',' + JSON.stringify(s.name) + ',\'remove\')" ' +
+          'class="label-caps text-error border border-error px-2 py-0.5 hover:bg-error hover:text-on-primary transition-colors whitespace-nowrap">Remove</button></div>';
+      });
+      h += '</div>';
+    }
+    box.innerHTML = h;
+  }).catch(e => { box.innerHTML = '<p class="text-sm text-error">' + esc(e.message) + '</p>'; });
+}
+function applyRetarget(field, id, name, op) {
+  api('/apply-retarget-suggestion/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ field, id, name, op }) })
+    .then(() => { toast(op === 'add' ? 'Added' : 'Removed'); loaded.audience = false; renderAudience();
+      setTimeout(loadRetargetSuggestions, 400); })
+    .catch(e => showError(e.message));
+}
 function saveAudience() {
   const included = [], excluded = [];
   document.querySelectorAll('.aud-meta-audience').forEach(group => {
@@ -1570,16 +1651,38 @@ function undoSavedAudience(btn) {
     .then(() => { toast('Reverted to the audience before that apply'); renderAudience(); })
     .catch(e => { if (btn) { btn.disabled = false; btn.textContent = 'Undo'; } showError(e.message); });
 }
-function deploy() {
+function strippedBanner(stripped) {
+  if (!(stripped || []).length) return '';
+  return '<div class="mt-2 text-xs text-warn border border-warn/40 bg-warn/5 rounded p-2">' +
+    stripped.map(s => '• We removed <strong>' + esc(s.field) + '</strong> because ' + esc(s.reason) +
+      (s.substitute ? ' <span class="text-ok">(replaced with ' + esc(s.substitute) + ')</span>' : '')).join('<br>') +
+    '</div>';
+}
+function deploy(opts) {
+  opts = opts || {};
   const el = document.getElementById('deploy-status');
   const btn = document.getElementById('deploy-btn');
   const spin = '<span class="inline-block w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span>';
   if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Publishing…'; }
   el.innerHTML = '<div class="flex items-center gap-2 text-on-surface-variant"><span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span> Connecting to Meta Ads… this may take up to a minute.</div>';
-  api('/deploy-to-meta/' + RUN_ID, { method: 'POST' }).then(d => {
-    const ok = (d.deployed || []).length, errs = (d.errors || []).map(e => e.error).join('; ');
-    el.innerHTML = '<span class="text-ok">✓ ' + ok + ' ad(s) created (PAUSED).</span> ' + (errs ? '<span class="text-error ml-2">' + esc(errs) + '</span>' : '');
+  api('/deploy-to-meta/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strip_invalid: !!opts.stripInvalid, strip_fields: opts.stripFields || [] }) }).then(d => {
     if (btn) { btn.disabled = false; btn.textContent = 'Publish campaign'; }
+    // Pre-publish validation caught invalid targeting — offer Fix & publish.
+    if ((d.targeting_issues || []).length) {
+      const fields = [...new Set(d.targeting_issues.map(i => i.field).filter(Boolean))];
+      const msg = esc(d.targeting_issue_message || 'Some targeting parameters are no longer accepted by Meta.');
+      el.innerHTML = '<div class="text-warn border border-warn/40 bg-warn/5 rounded p-3">' +
+        '<p class="font-medium">Targeting needs a fix before publishing</p>' +
+        '<p class="text-sm mt-1">' + msg + '</p>' +
+        (fields.length ? '<p class="text-xs mt-1 text-on-surface-variant">Affected: ' + fields.map(esc).join(', ') + '</p>' : '') +
+        '<button onclick="deploy({stripInvalid:true, stripFields:' + JSON.stringify(fields) + '})" ' +
+        'class="mt-2 label-caps bg-primary text-on-primary px-4 py-2 hover:bg-surface-tint transition-colors">Fix &amp; publish</button></div>';
+      return;
+    }
+    const ok = (d.deployed || []).length, errs = (d.errors || []).map(e => e.error).join('; ');
+    el.innerHTML = '<span class="text-ok">✓ ' + ok + ' ad(s) created (PAUSED).</span> ' +
+      (errs ? '<span class="text-error ml-2">' + esc(errs) + '</span>' : '') + strippedBanner(d.targeting_stripped);
     renderPublished();
   }).catch(e => {
     el.innerHTML = '<span class="text-error">✕ ' + esc(e.message) + '</span> <button onclick="deploy()" class="label-caps text-primary underline ml-2">Retry</button>';

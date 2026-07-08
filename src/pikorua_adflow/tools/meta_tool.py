@@ -786,6 +786,77 @@ def fetch_reach_estimate(ad_account_id: str, targeting_spec: dict, token: str) -
         return {}
 
 
+# Known targeting field names, scanned in a Meta error message to name the offender.
+_KNOWN_TARGETING_FIELDS = [
+    "user_adclusters", "interests", "behaviors", "behaviours", "work_positions",
+    "work_employers", "industries", "life_events", "family_statuses",
+    "relationship_statuses", "education_statuses", "income", "user_os", "geo_locations",
+    "flexible_spec", "custom_audiences", "excluded_custom_audiences", "age_range",
+]
+
+
+def validate_targeting_spec(ad_account_id: str, targeting_spec: dict, token: str) -> dict:
+    """Pre-publish check: ask Meta whether a targeting spec is acceptable BEFORE spending
+    a real campaign create on it, so a newly-deprecated/invalid param is caught early.
+
+    Runs the spec through the write-sanitizer first (so already-known deprecations are
+    auto-handled and don't show as issues), then probes reachestimate. Returns:
+        {"valid": True,  "issues": []}                        — spec is fine
+        {"valid": False, "issues": [{field, message}], "message": <raw>}
+    Best-effort — a transient/network error is reported as valid (don't block publish on
+    infrastructure hiccups; the real create still surfaces genuine errors)."""
+    clean = _sanitize_targeting_for_write(targeting_spec)
+    acct = ad_account_id.replace("act_", "")
+    try:
+        _get(f"act_{acct}/reachestimate", token, {"targeting_spec": json.dumps(clean)})
+        return {"valid": True, "issues": []}
+    except RuntimeError as exc:
+        msg = str(exc)
+        # Only treat it as an invalid-targeting result if Meta actually complained about
+        # the spec (HTTP 400). Auth/rate/transient errors shouldn't block publishing.
+        if "[400]" not in msg and "invalid" not in msg.lower():
+            return {"valid": True, "issues": []}
+        low = msg.lower()
+        blamed = [f for f in _KNOWN_TARGETING_FIELDS if f in low]
+        # Try to extract Meta's human message from the embedded JSON body.
+        human = msg
+        try:
+            body = msg[msg.index("{"):]
+            err = json.loads(body).get("error", {})
+            human = err.get("error_user_msg") or err.get("message") or msg
+        except Exception:
+            pass
+        issues = [{"field": f, "message": human} for f in blamed] or [{"field": "", "message": human}]
+        return {"valid": False, "issues": issues, "message": human}
+    except Exception:
+        return {"valid": True, "issues": []}
+
+
+def strip_fields_from_spec(targeting_spec: dict, fields: list[str]) -> dict:
+    """Remove named targeting fields from a spec (top-level and inside every flexible_spec
+    group) — used by the 'Fix & publish' path to drop a param Meta rejected."""
+    if not fields:
+        return targeting_spec
+    out = dict(targeting_spec)
+    fields = set(fields)
+    for f in list(fields):
+        out.pop(f, None)
+    flex = out.get("flexible_spec")
+    if isinstance(flex, list):
+        cleaned = []
+        for g in flex:
+            if not isinstance(g, dict):
+                continue
+            g2 = {k: v for k, v in g.items() if k not in fields}
+            if g2:
+                cleaned.append(g2)
+        if cleaned:
+            out["flexible_spec"] = cleaned
+        else:
+            out.pop("flexible_spec", None)
+    return out
+
+
 def fetch_delivery_estimate(adset_id: str, token: str,
                             optimization_goal: str = "LEAD_GENERATION") -> dict:
     """Daily delivery estimate for an ad set. Returns {} on failure."""
@@ -966,11 +1037,16 @@ def delete_ad(ad_id: str, token: str) -> bool:
     return True
 
 
-def _sanitize_targeting_for_write(spec: dict) -> dict:
+def _sanitize_targeting_for_write(spec: dict, report: list | None = None) -> dict:
     """Strip fields Meta returns in GET responses but rejects in PATCH requests.
 
     Sending these back causes errors like 'invalid broad categories' or generic
     validation failures even when the targeting itself is valid.
+
+    When `report` (a list) is passed, each write-deprecated field that was actually
+    stripped is appended as {field, reason, substitute} so callers (deploy) can tell the
+    user what was removed and why. The set of deprecated fields lives in
+    targeting_deprecations.WRITE_DEPRECATED — a data edit, not a code change.
     """
     if not spec:
         return spec
@@ -1001,19 +1077,20 @@ def _sanitize_targeting_for_write(spec: dict) -> dict:
     if isinstance(ta, dict):
         out["targeting_automation"] = {"advantage_audience": ta.get("advantage_audience", 0)}
 
-    # user_adclusters ("Broad Category Clusters", e.g. Household income Top 10%) is
-    # write-deprecated: Meta still RETURNS it on legacy ad sets and even validates the
-    # id on /targetingvalidation, but ANY create/update payload containing it fails
-    # with subcode 1487122 "You have chosen invalid broad categories" (verified live
-    # 2026-07-06 via paused create bisect). Strip it from every flexible_spec group,
-    # and drop groups that become empty (Meta rejects empty flexible_spec entries).
+    # Strip every write-deprecated targeting field from each flexible_spec group,
+    # substituting the configured stand-in (e.g. user_adclusters "Household income
+    # Top 10%" → the writable affluence-proxy behaviour). Meta still RETURNS these on
+    # legacy ad sets and may validate them, but ANY create/update payload containing
+    # one fails. The list is data (targeting_deprecations.WRITE_DEPRECATED), so a future
+    # deprecation is a one-line edit. Drop groups that become empty (Meta rejects them).
+    from pikorua_adflow.tools import targeting_deprecations as _dep
     flex = out.get("flexible_spec")
     if isinstance(flex, list):
         cleaned = []
         for g in flex:
             if not isinstance(g, dict):
                 continue
-            g2 = {k: v for k, v in g.items() if k != "user_adclusters"}
+            g2 = _dep.strip_from_flexible_group(g, report)
             if g2:
                 cleaned.append(g2)
         if cleaned:
@@ -1286,6 +1363,84 @@ def retarget_campaign_adsets(
         "errors":         errors,
         "dry_run":        dry_run,
     }
+
+
+# flexible_spec uses US spelling "behaviors"; our audience dicts use "behaviours".
+_FIELD_TO_SPEC_KEY = {
+    "interests": "interests",
+    "behaviours": "behaviors",
+    "work_positions": "work_positions",
+    "industries": "industries",
+}
+
+
+def apply_segment_to_campaign(campaign_id: str, field: str, entry: dict, op: str,
+                              token: str, *, dry_run: bool = False) -> dict:
+    """Add or remove ONE interest/behaviour/work_position/industry across every
+    ACTIVE/PAUSED ad set in a campaign, leaving everything else (geo, custom audiences,
+    exclusions, age, other segments) untouched. This is the incremental counterpart to
+    retarget_campaign_adsets — it lets the smart-retarget UI apply a single suggestion
+    instead of overwriting the whole flexible_spec. Returns {campaign_id, updated, errors, dry_run}."""
+    spec_key = _FIELD_TO_SPEC_KEY.get(field)
+    if not spec_key:
+        raise ValueError(f"Cannot retarget field '{field}'.")
+    if op not in ("add", "remove"):
+        raise ValueError(f"Unknown op '{op}'.")
+    entry_id = str(entry.get("id", ""))
+    if not entry_id:
+        raise ValueError("Segment id is required.")
+
+    adsets = fetch_campaign_adsets(campaign_id, token)
+    updated: list[dict] = []
+    errors: list[dict] = []
+
+    for adset in adsets:
+        if adset.get("effective_status") not in ("ACTIVE", "PAUSED", "CAMPAIGN_PAUSED"):
+            continue
+        targeting = dict(adset.get("targeting") or {})
+        flex = [dict(g) for g in (targeting.get("flexible_spec") or [])]
+        if not flex:
+            flex = [{}]
+        group = flex[0]
+        seg_list = [dict(s) for s in (group.get(spec_key) or [])]
+        present = any(str(s.get("id")) == entry_id for s in seg_list)
+
+        if op == "add" and not present:
+            seg_list.append({"id": entry_id, "name": entry.get("name", "")})
+        elif op == "remove" and present:
+            seg_list = [s for s in seg_list if str(s.get("id")) != entry_id]
+        else:
+            # No change needed for this ad set (already in the desired state).
+            updated.append({"adset_id": adset["id"], "adset_name": adset.get("name", ""),
+                            "changed": False})
+            continue
+
+        if seg_list:
+            group[spec_key] = seg_list
+        else:
+            group.pop(spec_key, None)
+        flex[0] = group
+        # Drop the group entirely if it became empty (Meta rejects empty flexible_spec).
+        targeting["flexible_spec"] = [g for g in flex if g]
+        if not targeting["flexible_spec"]:
+            targeting.pop("flexible_spec", None)
+
+        rec = {"adset_id": adset["id"], "adset_name": adset.get("name", ""), "changed": True}
+        if dry_run:
+            rec["dry_run"] = True
+            updated.append(rec)
+        else:
+            try:
+                update_adset_targeting(adset["id"], targeting, token)
+                rec["ok"] = True
+                updated.append(rec)
+            except Exception as exc:
+                errors.append({"adset_id": adset["id"], "adset_name": adset.get("name", ""),
+                               "error": str(exc)})
+
+    return {"campaign_id": campaign_id, "field": field, "op": op,
+            "segment": {"id": entry_id, "name": entry.get("name", "")},
+            "updated": updated, "errors": errors, "dry_run": dry_run}
 
 
 def fetch_ads_with_age(campaign_id: str, token: str) -> list[dict]:

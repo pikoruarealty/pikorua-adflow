@@ -48,3 +48,27 @@ def save_runs() -> None:
     with RUNS_LOCK:
         payload = json.dumps(RUNS, indent=2, default=str)
     RUNS_PATH.write_text(payload, encoding="utf-8")
+
+
+# ── Cooperative cancellation ─────────────────────────────────────────────────
+# A long generation (the campaign pipeline thread, an image-generation request)
+# cannot be force-killed mid-LLM-call in-process, so cancellation is cooperative:
+# the requester sets a flag here, and the running job checks it at safe checkpoints
+# (between pipeline stages, between images) and stops cleanly. Keys are run_ids for
+# the pipeline and "img:{run_id}" for image jobs so the two are independent.
+CANCEL_REQUESTS: set[str] = set()
+
+
+def request_cancel(key: str) -> None:
+    with RUNS_LOCK:
+        CANCEL_REQUESTS.add(key)
+
+
+def is_cancelled(key: str) -> bool:
+    with RUNS_LOCK:
+        return key in CANCEL_REQUESTS
+
+
+def clear_cancel(key: str) -> None:
+    with RUNS_LOCK:
+        CANCEL_REQUESTS.discard(key)

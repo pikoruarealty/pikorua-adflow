@@ -36,6 +36,9 @@ class CampaignBrief(BaseModel):
         description="Derived from buyer_type if blank. hni | nri | hni_nri.",
     )
     cheque_only: bool = Field(False, description="If true, a '100% Cheque Payment' selling point is surfaced in images + copy.")
+    generate_google: bool = Field(False, description="Opt-in: also generate Google Ads copy during the run. Off by default; can be generated on demand later.")
+    generate_whatsapp: bool = Field(False, description="Opt-in: also generate the WhatsApp script during the run. Off by default; can be generated on demand later.")
+    generate_email: bool = Field(False, description="Opt-in: also generate the email during the run. Off by default; can be generated on demand later.")
     target_adset_id: str = Field("", description="When set, deploy injects ads into this existing Meta adset instead of creating a new campaign.")
     sample_ready: bool = Field(False, description="If true, a 'Sample apartment ready to view' line is included in images.")
     rera_verified: bool = Field(False, description="If true, RERA claims in image prompts are allowed.")
@@ -168,6 +171,26 @@ class RetargetCampaignReq(BaseModel):
     campaign_id: str
     clientele_type: str
     dry_run: bool = False
+
+
+class RetargetSuggestionApply(BaseModel):
+    field: str = Field(..., description="interests | behaviours | work_positions | industries")
+    id: str = Field(..., description="Meta segment id to add or remove")
+    name: str = Field("", description="Segment display name (used when adding)")
+    op: str = Field(..., description="add | remove")
+
+
+class DeployToMetaReq(BaseModel):
+    strip_invalid: bool = Field(
+        False,
+        description="Fix & publish: strip the targeting fields Meta flagged as invalid and "
+                    "publish anyway. Set by the UI after a first attempt returned targeting_issues.",
+    )
+    strip_fields: list[str] = Field(
+        default_factory=list,
+        description="Specific targeting field names to remove before publishing (from the "
+                    "targeting_issues of the previous attempt).",
+    )
 
 
 class CreativeModeReq(BaseModel):

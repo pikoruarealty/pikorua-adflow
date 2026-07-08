@@ -12,7 +12,8 @@ from fastapi.responses import JSONResponse, Response
 
 from ..config import REFERENCE_IMAGES_DIR
 from ..models import (AdvantageToggleReq, ApplyRecommendationReq, CboToggleReq,
-                      CreativeModeReq, MetaOptimizeReq, RetargetCampaignReq)
+                      CreativeModeReq, DeployToMetaReq, MetaOptimizeReq,
+                      RetargetCampaignReq)
 from ..services import campaign_service as cs
 from ..services import crm_service
 from ..services import deploy_service as ds
@@ -35,8 +36,14 @@ def set_creative_mode(run_id: str, req: CreativeModeReq):
 
 
 @router.post("/deploy-to-meta/{run_id}")
-def deploy_to_meta(run_id: str):
-    """Deploy selected variants to Meta Ads as OUTCOME_LEADS campaigns (all PAUSED)."""
+def deploy_to_meta(run_id: str, req: DeployToMetaReq | None = None):
+    """Deploy selected variants to Meta Ads as OUTCOME_LEADS campaigns (all PAUSED).
+
+    Self-healing targeting: known write-deprecated params are auto-stripped and reported
+    (`targeting_stripped`); a pre-publish validation catches anything newly invalid and
+    returns `targeting_issues` WITHOUT creating anything, so the UI can offer 'Fix &
+    publish' (re-call with strip_invalid=true)."""
+    req = req or DeployToMetaReq()
     run = cs.require_complete(run_id)
     review_folder = Path(run["review_folder"])
     brief = run.get("brief", {})
@@ -49,7 +56,9 @@ def deploy_to_meta(run_id: str):
 
     creative_mode = cs.get_creative_mode(review_folder)
 
-    from pikorua_adflow.tools.meta_tool import create_campaign, deploy_ad, deploy_dynamic_ad
+    from pikorua_adflow.tools.meta_tool import (create_campaign, deploy_ad, deploy_dynamic_ad,
+                                                strip_fields_from_spec, validate_targeting_spec,
+                                                _sanitize_targeting_for_write)
 
     campaign_name = brief.get("property_name", "Pikorua Campaign")
     city = brief.get("city", "India")
@@ -64,8 +73,34 @@ def deploy_to_meta(run_id: str):
     end_time = audience.get("end_time", "")
 
     dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
-    shared_campaign_id = ""
     _token = os.getenv("META_ACCESS_TOKEN", "")
+
+    # ── Self-healing targeting ───────────────────────────────────────────────
+    # 1) 'Fix & publish' — drop the fields Meta flagged on a previous attempt.
+    if req.strip_fields:
+        targeting_spec = strip_fields_from_spec(targeting_spec, req.strip_fields)
+    # 2) Auto-strip known write-deprecated params + record what/why for the UI.
+    targeting_stripped: list[dict] = []
+    _sanitize_targeting_for_write(targeting_spec, targeting_stripped)
+    # 3) Pre-publish validation (real deploys only) — catch anything newly invalid
+    #    BEFORE spending a create call. If found and the user hasn't opted to fix, stop
+    #    and surface the issues so the UI can offer 'Fix & publish'.
+    if not dry_run and _token and not req.strip_invalid:
+        _account = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
+        check = validate_targeting_spec(_account, targeting_spec, _token)
+        if not check.get("valid"):
+            return {"run_id": run_id, "deployed": [], "errors": [],
+                    "dropped_locations": [], "targeting_stripped": targeting_stripped,
+                    "targeting_issues": check.get("issues", []),
+                    "targeting_issue_message": check.get("message", "")}
+    elif req.strip_invalid and req.strip_fields:
+        # Fix & publish requested — remove the flagged fields from the *saved* audience
+        # too, so future reads/estimates don't keep offering the broken targeting.
+        for f in req.strip_fields:
+            audience.pop(f, None)
+        cs.save_audience(review_folder, audience)
+
+    shared_campaign_id = ""
     if not dry_run:
         _account_id = os.getenv("META_AD_ACCOUNT_ID", "").replace("act_", "")
         try:
@@ -167,8 +202,11 @@ def deploy_to_meta(run_id: str):
             RUNS[run_id]["meta_dropped_locations"] = dropped
         else:
             RUNS[run_id].pop("meta_dropped_locations", None)
+        if targeting_stripped:
+            RUNS[run_id]["meta_targeting_stripped"] = targeting_stripped
     save_runs()
-    return {"run_id": run_id, "deployed": results, "errors": errors, "dropped_locations": dropped}
+    return {"run_id": run_id, "deployed": results, "errors": errors, "dropped_locations": dropped,
+            "targeting_stripped": targeting_stripped}
 
 
 @router.post("/publish-additional-variant/{run_id}/{variant}")

@@ -18,7 +18,7 @@ from ..config import TREND_HOOKS_PATH, TREND_TTL_SECONDS
 from ..models import (ApproveRequest, CampaignBrief, ContentEdit,
                       ExtractBriefReq, RescoreVariantPayload, RewriteCopyPayload)
 from ..services import campaign_service as cs
-from ..state import RUNS, RUNS_LOCK, save_runs
+from ..state import RUNS, RUNS_LOCK, request_cancel, save_runs
 
 router = APIRouter()
 
@@ -175,8 +175,8 @@ def rerun_campaign(run_id: str):
     if run_id not in RUNS:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
     run = RUNS[run_id]
-    if run.get("status") not in ("failed", "failed_resumable"):
-        raise HTTPException(status_code=400, detail="Only failed runs can be re-run.")
+    if run.get("status") not in ("failed", "failed_resumable", "cancelled"):
+        raise HTTPException(status_code=400, detail="Only failed or cancelled runs can be re-run.")
     brief_data = run.get("brief", {})
     brief = CampaignBrief(**brief_data)
     new_run_id = str(uuid.uuid4())[:8]
@@ -191,6 +191,41 @@ def rerun_campaign(run_id: str):
     return {"status": "queued", "run_id": new_run_id, "rerun_of": run_id}
 
 
+@router.post("/cancel-pipeline/{run_id}")
+def cancel_pipeline(run_id: str):
+    """Request cooperative cancellation of an in-progress run. The pipeline thread
+    checks the flag at the next stage boundary and stops cleanly — it cannot interrupt
+    an LLM call already in flight, so cancellation takes effect within seconds, not
+    instantly. If the audience stage already finished, the run stays resumable."""
+    if run_id not in RUNS:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
+    status = RUNS[run_id].get("status", "")
+    if not (status.startswith("running_") or status == "queued"):
+        raise HTTPException(status_code=400, detail="This run isn't in progress.")
+    request_cancel(run_id)
+    return {"status": "cancelling", "run_id": run_id}
+
+
+@router.post("/generate-channel/{run_id}/{channel}")
+def generate_channel(run_id: str, channel: str):
+    """Generate one opt-in copy channel (google | whatsapp | email) on demand for a
+    completed run. Channels are skipped during the run by default; this produces the
+    requested one and stores it in the edit overlay so it appears on the campaign page."""
+    if channel not in ("google", "whatsapp", "email"):
+        raise HTTPException(status_code=400, detail="channel must be google, whatsapp or email")
+    run = cs.require_complete(run_id)
+    rf = Path(run["review_folder"])
+    brief = run.get("brief", {})
+    try:
+        text = cs.generate_channel_content(rf, brief, channel)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not generate {channel} copy: {exc}")
+    payload = {"ok": True, "channel": channel, "text": text}
+    if channel == "google":
+        payload["issues"] = cs.google_copy_issues(text, brief.get("city", ""))
+    return payload
+
+
 @router.post("/resume-pipeline/{run_id}")
 def resume_pipeline(run_id: str):
     """Resume a run whose ContentCrew stage failed, skipping the already-completed
@@ -199,7 +234,10 @@ def resume_pipeline(run_id: str):
     if run_id not in RUNS:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
     run = RUNS[run_id]
-    if run.get("status") != "failed_resumable":
+    # A run is resumable when its audience checkpoint survives — true for both a
+    # crash/mid-run failure ("failed_resumable") and a user cancel after stage 1
+    # ("cancelled" + checkpoint present).
+    if run.get("status") not in ("failed_resumable", "cancelled") or cs._load_pipeline_state(run_id) is None:
         raise HTTPException(status_code=400, detail="This run has no resumable checkpoint.")
     threading.Thread(target=cs.resume_pipeline, args=(run_id,), daemon=True,
                      name=f"resume-{run_id}").start()

@@ -12,10 +12,52 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from ..config import AUDIENCES_REGISTRY_PATH
-from ..models import AudienceSave, CRMAudienceRequest
+from ..models import AudienceSave, CRMAudienceRequest, RetargetSuggestionApply
 from ..services import campaign_service as cs
 
 router = APIRouter()
+
+
+@router.get("/audience-retarget-suggestions/{run_id}")
+def audience_retarget_suggestions(run_id: str):
+    """Smart-retarget suggestions for a draft campaign's audience: keep what's there,
+    propose CRM-proven / profile segments to ADD and irrelevant ones to REMOVE. Read-only
+    — the user approves each one via /apply-retarget-suggestion."""
+    run = cs.require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    brief = run.get("brief", {})
+    audience = cs.effective_audience(review_folder, brief)
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    crm_leads: list[dict] = []
+    try:
+        from pikorua_adflow.analytics import crm_analytics as _ca
+        crm_leads, _src = _ca.get_leads()
+    except Exception:
+        crm_leads = []
+    from pikorua_adflow.analytics import targeting_intelligence as _ti
+    result = _ti.suggest_targeting_changes(
+        audience,
+        clientele_type=brief.get("clientele_type", "") or "",
+        crm_leads=crm_leads,
+        token=token,
+    )
+    return {"run_id": run_id, **result}
+
+
+@router.post("/apply-retarget-suggestion/{run_id}")
+def apply_retarget_suggestion(run_id: str, payload: RetargetSuggestionApply):
+    """Apply one add/remove suggestion to a draft campaign's audience overlay."""
+    run = cs.require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    audience = dict(cs.effective_audience(review_folder, run.get("brief", {})))
+    from pikorua_adflow.analytics import targeting_intelligence as _ti
+    try:
+        audience = _ti.apply_suggestion(audience, payload.field, payload.id, payload.name, payload.op)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    cs.save_audience(review_folder, audience)
+    from pikorua_adflow.tools import meta_targeting as _mt
+    return {"run_id": run_id, "audience": audience, "summary": _mt.audience_summary(audience)}
 
 
 @router.get("/audience/{run_id}")

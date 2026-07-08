@@ -155,6 +155,123 @@ def autooptimiser_retarget_all():
     return result
 
 
+class ApplyLiveRetargetReq(BaseModel):
+    campaign_id: str
+    field: str = Field(..., description="interests | behaviours | work_positions | industries")
+    id: str
+    name: str = ""
+    op: str = Field(..., description="add | remove")
+
+
+def _live_audience_from_adsets(adsets: list[dict]) -> dict:
+    """Collapse the flexible_spec segments across a campaign's ad sets into an
+    audience-shaped dict the smart-retarget analyzer understands."""
+    interests, behaviours, work_positions, industries = {}, {}, {}, {}
+    for adset in adsets:
+        for group in ((adset.get("targeting") or {}).get("flexible_spec") or []):
+            for e in group.get("interests", []) or []:
+                interests[str(e.get("id"))] = {"id": str(e.get("id")), "name": e.get("name", "")}
+            for e in group.get("behaviors", []) or []:
+                behaviours[str(e.get("id"))] = {"id": str(e.get("id")), "name": e.get("name", "")}
+            for e in group.get("work_positions", []) or []:
+                work_positions[str(e.get("id"))] = {"id": str(e.get("id")), "name": e.get("name", "")}
+            for e in group.get("industries", []) or []:
+                industries[str(e.get("id"))] = {"id": str(e.get("id")), "name": e.get("name", "")}
+    return {"interests": list(interests.values()), "behaviours": list(behaviours.values()),
+            "work_positions": list(work_positions.values()), "industries": list(industries.values())}
+
+
+@router.get("/targeting-health")
+def targeting_health(refresh: bool = False):
+    """Targeting health: (1) NEW Meta targeting parameters not yet in our pools — so the
+    user can adopt useful ones; (2) the write-deprecated params we auto-strip at publish,
+    with reasons. The 'new params' diff comes from targeting_pool_refresh (cached to disk;
+    pass refresh=true to re-query Meta)."""
+    import pathlib
+    from pikorua_adflow.tools import targeting_deprecations as _dep
+
+    deprecations = [{"field": e["field"], "reason": e["reason"],
+                     "substitute": (e.get("substitute") or {}).get("name", "")}
+                    for e in _dep.WRITE_DEPRECATED]
+
+    report = None
+    report_path = pathlib.Path("outputs") / "targeting_pool_report.json"
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if refresh and token:
+        try:
+            from pikorua_adflow.tools import targeting_pool_refresh as _tpr
+            report = _tpr.generate_report(token)
+        except Exception as exc:
+            report = {"error": str(exc)}
+    if report is None and report_path.exists():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception:
+            report = None
+
+    new_params = []
+    if report and isinstance(report.get("classes"), dict):
+        for cls, info in report["classes"].items():
+            for e in (info.get("new") or [])[:25]:
+                new_params.append({"class": cls, "id": e.get("id", ""),
+                                   "name": e.get("name", ""),
+                                   "audience_size": e.get("audience_size", 0)})
+
+    return {
+        "deprecations": deprecations,
+        "new_params": new_params,
+        "report_generated_at": (report or {}).get("generated_at"),
+        "has_report": report is not None,
+        "token_configured": bool(token),
+    }
+
+
+@router.get("/campaign-retarget-suggestions")
+def campaign_retarget_suggestions(campaign_id: str, clientele_type: str = ""):
+    """Smart-retarget suggestions for a LIVE campaign — keep current targeting, propose
+    segments to add (CRM-proven / profile) and remove (irrelevant). Read-only."""
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
+    from pikorua_adflow.tools.meta_tool import fetch_campaign_adsets
+    adsets = fetch_campaign_adsets(campaign_id, token)
+    if not adsets:
+        return {"campaign_id": campaign_id, "add": [], "remove": [], "kept": 0,
+                "note": "No ad sets found for this campaign."}
+    current = _live_audience_from_adsets(adsets)
+    crm_leads: list[dict] = []
+    try:
+        from pikorua_adflow.analytics import crm_analytics as _ca
+        crm_leads, _src = _ca.get_leads()
+    except Exception:
+        crm_leads = []
+    from pikorua_adflow.analytics import targeting_intelligence as _ti
+    result = _ti.suggest_targeting_changes(current, clientele_type=clientele_type,
+                                           crm_leads=crm_leads, token=token)
+    return {"campaign_id": campaign_id, **result}
+
+
+@router.post("/campaign-apply-retarget")
+def campaign_apply_retarget(req: ApplyLiveRetargetReq):
+    """Apply one add/remove suggestion across a live campaign's ad sets."""
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not set.")
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    from pikorua_adflow.tools.meta_tool import apply_segment_to_campaign
+    try:
+        result = apply_segment_to_campaign(
+            req.campaign_id, req.field, {"id": req.id, "name": req.name}, req.op,
+            token, dry_run=dry_run,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result["errors"] and not any(u.get("ok") for u in result["updated"]):
+        raise HTTPException(status_code=502, detail=f"All ad sets failed: {result['errors']}")
+    _invalidate_cache()
+    return result
+
+
 @router.post("/autooptimiser-strategist-approve")
 def autooptimiser_strategist_approve(req: StrategistApproveReq):
     """

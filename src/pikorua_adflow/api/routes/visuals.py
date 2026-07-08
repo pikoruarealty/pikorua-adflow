@@ -17,7 +17,7 @@ from ..models import (AssignImagePayload, GenerateRefVariantPayload, ImageGenReq
                       RegeneratePromptPayload, SavePromptPayload)
 from ..services import campaign_service as cs
 from ..services import image_service as imgs
-from ..state import RUNS
+from ..state import RUNS, clear_cancel, is_cancelled, request_cancel
 from ...crews.content_crew.task_composer import get_variant_meta as _get_variant_meta
 
 router = APIRouter()
@@ -228,13 +228,23 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
 
     saved_edits = cs.load_edits(review_folder)
 
+    # Cooperative cancel: clear any stale flag from a previous run, then check it at
+    # the top of each image so a concurrent POST /cancel-images stops the batch cleanly
+    # between images (an image already being rendered by Ideogram finishes first).
+    cancel_key = f"img:{run_id}"
+    clear_cancel(cancel_key)
+
     results = []
     errors = []
+    cancelled = False
     for entry in visual_entries:
         i = entry.get("prompt_num", 0)
         is_alongside = i in alongside_set
         if i not in selected and not is_alongside:
             continue
+        if is_cancelled(cancel_key):
+            cancelled = True
+            break
         if is_alongside:
             k = 2
             while (images_dir / f"image_{i}_v{k}.png").exists():
@@ -421,7 +431,17 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
             meta[str(k)] = {"source": "manual"}
         cs.save_edits(review_folder, edits)
 
-    return {"run_id": run_id, "generated": results, "errors": errors}
+    clear_cancel(cancel_key)
+    return {"run_id": run_id, "generated": results, "errors": errors, "cancelled": cancelled}
+
+
+@router.post("/cancel-images/{run_id}")
+def cancel_images(run_id: str):
+    """Request cooperative cancellation of an in-progress image batch for this run.
+    The generate loop checks the flag between images and stops; an image already being
+    rendered finishes first. Images generated before the cancel are kept."""
+    request_cancel(f"img:{run_id}")
+    return {"status": "cancelling", "run_id": run_id}
 
 
 @router.post("/save-prompt/{run_id}/{prompt_num}")

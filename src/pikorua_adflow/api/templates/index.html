@@ -97,6 +97,23 @@
               <input type="checkbox" id="cheque_only" name="cheque_only" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
               100% cheque payment only
             </label>
+            <div class="pt-2">
+              <div class="label-caps text-outline mb-1">Also write now <span class="text-outline-variant normal-case">(optional — Meta ads + images are always made; you can also generate these later on the campaign page)</span></div>
+              <div class="flex flex-wrap gap-x-6 gap-y-2">
+                <label class="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" id="generate_google" name="generate_google" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
+                  Google ads
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" id="generate_whatsapp" name="generate_whatsapp" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
+                  WhatsApp message
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" id="generate_email" name="generate_email" class="w-4 h-4 text-primary rounded-sm focus:ring-primary"/>
+                  Email
+                </label>
+              </div>
+            </div>
           </div>
         </details>
 
@@ -244,19 +261,35 @@ function setStatus(html, kind) {
   box.innerHTML = html;
 }
 
+function cancelLink(runId) {
+  return ' <button onclick="cancelCurrentRun(\'' + runId + '\')" class="label-caps text-outline hover:text-error underline ml-2">Cancel</button>';
+}
+function cancelCurrentRun(runId) {
+  if (!confirm('Cancel this campaign? It stops at the next step.')) return;
+  api('/cancel-pipeline/' + runId, { method: 'POST' })
+    .then(() => setStatus('Cancelling…', 'queued'))
+    .catch(e => setStatus('Could not cancel: ' + e.message, 'fail'));
+}
 function poll(runId) {
   fetch('/status/' + runId).then(r => r.json()).then(data => {
     const s = data.status;
-    if (s === 'queued') setStatus('Getting started…', 'queued');
-    else if (s === 'running_stage1') setStatus('Researching your ideal buyers and the local market…', 'running');
-    else if (s === 'running_stage2') setStatus('Writing your ads, WhatsApp messages and emails…', 'running');
-    else if (s === 'running_stage3') setStatus('Reviewing and polishing the best versions…', 'running');
+    if (s === 'queued') setStatus('Getting started…' + cancelLink(runId), 'queued');
+    else if (s === 'running_stage1') setStatus('Researching your ideal buyers and the local market…' + cancelLink(runId), 'running');
+    else if (s === 'running_stage2') setStatus('Writing your ads and visuals…' + cancelLink(runId), 'running');
+    else if (s === 'running_stage3') setStatus('Reviewing and polishing the best versions…' + cancelLink(runId), 'running');
     else if (s === 'complete') {
       clearInterval(pollTimer);
       const sc = data.copy_scorecard_summary ? '<br><small>' + esc(data.copy_scorecard_summary) + '</small>' : '';
       setStatus('✓ Your campaign is ready to review.' + sc, 'ok');
       btn.disabled = false;
       loadResults(runId);
+    } else if (s === 'cancelled') {
+      clearInterval(pollTimer);
+      const resumeMsg = data.resumable
+        ? ' Research finished — you can resume it from the <a href="/campaigns" class="text-primary underline">campaigns list</a>.'
+        : '';
+      setStatus('Campaign cancelled.' + resumeMsg, 'queued');
+      btn.disabled = false;
     } else if (s === 'failed' || s === 'failed_resumable') {
       clearInterval(pollTimer);
       setStatus('✗ Something went wrong: ' + esc(data.error || 'unknown error') + '. Please try again.', 'fail');
@@ -378,6 +411,9 @@ form.addEventListener('submit', function (e) {
     cta: form.cta.value, company_name: form.company_name.value.trim(),
     sample_ready: form.sample_ready.checked,
     cheque_only: form.cheque_only.checked,
+    generate_google: document.getElementById('generate_google').checked,
+    generate_whatsapp: document.getElementById('generate_whatsapp').checked,
+    generate_email: document.getElementById('generate_email').checked,
     property_description: document.getElementById('property_description').value.trim(),
     amenities: amenities,
   };
