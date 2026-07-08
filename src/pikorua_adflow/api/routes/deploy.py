@@ -124,6 +124,23 @@ def deploy_to_meta(run_id: str, req: DeployToMetaReq | None = None):
     results = []
     errors = []
 
+    # ── Budget pacing (fix: was N× overspend) ────────────────────────────────
+    # daily_budget_inr is the intended TOTAL daily spend for the campaign (the form
+    # computes it as total ÷ duration). The curated path creates ONE ad set PER
+    # variant, each with its own daily budget, so passing the full amount to every
+    # variant multiplied real spend by the variant count and burned the budget in
+    # days/N. Split it across the selected variants so the campaign's combined daily
+    # spend equals daily_budget_inr and the budget lasts the intended duration.
+    # Dynamic creative uses a single ad set for the whole pool, so it keeps the full
+    # amount.
+    n_variants = max(1, len(selected))
+    per_variant_budget_inr = max(1, daily_budget_inr // n_variants) if creative_mode != "dynamic" else daily_budget_inr
+    budget_note = {
+        "campaign_daily_total_inr": daily_budget_inr,
+        "per_adset_daily_inr": per_variant_budget_inr,
+        "adset_count": 1 if creative_mode == "dynamic" else n_variants,
+    }
+
     if creative_mode == "dynamic":
         headlines, bodies, image_paths = [], [], []
         for variant_num in selected:
@@ -167,7 +184,7 @@ def deploy_to_meta(run_id: str, req: DeployToMetaReq | None = None):
                 result = deploy_ad(
                     variant=variant_num, headline=headline, body=body_text, image_path=image_path,
                     campaign_name=campaign_name, city=city, landing_page_url=landing_page_url,
-                    daily_budget_inr=daily_budget_inr, cta=cta, targeting_spec=targeting_spec,
+                    daily_budget_inr=per_variant_budget_inr, cta=cta, targeting_spec=targeting_spec,
                     audience_label=audience_label, end_time=end_time, campaign_id=shared_campaign_id,
                     adset_id=brief.get("target_adset_id", ""),
                 )
@@ -206,7 +223,7 @@ def deploy_to_meta(run_id: str, req: DeployToMetaReq | None = None):
             RUNS[run_id]["meta_targeting_stripped"] = targeting_stripped
     save_runs()
     return {"run_id": run_id, "deployed": results, "errors": errors, "dropped_locations": dropped,
-            "targeting_stripped": targeting_stripped}
+            "targeting_stripped": targeting_stripped, "budget": budget_note}
 
 
 @router.post("/publish-additional-variant/{run_id}/{variant}")

@@ -73,9 +73,12 @@ async def _lifespan(_app: FastAPI):
         scheduler.add_job(_daily_autooptimiser_run, "cron",
                           hour=2, minute=0, id="daily_autooptimiser",
                           replace_existing=True)
-        # Every 30 days (first run 30 days after server start)
-        scheduler.add_job(_monthly_retarget, "interval",
-                          days=30, id="monthly_retarget",
+        # Monthly retarget on a fixed calendar day (1st, 02:30 UTC). An "interval,
+        # days=30" job resets its next-run to now+30d on every process start, so with
+        # frequent redeploys it never fired; an anchored cron is restart-proof. The
+        # job itself is idempotent (periodic_retarget_all skips if it ran recently).
+        scheduler.add_job(_monthly_retarget, "cron",
+                          day=1, hour=2, minute=30, id="monthly_retarget",
                           replace_existing=True)
         scheduler.start()
         print("[scheduler] APScheduler started — daily 02:00 UTC + 30-day retarget.")

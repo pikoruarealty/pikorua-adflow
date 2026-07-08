@@ -51,6 +51,7 @@ _CANON: dict[str, list[str]] = {
     "assignedto": ["assignedto", "owner", "salesrep"],
     "callstatus": ["callstatus"],
     "hwc": ["hwc"],
+    "sitevisitstatus": ["sitevisitstatus", "sitevisit", "visitstatus"],
     "buyingstatus": ["buyingstatus", "buying"],
     "budget": ["budget", "budgetrange", "budgetbracket", "pricerange"],
     "profession": ["profession", "occupation", "job", "designation"],
@@ -107,16 +108,17 @@ _QUALITY_CLIENT_STATUSES = {"hot", "warm", "interested", "active"}
 
 def _is_quality(norm_row: dict) -> bool:
     """
-    A lead is 'quality' when either:
-    - client_status is hot/warm/interested/active, OR
-    - buying_status is exploring/warm/hot/interested/postponed/still searching.
-    client_status is checked first (explicit human judgement > CRM buying field).
+    A lead is 'quality' when it classifies as a 'good' lead under the editable
+    categorisation rules (analytics.lead_rules — ordered, bad-before-good).
+
+    This replaced an earlier inline check that used substring matching with the
+    good list evaluated before the bad list, so "not interested" matched the good
+    term "interested" and counted as quality. The rule engine's ordering makes that
+    impossible. `_QUALITY_*_STATUSES` are kept as module aliases for any external
+    importer but are no longer the decision path.
     """
-    cs = norm_row.get("clientstatus", "").strip().lower()
-    if cs and any(q in cs for q in _QUALITY_CLIENT_STATUSES):
-        return True
-    bs = norm_row.get("buyingstatus", "").strip().lower()
-    return any(q in bs for q in _QUALITY_BUYING_STATUSES)
+    from pikorua_adflow.analytics import lead_rules
+    return lead_rules.is_good(norm_row)
 
 
 def _quality_rate(norm_rows: list[dict]) -> float:
@@ -672,7 +674,12 @@ def match_meta_leads(leads: list[dict], campaign_name: str) -> list[dict]:
     for row in leads or []:
         norm = _normalize([row])[0]
         hay = _key(norm.get("campaign", ""))
-        if hay and (needle in hay or hay in needle or hay in alias_keys):
+        # `needle in hay`: the (long) Meta campaign name appears in the lead's campaign
+        # string — safe. `hay in needle`: the lead's campaign string is a substring of
+        # the Meta name — only trust this when hay is long enough to be meaningful, so
+        # a 2-3 char stamp doesn't attribute one lead to many campaigns (short/oddly
+        # named ones are matched explicitly via alias_keys instead).
+        if hay and (needle in hay or (len(hay) >= 4 and hay in needle) or hay in alias_keys):
             out.append(row)
             already_ids.add(id(row))
 

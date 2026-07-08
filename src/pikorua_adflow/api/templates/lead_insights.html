@@ -8,10 +8,42 @@
     <h1 class="font-display text-4xl md:text-5xl">Lead Insights</h1>
     <p id="src" class="text-sm text-outline mt-2"></p>
   </div>
-  <button onclick="refresh()" class="border border-outline label-caps px-5 py-2 hover:bg-surface-container-low">Refresh</button>
+  <div class="flex gap-3">
+    <button onclick="openCatModal()" class="border border-outline label-caps px-5 py-2 hover:bg-surface-container-low">Categorization Settings</button>
+    <button onclick="refresh()" class="border border-outline label-caps px-5 py-2 hover:bg-surface-container-low">Refresh</button>
+  </div>
 </header>
 
 <div id="board"><p class="text-on-surface-variant">Loading CRM intelligence…</p></div>
+
+<!-- ── Categorization Settings modal ─────────────────────────────────────── -->
+<div id="cat-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-start justify-center overflow-y-auto py-10">
+  <div class="bg-surface-container-low border border-outline-variant w-full max-w-2xl mx-4 shadow-2xl">
+    <div class="flex justify-between items-center px-6 py-5 border-b border-outline-variant">
+      <h2 class="font-headline text-2xl">Categorization Settings</h2>
+      <button onclick="closeCatModal()" class="text-outline hover:text-on-surface text-xl leading-none">✕</button>
+    </div>
+    <div class="px-6 py-5">
+      <p class="text-sm text-on-surface-variant mb-1">Create rules to classify leads based on their column values.
+        Rules are evaluated top to bottom — the first rule that fully matches wins.</p>
+      <p class="text-xs text-outline mb-4">Within a rule, every condition must match (AND). Different rules are alternatives (OR).
+        Put “Bad Lead” rules above “Good Lead” rules so a status like “Not Interested” is never mistaken for “Interested”.</p>
+      <div id="cat-counts" class="text-xs text-outline mb-4"></div>
+      <div id="cat-rules" class="space-y-3"></div>
+      <button onclick="catAddRule()" class="mt-4 border border-outline-variant label-caps px-4 py-2 text-sm hover:bg-surface-container">+ Add Rule</button>
+      <p id="cat-msg" class="text-sm mt-3"></p>
+    </div>
+    <div class="flex flex-wrap gap-3 px-6 py-5 border-t border-outline-variant">
+      <button onclick="catImport()" class="border border-outline-variant label-caps px-4 py-2 text-sm hover:bg-surface-container">Import JSON</button>
+      <button onclick="catExport()" class="border border-outline-variant label-caps px-4 py-2 text-sm hover:bg-surface-container">Export JSON</button>
+      <button onclick="catReset()" class="border border-outline-variant label-caps px-4 py-2 text-sm hover:bg-surface-container">Reset to defaults</button>
+      <button onclick="catClear()" class="border border-outline-variant label-caps px-4 py-2 text-sm hover:bg-surface-container">Clear All</button>
+      <button onclick="catSave()" class="ml-auto bg-primary text-on-primary label-caps px-6 py-2 text-sm hover:opacity-90">Save &amp; Apply</button>
+    </div>
+  </div>
+</div>
+<div id="cat-datalists-holder" class="hidden"></div>
+<input type="file" id="cat-import-file" accept="application/json,.json" class="hidden"/>
 {% endblock %}
 
 {% block scripts %}
@@ -118,5 +150,154 @@ function loadInsights() {
 function load() { api('/crm-analytics/summary').then(render).catch(e => { document.getElementById('board').innerHTML = '<p class="text-error">' + e.message + '</p>'; }); }
 function refresh() { document.getElementById('board').innerHTML = '<p class="text-on-surface-variant">Refreshing…</p>'; api('/crm-analytics/refresh').then(render).catch(() => load()); }
 load();
+
+/* ── Categorization Settings editor ─────────────────────────────────────── */
+let CAT = { meta: null, fieldValues: {}, rules: [] };
+
+function catPostJSON(url, body) {
+  return fetch(url, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  }).then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status)); return d; });
+}
+
+function openCatModal() {
+  document.getElementById('cat-modal').classList.remove('hidden');
+  document.getElementById('cat-msg').textContent = '';
+  api('/categorization-rules').then(d => {
+    CAT.meta = d.metadata; CAT.fieldValues = d.field_values || {};
+    CAT.rules = (d.rules && d.rules.length) ? d.rules : (d.default_rules || []);
+    buildDatalists();
+    catRender();
+    catShowCounts(d.counts, d.using_defaults);
+  }).catch(e => { document.getElementById('cat-msg').innerHTML = '<span class="text-error">Could not load rules: ' + esc(e.message) + '</span>'; });
+}
+function closeCatModal() { document.getElementById('cat-modal').classList.add('hidden'); }
+
+function buildDatalists() {
+  const holder = document.getElementById('cat-datalists-holder');
+  holder.innerHTML = (CAT.meta.fields || []).map(f => {
+    const vals = CAT.fieldValues[f.key] || [];
+    return '<datalist id="vals-' + f.key + '">' + vals.map(v => '<option value="' + esc(v) + '"></option>').join('') + '</datalist>';
+  }).join('');
+}
+
+function catShowCounts(counts, usingDefaults) {
+  if (!counts) { document.getElementById('cat-counts').textContent = ''; return; }
+  const el = document.getElementById('cat-counts');
+  el.innerHTML = (usingDefaults ? '<span class="text-warn">Using built-in defaults. </span>' : '') +
+    'Current classification of ' + (counts.total || 0) + ' leads — ' +
+    '<span class="text-ok">' + (counts.good || 0) + ' good</span>, ' +
+    '<span class="text-error">' + (counts.bad || 0) + ' bad</span>, ' +
+    (counts.broker || 0) + ' broker, ' + (counts.unclassified || 0) + ' unclassified.';
+}
+
+function optionList(items, selected, valueKey, labelKey) {
+  return items.map(i => '<option value="' + esc(i[valueKey]) + '"' + (i[valueKey] === selected ? ' selected' : '') + '>' + esc(i[labelKey]) + '</option>').join('');
+}
+
+function catRender() {
+  catCollect(); // preserve any in-progress edits before re-rendering
+  const box = document.getElementById('cat-rules');
+  if (!CAT.rules.length) { box.innerHTML = '<p class="text-sm text-outline">No rules — every lead will be “unclassified”. Add a rule or Reset to defaults.</p>'; return; }
+  const fields = CAT.meta.fields, ops = CAT.meta.ops, cats = CAT.meta.categories;
+  box.innerHTML = CAT.rules.map((rule, ri) => {
+    const conds = (rule.conditions || []).map((c, ci) => {
+      const listAttr = ' list="vals-' + (c.field || fields[0].key) + '"';
+      return '<div class="cat-cond flex flex-wrap items-center gap-2" data-ri="' + ri + '" data-ci="' + ci + '">' +
+        '<select class="cond-field bg-surface-container border border-outline-variant px-2 py-1 text-sm" onchange="catFieldChanged(this)">' + optionList(fields, c.field, 'key', 'label') + '</select>' +
+        '<select class="cond-op bg-surface-container border border-outline-variant px-2 py-1 text-sm">' + optionList(ops, c.op || 'contains_any', 'key', 'label') + '</select>' +
+        '<input class="cond-values bg-surface-container border border-outline-variant px-2 py-1 text-sm flex-1 min-w-[10rem]"' + listAttr + ' placeholder="value, value…" value="' + esc((c.values || []).join(', ')) + '"/>' +
+        (ci > 0 ? '<button onclick="catRemoveCond(' + ri + ',' + ci + ')" class="text-error text-xs px-2">✕</button>' : '') +
+        '</div>';
+    }).join('<div class="text-[10px] label-caps text-outline pl-1">AND</div>');
+    return '<div class="cat-rule border border-outline-variant p-4" data-ri="' + ri + '">' +
+      '<div class="space-y-2">' + conds + '</div>' +
+      '<button onclick="catAddCond(' + ri + ')" class="mt-2 text-xs label-caps text-primary hover:underline">+ AND condition</button>' +
+      '<div class="flex items-center gap-2 mt-3 pt-3 border-t border-outline-variant">' +
+        '<span class="label-caps text-outline text-xs">then →</span>' +
+        '<select class="rule-category bg-surface-container border border-outline-variant px-2 py-1 text-sm">' + optionList(cats, rule.category, 'key', 'label') + '</select>' +
+        '<button onclick="catRemoveRule(' + ri + ')" class="ml-auto text-error label-caps text-xs px-2 py-1 border border-outline-variant hover:bg-surface-container">✕ Remove rule</button>' +
+      '</div></div>';
+  }).join('<div class="text-center label-caps text-outline text-xs">OR</div>');
+}
+
+function catFieldChanged(sel) {
+  const input = sel.parentElement.querySelector('.cond-values');
+  if (input) input.setAttribute('list', 'vals-' + sel.value);
+}
+
+function catCollect() {
+  const box = document.getElementById('cat-rules');
+  const ruleEls = box.querySelectorAll('.cat-rule');
+  if (!ruleEls.length) return; // nothing rendered yet
+  const rules = [];
+  ruleEls.forEach(rEl => {
+    const conds = [];
+    rEl.querySelectorAll('.cat-cond').forEach(cEl => {
+      const field = cEl.querySelector('.cond-field').value;
+      const op = cEl.querySelector('.cond-op').value;
+      const values = cEl.querySelector('.cond-values').value.split(',').map(s => s.trim()).filter(Boolean);
+      conds.push({ field, op, values });
+    });
+    const category = rEl.querySelector('.rule-category').value;
+    rules.push({ category, conditions: conds });
+  });
+  CAT.rules = rules;
+}
+
+function catAddRule() { catCollect(); CAT.rules.push({ category: 'good', conditions: [{ field: CAT.meta.fields[0].key, op: 'contains_any', values: [] }] }); catRender(); }
+function catAddCond(ri) { catCollect(); CAT.rules[ri].conditions.push({ field: CAT.meta.fields[0].key, op: 'contains_any', values: [] }); catRender(); }
+function catRemoveCond(ri, ci) { catCollect(); CAT.rules[ri].conditions.splice(ci, 1); if (!CAT.rules[ri].conditions.length) CAT.rules[ri].conditions.push({ field: CAT.meta.fields[0].key, op: 'contains_any', values: [] }); catRender(); }
+function catRemoveRule(ri) { catCollect(); CAT.rules.splice(ri, 1); catRender(); }
+function catClear() { CAT.rules = []; catRender(); document.getElementById('cat-msg').textContent = 'Cleared — press Save & Apply to persist an empty rule set, or Reset to defaults.'; }
+
+function catSave() {
+  catCollect();
+  const msg = document.getElementById('cat-msg');
+  msg.innerHTML = '<span class="text-outline">Saving…</span>';
+  catPostJSON('/categorization-rules', { rules: CAT.rules }).then(d => {
+    msg.innerHTML = '<span class="text-ok">Saved &amp; applied.</span>';
+    catShowCounts(d.counts, false);
+    refresh(); // recompute the insights board with the new categorisation
+  }).catch(e => { msg.innerHTML = '<span class="text-error">' + esc(e.message) + '</span>'; });
+}
+
+function catReset() {
+  if (!confirm('Reset categorisation to the built-in defaults? This deletes your custom rules.')) return;
+  catPostJSON('/categorization-rules/reset', {}).then(d => {
+    CAT.rules = d.rules; catRender(); catShowCounts(d.counts, true);
+    document.getElementById('cat-msg').innerHTML = '<span class="text-ok">Reset to defaults.</span>';
+    refresh();
+  }).catch(e => { document.getElementById('cat-msg').innerHTML = '<span class="text-error">' + esc(e.message) + '</span>'; });
+}
+
+function catExport() {
+  catCollect();
+  const blob = new Blob([JSON.stringify({ version: 1, rules: CAT.rules }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'pikorua_categorization_rules.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+function catImport() {
+  const inp = document.getElementById('cat-import-file');
+  inp.onchange = () => {
+    const file = inp.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const rules = Array.isArray(parsed) ? parsed : parsed.rules;
+        if (!Array.isArray(rules)) throw new Error('JSON must be a rules array or { rules: [...] }.');
+        CAT.rules = rules; catRender();
+        document.getElementById('cat-msg').innerHTML = '<span class="text-ok">Imported ' + rules.length + ' rule(s) — press Save &amp; Apply to persist.</span>';
+      } catch (e) { document.getElementById('cat-msg').innerHTML = '<span class="text-error">Import failed: ' + esc(e.message) + '</span>'; }
+      inp.value = '';
+    };
+    reader.readAsText(file);
+  };
+  inp.click();
+}
 </script>
 {% endblock %}

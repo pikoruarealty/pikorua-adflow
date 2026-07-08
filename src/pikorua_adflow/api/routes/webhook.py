@@ -20,6 +20,8 @@ Env vars required:
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import urllib.request
@@ -30,6 +32,17 @@ from fastapi.responses import PlainTextResponse
 router = APIRouter()
 
 _GRAPH = "https://graph.facebook.com/v21.0"
+
+
+def _verify_signature(raw: bytes, header: str, app_secret: str) -> bool:
+    """Verify Meta's X-Hub-Signature-256 HMAC over the raw request body.
+    The endpoint is public (no session cookie), so without this anyone could POST a
+    crafted leadgen payload and make the server fetch data with our ads token and
+    write to the leadgen mapping. Constant-time compared."""
+    if not header.startswith("sha256="):
+        return False
+    expected = hmac.new(app_secret.encode(), raw, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header.split("=", 1)[1])
 
 
 def _fetch_lead_field_data(leadgen_id: str, token: str) -> dict[str, str]:
@@ -81,8 +94,20 @@ async def webhook_receive(request: Request) -> dict:
 
     token = os.getenv("META_ACCESS_TOKEN", "")
 
+    raw = await request.body()
+
+    # Reject forged/unsigned calls when an app secret is configured (recommended).
+    # Set META_APP_SECRET (Meta → App → Settings → Basic) to activate verification.
+    # Returns 200 ok:False on failure so Meta doesn't retry-storm, but the payload is
+    # NOT processed.
+    app_secret = os.getenv("META_APP_SECRET", "")
+    if app_secret:
+        sig = request.headers.get("x-hub-signature-256", "")
+        if not _verify_signature(raw, sig, app_secret):
+            return {"ok": False, "stored": 0, "error": "signature verification failed"}
+
     try:
-        body = await request.json()
+        body = json.loads(raw)
     except Exception:
         return {"ok": False, "stored": 0, "error": "Invalid JSON body."}
 

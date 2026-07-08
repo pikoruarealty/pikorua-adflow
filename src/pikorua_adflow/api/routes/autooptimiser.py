@@ -148,10 +148,10 @@ class StrategistApproveReq(BaseModel):
 def autooptimiser_retarget_all():
     """
     Rung 12 — refresh targeting on all active campaigns against the current
-    CLIENTELE_TARGETING_MAP. Called by APScheduler every 30 days; also
-    triggerable manually from the AutoOptimiser page.
+    CLIENTELE_TARGETING_MAP. Called by APScheduler monthly; also triggerable
+    manually from the AutoOptimiser page (manual = force past the recency guard).
     """
-    result = autooptimiser.periodic_retarget_all()
+    result = autooptimiser.periodic_retarget_all(force=True)
     return result
 
 

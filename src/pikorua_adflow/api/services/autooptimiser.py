@@ -70,6 +70,15 @@ COOLDOWN_DAYS    = AO_COOLDOWN_DAYS
 AB_WINDOW_DAYS = 7          # days to run A/B pairs before declaring a winner (B2)
 AB_WINDOW_EXTENSION = 2     # days to extend once if result is inconclusive
 
+# Actions the LLM strategist may auto-apply WITHOUT human approval. The strategist
+# self-tags each suggestion "safe"/"risky", but that tag is model-generated — this
+# server-side allowlist is the real gate. Anything touching budget or pausing a
+# campaign/ad is deliberately excluded, so a mislabelled suggestion can never move
+# spend or pause delivery unattended.
+_LLM_SAFE_ACTIONS = frozenset({
+    "add_exclusion", "add_lookalike", "add_interests", "enable_advantage", "dayparting",
+})
+
 
 _STATE_PATH = OUTPUT_DIR / "autooptimiser_state.json"
 _NRI_DEFAULT = ["AE", "GB", "US", "SG"]
@@ -332,8 +341,11 @@ def _should_inject_reference(campaign_name: str, profiles: list[dict]) -> bool:
     if len(profiles) >= 3:
         return False  # enough real data — don't override with a static heuristic
     # Apply only to bungalow/premium-style campaigns (inferred from name keywords).
+    # NB: an empty string used to be in this tuple, and "" in cn is always True, so
+    # the reference profile leaked into every campaign (incl. NRI/commercial, which
+    # have different buyers). Keep the keyword list real so the gate actually gates.
     cn = campaign_name.strip().lower()
-    return any(kw in cn for kw in ("bungalow", "villa", "premium", "luxury", "pikorua", ""))
+    return any(kw in cn for kw in ("bungalow", "villa", "premium", "luxury", "pikorua"))
 
 
 def adaptive_quality(campaign_name: str, spend_7d: float, leads_7d: int,
@@ -510,17 +522,27 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
                 if perf["has_winner_loser"]:
                     w_cpl = perf["winner_cpl"] or 0
                     l_cpl = perf["loser_cpl"] or 0
-                    budget_paise = campaign.get("daily_budget")
-                    cur_budget = int(int(budget_paise) / 100) if budget_paise else 1000
-                    new_budget = min(int(cur_budget * 1.30), cur_budget + 2000)
+                    # Size the boost from the WINNER ad set's LIVE budget — never from
+                    # campaign.daily_budget (None under ABO, which is this account's setup)
+                    # and never a fabricated default that could SLASH a well-funded winner.
+                    from . import deploy_service as _ds
+                    win_adset_id = perf.get("winner_adset_id") or adset_id
+                    try:
+                        cur_budget = _ds.live_adset_budget_inr(win_adset_id, token)
+                    except Exception:
+                        cur_budget = None
+                    # Only propose a budget move when we can read the real budget.
+                    new_budget = min(int(cur_budget * 1.30), cur_budget + 2000) if cur_budget else None
+                    boost_line = (f" Raising its budget to ₹{new_budget:,}/day." if new_budget
+                                  else " Its budget is left unchanged (managed at campaign level).")
                     add("winner_loser", 0, "auto",
                         "Pause the weaker ad, give budget to the winner",
                         (f"One creative costs ₹{round(l_cpl):,}/enquiry — "
                          f"{round(l_cpl / max(w_cpl, 1), 1)}× more than the other at ₹{round(w_cpl):,}. "
-                         "Pausing it and shifting its budget to the winner."),
+                         "Pausing it and shifting delivery to the winner." + boost_line),
                         "winner_loser",
                         {"loser_ad_id": perf["loser_ad_id"],
-                         "winner_adset_id": perf["winner_adset_id"],
+                         "winner_adset_id": win_adset_id,
                          "new_budget_inr": new_budget,
                          "base_budget": cur_budget,
                          "adset_id": adset_id})
@@ -690,9 +712,15 @@ def _ladder(campaign: dict, adsets: list[dict], ads: list[dict], metrics: dict,
                                "campaign_name": campaign.get("name", "")})
 
     # Rung 9 (APPROVE) — reduce budget to sustainable level.
+    # Budget lives on the AD SET under this account's ABO setup, so read it live from
+    # the ad set (campaign.daily_budget is None for ABO, which used to make this rung
+    # silently never fire). apply_fix writes the ad-set budget to match.
     if freq > 3.5 and cpl and cpl > CPL_CEILING:
-        budget_paise = campaign.get("daily_budget")
-        cur_budget = int(int(budget_paise) / 100) if budget_paise else None
+        try:
+            from . import deploy_service as _ds9
+            cur_budget = _ds9.live_adset_budget_inr(adset_id, os.getenv("META_ACCESS_TOKEN", ""))
+        except Exception:
+            cur_budget = None
         if cur_budget:
             new_budget = max(int(cur_budget * 0.7), 300)
             add("reduce_budget", 9, "approve",
@@ -815,22 +843,27 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
             # Pause the loser ad, boost the winner's ad-set budget.
             loser_ad_id = params.get("loser_ad_id", "")
             winner_adset_id = params.get("winner_adset_id", "")
-            new_budget_inr = int(params.get("new_budget_inr", 0))
-            base_budget = int(params.get("base_budget", new_budget_inr))
+            # new_budget_inr / base_budget are None when the live budget couldn't be
+            # read (e.g. CBO). In that case we pause the loser only and never write a
+            # budget — so a well-funded winner is never accidentally cut.
+            new_budget_inr = params.get("new_budget_inr")
+            base_budget = params.get("base_budget")
             if loser_ad_id:
                 mt.pause_variant(loser_ad_id, token)
-            if winner_adset_id and new_budget_inr:
-                mt.update_adset_budget(winner_adset_id, new_budget_inr, token)
+            budget_changed = bool(winner_adset_id and new_budget_inr and base_budget)
+            if budget_changed:
+                mt.update_adset_budget(winner_adset_id, int(new_budget_inr), token)
             undo = {
                 "action": "resume_loser_restore_budget",
                 "loser_ad_id": loser_ad_id,
-                "winner_adset_id": winner_adset_id,
-                "base_budget": base_budget,
+                "winner_adset_id": winner_adset_id if budget_changed else "",
+                "base_budget": int(base_budget) if budget_changed else 0,
             }
             impact = {
-                "summary": (f"Paused loser ad; winner ad-set budget → ₹{new_budget_inr:,}/day"),
+                "summary": (f"Paused loser ad; winner ad-set budget → ₹{int(new_budget_inr):,}/day"
+                            if budget_changed else "Paused the weaker ad; winner budget unchanged."),
                 "loser_paused": loser_ad_id,
-                "winner_budget": new_budget_inr,
+                "winner_budget": int(new_budget_inr) if budget_changed else None,
             }
         elif action == "remove_geo":
             from . import deploy_service as ds
@@ -1059,8 +1092,15 @@ def run_autooptimiser(apply_safe: bool = True) -> dict:
     from pikorua_adflow.tools.meta_tool import fetch_active_campaigns
     from . import crm_service
 
-    crm_leads, _ = _safe_crm_leads()
+    crm_leads, crm_source_label = _safe_crm_leads()
     crm_report = _safe_crm_report(crm_service)
+    # Safety: never AUTO-APPLY on stale data. If the live CRM (Supabase) was
+    # unreachable and we fell back to the local CSV snapshot, the quality/geo signals
+    # may be out of date — surface fixes for review instead of writing to Meta.
+    crm_on_supabase = crm_source_label.strip().lower().startswith("supabase")
+    crm_fallback = bool(crm_leads) and not crm_on_supabase
+    if crm_fallback and apply_safe:
+        apply_safe = False
     campaigns = fetch_active_campaigns(account, token)
     state = _load_state()
 
@@ -1139,6 +1179,12 @@ def run_autooptimiser(apply_safe: bool = True) -> dict:
     except Exception:
         pass
 
+    # Reload from disk before the tail mutations: apply_fix() (auto-applied fixes
+    # above) persisted cooldowns + applied-log entries to disk, but the in-memory
+    # `state` from the top of this pass doesn't have them. Saving the stale copy here
+    # used to erase this run's auto-applied undo/cooldown records. Reloading merges
+    # them back in so nothing is lost.
+    state = _load_state()
     state["last_run"] = _now().isoformat()
 
     # B2: resolve any A/B groups whose window has elapsed.
@@ -1180,20 +1226,30 @@ def run_autooptimiser(apply_safe: bool = True) -> dict:
         )
         # Route safe suggestions through the existing Tier-1 apply path.
         for sug in strategist_result.get("suggestions", []):
-            if sug.get("risk") == "safe" and apply_safe and not dry_run:
-                fix = sug.get("fix")
-                if fix:
-                    try:
-                        res = apply_fix(fix, auto=True)
-                        if res.get("ok"):
-                            llm_safe_applied.append({**fix, "impact": res.get("impact", {}),
-                                                     "source": "llm_strategist"})
-                    except Exception:
-                        pass
+            fix = sug.get("fix") or {}
+            action = fix.get("action", "")
+            # Gate on the server-side allowlist, NOT the model's self-declared risk
+            # tag — budget/pause actions can never auto-apply here even if mislabelled.
+            if (sug.get("risk") == "safe" and action in _LLM_SAFE_ACTIONS
+                    and apply_safe and not dry_run):
+                try:
+                    res = apply_fix(fix, auto=True)
+                    if res.get("ok"):
+                        llm_safe_applied.append({**fix, "impact": res.get("impact", {}),
+                                                 "source": "llm_strategist"})
+                except Exception:
+                    pass
     except Exception:
         pass  # never let the strategist break the autooptimiser
 
-    _save_state(state)
+    # Final persist as a reload-merge: the LLM-applied fixes above went through
+    # apply_fix(), which wrote fresh cooldowns/applied-log entries to disk. Overlay
+    # only the two fields this pass owns (last_run + ab_groups) onto the latest disk
+    # state so we never clobber those writes.
+    _final = _load_state()
+    _final["last_run"] = state.get("last_run") or _now().isoformat()
+    _final["ab_groups"] = state.get("ab_groups", _final.get("ab_groups", {}))
+    _save_state(_final)
 
     # Rung 11 — CAPI: fire QualifiedLead events for newly-qualified CRM leads.
     capi_result: dict = {}
@@ -1218,6 +1274,8 @@ def run_autooptimiser(apply_safe: bool = True) -> dict:
         "settled_outcomes": len(settled_outcomes),
         "strategist": strategist_result,
         "capi": capi_result,
+        "crm_source": crm_source_label,
+        "crm_fallback": crm_fallback,  # True → auto-apply was suppressed (stale CSV)
     }
 
 
@@ -1250,9 +1308,10 @@ def get_applied_log() -> list[dict]:
 
 
 # ── Rung 12 — Periodic targeting refresh ─────────────────────────────────────
-def periodic_retarget_all() -> dict:
+def periodic_retarget_all(force: bool = False) -> dict:
     """
-    Rung 12 — called by APScheduler every 30 days (and via POST /autooptimiser-retarget-all).
+    Rung 12 — called by APScheduler monthly (and via POST /autooptimiser-retarget-all).
+    force=True (manual trigger) bypasses the recently-ran idempotency guard.
     Refreshes the flexible_spec on all ACTIVE campaigns against the current
     CLIENTELE_TARGETING_MAP. DRY_RUN-gated; geo/custom-audiences never touched.
     """
@@ -1263,6 +1322,18 @@ def periodic_retarget_all() -> dict:
     dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
     if not token or not account:
         return {"error": "META credentials not configured.", "results": []}
+
+    # Idempotency guard: the scheduler fires on a fixed calendar day, so a same-day
+    # restart could trigger a second run. Skip if we retargeted within the last 20
+    # days (unless forced via the manual endpoint, which passes force=True).
+    if not force:
+        try:
+            last = _load_state().get("last_retarget")
+            if last and (_now() - datetime.fromisoformat(last)) < timedelta(days=20):
+                return {"skipped": True, "reason": "retargeted recently",
+                        "last_retarget": last, "results": []}
+        except Exception:
+            pass
 
     campaigns = fetch_active_campaigns(account, token)
     results: list[dict] = []

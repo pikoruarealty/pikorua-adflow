@@ -324,6 +324,11 @@ function assignImgToVariant(variantNum, imageNum) {
 /* ── Visuals tab ── */
 function renderVisuals() {
   const d = DETAIL;
+  const b = d.brief || {};
+  // The client's own exterior details (towers, storeys, facade, etc.) were already
+  // typed into the original property description and parsed into amenities — reuse
+  // them here instead of making the user retype what they already gave us.
+  const extSuggestion = (b.amenities && b.amenities.length) ? b.amenities.join(', ') : '';
   const root = document.getElementById('tab-visuals');
   const allGenerating = generating.size > 0;
   const spinner = '<span class="inline-block w-2.5 h-2.5 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span>';
@@ -416,8 +421,8 @@ function renderVisuals() {
         ? '<label class="label-caps text-[9px] text-on-surface-variant leading-tight">Describe the exterior — towers, storeys, facade, landscaping, amenities</label>' +
           '<textarea id="ext-brief-' + p.num + '" rows="3" oninput="onExtBriefInput(' + p.num + ')" ' +
           'class="w-full text-xs border border-outline-variant rounded bg-surface p-2 font-body resize-none" ' +
-          'placeholder="e.g. Two 18-storey towers, glass curtain wall with bronze mullions, landscaped podium, rooftop infinity pool…"></textarea>' +
-          '<button id="gen-btn-' + p.num + '" disabled onclick="genExterior(' + p.num + ')" ' + (isGen ? 'disabled ' : '') +
+          'placeholder="e.g. Two 18-storey towers, glass curtain wall with bronze mullions, landscaped podium, rooftop infinity pool…">' + esc(extSuggestion) + '</textarea>' +
+          '<button id="gen-btn-' + p.num + '" ' + (extSuggestion.trim().length > 10 && !isGen ? '' : 'disabled ') + 'onclick="genExterior(' + p.num + ')" ' +
           'class="w-full bg-primary text-on-primary rounded label-caps text-[10px] py-2 hover:bg-surface-tint transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">' +
           (isGen ? '<span class="inline-block w-2 h-2 border border-on-primary border-t-transparent rounded-full animate-spin"></span> Working…' : (hasImage ? 'REPLACE EXTERIOR' : 'GENERATE EXTERIOR')) +
           '</button>'

@@ -86,6 +86,32 @@ def _sha256(value: str) -> str:
     return hashlib.sha256(value.strip().lower().encode()).hexdigest()
 
 
+def _normalize_phone(raw: str, default_cc: str = "91") -> str:
+    """
+    Normalise a phone number to E.164-style digits (country code + number, no '+',
+    spaces or punctuation) BEFORE hashing. Meta hashes and matches on this canonical
+    form — hashing the raw CRM string ("+91 98765-43210", "098765...") produces a
+    hash that never matches, so the Custom Audience silently matches almost no one.
+
+    Rules: strip all non-digits; drop an international "00" prefix; a bare 10-digit
+    Indian mobile (optionally with a trunk leading 0) gets the default country code.
+    Returns '' when there aren't enough digits to be a real number.
+    """
+    import re as _re
+    if not raw:
+        return ""
+    digits = _re.sub(r"\D", "", str(raw))
+    if digits.startswith("00"):
+        digits = digits[2:]
+    if len(digits) == 10:
+        digits = default_cc + digits
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = default_cc + digits[1:]
+    if len(digits) < 11:  # need at least country code + a plausible subscriber number
+        return ""
+    return digits
+
+
 def _get_raw(row: dict, *names: str) -> str:
     """
     Fetch a field from a CRM row, tolerant of space / underscore / case variants.
@@ -162,6 +188,8 @@ def _load_leads(crm_path: pathlib.Path) -> list[dict]:
     """
     from pikorua_adflow.utils import crm_source
     from pikorua_adflow.analytics.crm_analytics import parse_budget_cr
+    from pikorua_adflow.analytics import crm_analytics as _ca
+    from pikorua_adflow.analytics import lead_rules as _lr
 
     rows, _source = crm_source.fetch_rows(crm_path)
     if not rows:
@@ -174,7 +202,9 @@ def _load_leads(crm_path: pathlib.Path) -> list[dict]:
         raw_phone = _get_raw(row, "Phone", "phone", "Mobile", "mobile", "Contact", "contact")
         raw_email = _get_raw(row, "Email", "email", "Email Address", "email_address")
         if raw_phone:
-            entry["phone"] = _sha256(raw_phone)
+            norm_phone = _normalize_phone(raw_phone)
+            if norm_phone:
+                entry["phone"] = _sha256(norm_phone)
         if raw_email:
             entry["email"] = _sha256(raw_email)
         if not entry:
@@ -190,12 +220,15 @@ def _load_leads(crm_path: pathlib.Path) -> list[dict]:
         raw_call    = _get_raw(row, "Call Status", "CallStatus", "call_status").lower()
         raw_city    = _get_raw(row, "City", "city", "Current City", "CurrentCity", "current_city")
 
-        # Site visitors override all other signals — they confirmed intent physically.
+        # Site visitors are surfaced as a count below; the "site visit → good" logic
+        # itself now lives in the editable rules (analytics.lead_rules default rules),
+        # ordered so it never overrides an explicit bad/broker disposition.
         is_site_visitor = any(v in raw_svisit for v in _SITE_VISIT_CONFIRMED)
 
-        category = _categorise(raw_buying, raw_client)
-        if is_site_visitor and category not in ("bad", "broker"):
-            category = "good"
+        # Categorise via the ordered rule engine (single source of truth, shared with
+        # crm_analytics quality scoring). Normalise the raw row to canonical keys first.
+        norm_row = _ca._normalize([row])[0]
+        category = _lr.classify(norm_row)
 
         # Budget signal: low-budget unclassified leads are kept in ad-delivery pool
         # but excluded from the tight lookalike seed (Item 9).

@@ -62,7 +62,10 @@ _WEEKLY_MODEL = os.getenv("AO_STRATEGIST_WEEKLY_MODEL",
 _MAX_TOKENS   = int(os.getenv("AO_STRATEGIST_MAX_TOKENS", "2048"))
 
 # ── State path ────────────────────────────────────────────────────────────────
-_STATE_PATH = Path(__file__).resolve().parents[4] / "outputs" / "strategist_state.json"
+# analytics/llm_strategist.py -> parents[0]=analytics, [1]=pikorua_adflow, [2]=src,
+# [3]=repo root. (Was parents[4], which resolved OUTSIDE the repo, so state never
+# persisted where the rest of the app reads outputs/.)
+_STATE_PATH = Path(__file__).resolve().parents[3] / "outputs" / "strategist_state.json"
 
 
 def _now() -> datetime:

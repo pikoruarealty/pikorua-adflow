@@ -8,6 +8,7 @@ it's missing, expired, or invalid.
 
 from __future__ import annotations
 
+import hmac
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -33,7 +34,8 @@ def portal_password() -> str:
 
 
 def check_password(candidate: str) -> bool:
-    return bool(candidate) and candidate == portal_password()
+    # Constant-time compare so login timing can't be used to guess the password.
+    return bool(candidate) and hmac.compare_digest(candidate, portal_password())
 
 
 def create_session_token() -> str:
