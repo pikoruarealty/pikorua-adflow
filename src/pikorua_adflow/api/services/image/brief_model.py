@@ -99,12 +99,24 @@ class BriefModel:
     @property
     def locality_split_hint(self) -> str:
         """
-        For long locality names in vertical rail layouts: return a natural two-part
-        split hint (e.g. "NEHRU / NAGAR") so the LLM and Ideogram split at the correct
-        word boundary — not a random syllable boundary.  Returns "" for short names.
+        For locality names in vertical rail layouts: return a natural two-part split
+        hint (e.g. "NEHRU / NAGAR") so the LLM and Ideogram split at the correct word
+        boundary — not a random syllable boundary.
+
+        A locality that is ALREADY two separate words (e.g. "Nehru Nagar") is genuinely
+        splittable and always gets a hint at that real word boundary. A locality that is
+        one single compound word (e.g. "Vastrapur", "Nehrunagar") must never be broken —
+        it only gets a hint if it's long enough that Ideogram would otherwise be forced
+        to wrap it awkwardly mid-word.
         """
         loc = self.locality
-        if len(loc) <= 7:
+        words = loc.split()
+        if len(words) >= 2:
+            # Real multi-word name: split into two balanced halves at word boundaries,
+            # never mid-word.
+            mid = (len(words) + 1) // 2
+            return f"{' '.join(words[:mid]).upper()} / {' '.join(words[mid:]).upper()}"
+        if len(loc) <= 15:
             return ""
         low = loc.lower()
         for suffix in self._LOCALITY_SUFFIXES:
@@ -221,16 +233,19 @@ class BriefModel:
 
         if not raw_config:
             # Extract BHK config from property_type when not provided as a separate field.
-            # Handles "luxury apartments 4&5 bhk", "4 BHK flat", "4-5 BHK villa", etc.
-            bhk_m = re.search(r'(\d+\s*[&,\-–]\s*\d+|\d+)\s*BHK', raw_property_type, re.IGNORECASE)
+            # Handles "luxury apartments 4&5 bhk", "4 BHK flat", "4-5 BHK villa",
+            # and any number of configs — "3, 4 & 5 BHK" — not just a pair.
+            bhk_m = re.search(r'((?:\d+\s*[&,\-–]\s*)+\d+|\d+)\s*BHK', raw_property_type, re.IGNORECASE)
             if bhk_m:
                 raw_config = bhk_m.group(0).strip()
-                # Normalise separator: "4&5" or "4-5" → "4 & 5"; uppercase BHK
-                raw_config = re.sub(r'(\d+)\s*[&,\-–]\s*(\d+)', r'\1 & \2', raw_config)
-                raw_config = re.sub(r'\bBHK\b', 'BHK', raw_config, flags=re.IGNORECASE)
+                # Normalise every "<num> BHK" run into "n1, n2 & n3"-style joins so no
+                # config number is silently dropped, then uppercase BHK.
+                nums = re.findall(r'\d+', bhk_m.group(1))
+                joined = ", ".join(nums[:-1]) + " & " + nums[-1] if len(nums) > 1 else nums[0]
+                raw_config = f"{joined} BHK"
                 # Strip the extracted BHK part from property_type so it doesn't duplicate
                 raw_property_type = re.sub(
-                    r'\d+\s*[&,\-–]\s*\d+\s*BHK|\d+\s*BHK', '',
+                    re.escape(bhk_m.group(0)), '',
                     raw_property_type, flags=re.IGNORECASE,
                 ).strip()
 

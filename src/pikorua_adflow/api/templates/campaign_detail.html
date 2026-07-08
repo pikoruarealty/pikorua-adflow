@@ -52,6 +52,7 @@ const selected = new Set();
 const loaded = {};
 const generating = new Set();
 const PAGE_TS = Date.now();
+let OPTIMISE_RECS = [];
 
 /* Image URL with an mtime-based cache key: the URL only changes when the file
    actually changed on disk, so re-rendering the tab (after a generate or an
@@ -684,7 +685,8 @@ function writeAndGenImage(n) {
       generating.delete(n);
       const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
       const statusMsg = (d.generated || []).length + ' image(s) generated.' + (errs ? ' ' + errs : '');
-      loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing([n]); document.getElementById('gen-status').textContent = statusMsg; });
+      return loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing([n]); document.getElementById('gen-status').textContent = statusMsg; })
+        .catch(e => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg + ' (view refresh failed: ' + e.message + ')'; });
     })
     .catch(e => {
       generating.delete(n);
@@ -703,7 +705,8 @@ function addVariantImage(n) {
       generating.delete(n);
       const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
       const statusMsg = (d.generated || []).length + ' variant(s) generated.' + (errs ? ' ' + errs : '');
-      loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing([n]); document.getElementById('gen-status').textContent = statusMsg; });
+      return loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing([n]); document.getElementById('gen-status').textContent = statusMsg; })
+        .catch(e => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg + ' (view refresh failed: ' + e.message + ')'; });
     }).catch(e => { generating.delete(n); renderVisuals(); document.getElementById('gen-status').textContent = 'Error: ' + e.message; });
 }
 function deleteVariantImage(fname) {
@@ -809,7 +812,8 @@ function genImages(prompts, mode, exteriorBrief) {
       promptList.forEach(n => generating.delete(n));
       const errs = (d.errors || []).map(e => 'Prompt ' + e.prompt + ': ' + e.error).join('; ');
       const statusMsg = (d.generated || []).length + ' image(s) generated.' + (errs ? ' ' + errs : '');
-      loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing(promptList); document.getElementById('gen-status').textContent = statusMsg; });
+      return loadDetail().then(() => { renderVisuals(); refreshLightboxIfShowing(promptList); document.getElementById('gen-status').textContent = statusMsg; })
+        .catch(e => { renderVisuals(); document.getElementById('gen-status').textContent = statusMsg + ' (view refresh failed: ' + e.message + ')'; });
     }).catch(e => {
       promptList.forEach(n => {
         generating.delete(n);
@@ -995,6 +999,8 @@ function renderAudience() {
       nri_countries: (a.nri_countries || []).slice(),
       advantage_plus: a.advantage_plus !== false,
       clientele_type: a.clientele_type || '',
+      applied_saved_audience_id: a.applied_saved_audience_id || '',
+      has_undo: !!a._pre_apply_audience,
     };
     AUD_GEO_SUGGEST = null;
     // Relevance: an audience whose name shares tokens with this campaign's
@@ -1104,12 +1110,16 @@ function renderAudience() {
     if (savedAudiences.length) {
       html += '<div class="space-y-1 max-h-32 overflow-y-auto pr-1 mb-2">';
       savedAudiences.forEach(m => {
+        const isApplied = AUD_STATE.applied_saved_audience_id === m.id;
         html += '<div class="flex items-center justify-between gap-2 text-sm py-1 border-b border-outline-variant/30">' +
           '<span class="truncate">' + esc(m.name) + matchChip(m) + '</span>' +
           '<span class="flex items-center gap-2 flex-shrink-0">' +
             '<span class="label-caps text-outline text-[10px]">' + (m.approximate_count || 0).toLocaleString() + '</span>' +
-            '<button onclick="applySavedAudience(\'' + esc(m.id) + '\', this)" ' +
-              'class="label-caps text-[10px] border border-outline rounded px-2 py-0.5 hover:bg-primary hover:text-on-primary transition-colors">Apply</button>' +
+            (isApplied
+              ? '<span class="label-caps text-[10px] text-ok inline-flex items-center gap-1"><span class="material-symbols-outlined text-[13px]">check</span> Applied</span>' +
+                '<button onclick="undoSavedAudience(this)" class="label-caps text-[10px] text-error border border-error/40 rounded px-2 py-0.5 hover:bg-error hover:text-on-error transition-colors">Undo</button>'
+              : '<button onclick="applySavedAudience(\'' + esc(m.id) + '\', this)" ' +
+                'class="label-caps text-[10px] border border-outline rounded px-2 py-0.5 hover:bg-primary hover:text-on-primary transition-colors">Apply</button>') +
           '</span>' +
         '</div>';
       });
@@ -1554,6 +1564,12 @@ function applySavedAudience(id, btn) {
     .then(d => { toast('Applied "' + (d.applied || 'saved audience') + '" — review the fields, then Save'); renderAudience(); })
     .catch(e => { if (btn) { btn.disabled = false; btn.textContent = 'Apply'; } showError(e.message); });
 }
+function undoSavedAudience(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Undoing…'; }
+  api('/undo-saved-audience/' + RUN_ID, { method: 'POST' })
+    .then(() => { toast('Reverted to the audience before that apply'); renderAudience(); })
+    .catch(e => { if (btn) { btn.disabled = false; btn.textContent = 'Undo'; } showError(e.message); });
+}
 function deploy() {
   const el = document.getElementById('deploy-status');
   const btn = document.getElementById('deploy-btn');
@@ -1572,20 +1588,90 @@ function deploy() {
 }
 function renderPublished() {
   if (!DETAIL || !DETAIL.has_live_ads) return;
+  const liveAds = (DETAIL.meta_ads || []).filter(a => !a.dry_run && a.ad_id);
+  const anyActive = liveAds.some(a => a.status === 'ACTIVE');
   api('/meta-previews/' + RUN_ID).then(d => {
-    if (!(d.previews || []).length) return;
     const root = document.getElementById('tab-audience');
-    let html = '<div class="mt-10"><div class="flex items-center justify-between mb-3">'
+    let html = '<div class="mt-10">'
+      + '<div class="flex items-center justify-between mb-3">'
       + '<h3 class="font-headline text-xl">Published ads</h3>'
+      + '<div class="flex gap-2">'
+      + (anyActive ? '' :
+          '<button id="go-live-btn" onclick="goLive()" class="label-caps bg-primary text-on-primary px-4 py-2 hover:bg-surface-tint transition-colors">Go live</button>')
       + '<button id="refresh-live-btn" onclick="refreshLive()" class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary transition-colors">Refresh live ads</button>'
-      + '</div>'
+      + '</div></div>'
+      + (anyActive ? '' : '<p class="text-sm text-warn mb-3">Every published ad is created PAUSED so nothing spends until you review it — click Go live to start delivery.</p>')
       + '<p class="text-sm text-on-surface-variant mb-3">Pushes the current images &amp; copy onto the live ads in place — same ad set, targeting, budget and delivery history. No new campaign is created.</p>'
       + '<div id="refresh-live-status" class="text-sm mb-3"></div>'
-      + '<div class="flex gap-4 flex-wrap">';
-    d.previews.forEach(p => { (p.previews || []).forEach(pv => { html += '<div class="border border-outline-variant">' + (pv.body || '') + '</div>'; }); });
-    html += '</div></div>';
+      + '<div id="go-live-status" class="text-sm mb-3"></div>'
+      + '<div class="space-y-2 mb-4">';
+    liveAds.forEach(a => {
+      const status = a.status || 'PAUSED';
+      const isActive = status === 'ACTIVE';
+      html += '<div id="ad-row-' + a.variant + '" class="border border-outline-variant p-3 flex items-center justify-between gap-3">'
+        + '<div><p class="label-caps">Version ' + a.variant + '</p>'
+        + '<p class="text-xs mt-1 ' + (isActive ? 'text-ok' : 'text-on-surface-variant') + '">' + status + '</p></div>'
+        + '<div class="flex gap-2">'
+        + '<button onclick="toggleAdStatus(this, ' + a.variant + ', \'' + (isActive ? 'pause' : 'resume') + '\')" class="label-caps border border-primary text-primary px-3 py-2 hover:bg-primary hover:text-on-primary transition-colors disabled:opacity-60 disabled:cursor-not-allowed">' + (isActive ? 'Pause' : 'Resume') + '</button>'
+        + '<button onclick="deleteAd(this, ' + a.variant + ')" class="label-caps border border-error text-error px-3 py-2 hover:bg-error hover:text-on-error transition-colors disabled:opacity-60 disabled:cursor-not-allowed">Delete</button>'
+        + '</div></div>';
+    });
+    html += '</div>';
+    if ((d.previews || []).length) {
+      html += '<div class="flex gap-4 flex-wrap">';
+      d.previews.forEach(p => { (p.previews || []).forEach(pv => { html += '<div class="border border-outline-variant">' + (pv.body || '') + '</div>'; }); });
+      html += '</div>';
+    }
+    html += '</div>';
     root.insertAdjacentHTML('beforeend', html);
   }).catch(() => {});
+}
+function goLive() {
+  const btn = document.getElementById('go-live-btn');
+  const el = document.getElementById('go-live-status');
+  const spin = '<span class="inline-block w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin align-middle"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Going live…'; }
+  if (el) el.innerHTML = '<span class="text-on-surface-variant">Activating campaign…</span>';
+  api('/go-live/' + RUN_ID, { method: 'POST' }).then(d => {
+    if (d.dry_run) {
+      if (el) el.innerHTML = '<span class="text-on-surface-variant">Preview (DRY_RUN): would activate ' + (d.would_activate.ads || []).length + ' ad(s).</span>';
+      if (btn) { btn.disabled = false; btn.textContent = 'Go live'; }
+      return;
+    }
+    const errs = (d.errors || []).join('; ');
+    if (el) el.innerHTML = errs
+      ? '<span class="text-error">✕ ' + esc(errs) + '</span>'
+      : '<span class="text-ok">✓ Campaign is live.</span>';
+    toast(errs ? 'Go live finished with errors' : 'Campaign is live');
+    loadDetail().then(() => { loaded.audience = false; renderAudience(); });
+  }).catch(e => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Go live'; }
+    if (el) el.innerHTML = '<span class="text-error">✕ ' + esc(e.message) + '</span>';
+  });
+}
+function toggleAdStatus(btn, variant, action) {
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>';
+  const origHtml = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = spin;
+  api('/meta-optimize/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, variant, params: {} }) })
+    .then(() => {
+      toast(action === 'pause' ? 'Paused' : 'Resumed');
+      return loadDetail().then(() => { loaded.audience = false; renderAudience(); });
+    })
+    .catch(e => { btn.disabled = false; btn.innerHTML = origHtml; showError(e.message); });
+}
+function deleteAd(btn, variant) {
+  if (!confirm('Permanently delete Version ' + variant + '\'s live ad from Meta? This cannot be undone.')) return;
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-error border-t-transparent rounded-full animate-spin"></span>';
+  const origHtml = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = spin;
+  api('/delete-ad/' + RUN_ID + '/' + variant, { method: 'POST' })
+    .then(() => {
+      toast('Ad deleted');
+      return loadDetail().then(() => { loaded.audience = false; renderAudience(); });
+    })
+    .catch(e => { btn.disabled = false; btn.innerHTML = origHtml; showError(e.message); });
 }
 function refreshLive() {
   const btn = document.getElementById('refresh-live-btn');
@@ -1636,13 +1722,14 @@ function renderOptimise() {
       stat('Leads', tot.leads) + stat('CPL', fmtINR(cpl)) + '</div>';
     // Recommendations (campaign + per-variant)
     const allRecs = (d.campaign_recs || []).concat(...(d.variants || []).map(v => (v.recommendations || []).map(r => ({ ...r, variant: v.variant }))));
+    OPTIMISE_RECS = allRecs.slice();
     html += '<h3 class="font-headline text-xl mb-3">AI recommendations</h3>';
     if (!allRecs.length) html += '<p class="text-sm text-on-surface-variant mb-6">No recommendations yet — let the ads gather more data.</p>';
     else { html += '<div class="space-y-3 mb-8">'; allRecs.forEach((r, i) => {
       const col = r.severity === 'red' ? 'text-error' : r.severity === 'green' ? 'text-ok' : 'text-warn';
-      html += '<div class="border border-outline-variant p-4 flex justify-between items-center gap-4">' +
+      html += '<div id="rec-row-' + i + '" class="border border-outline-variant p-4 flex justify-between items-center gap-4">' +
         '<div><p class="label-caps ' + col + '">' + esc(r.label) + '</p><p class="text-sm text-on-surface-variant mt-1">' + esc(r.detail) + '</p></div>' +
-        '<button onclick=\'applyRec(' + JSON.stringify(r).replace(/'/g, "&#39;") + ')\' class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap">Apply</button>' +
+        '<button onclick="applyRecAt(this, ' + i + ')" class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed">Apply</button>' +
         '</div>';
     }); html += '</div>'; }
     // Per-variant performance
@@ -1664,16 +1751,32 @@ function renderOptimise() {
 function stat(label, val) {
   return '<div class="border border-outline-variant p-4"><p class="label-caps text-outline">' + label + '</p><p class="font-display text-3xl mt-1">' + val + '</p></div>';
 }
-function applyRec(r) {
+function applyRecAt(btn, idx) {
+  const r = OPTIMISE_RECS[idx];
+  if (!r) { showError('Recommendation is out of date — refresh and try again.'); return; }
   let action = r.action, params = r.params || {};
   if (action === 'note') { showError(r.detail); return; }
   if (action === 'targeting_interests') { action = 'add_interests'; }
   // variant=0 means all live variants; fall back to first variant for legacy callers
   const variant = (r.variant !== undefined) ? r.variant
     : (r.apply_to_variant || (DETAIL.variants[0] && DETAIL.variants[0].variant) || 1);
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>';
+  const origHtml = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Applying…'; }
   api('/meta-optimize/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, variant, params }) })
-    .then(() => { toast('Applied'); loaded.optimise = false; renderOptimise(); }).catch(e => showError(e.message));
+    .then(() => {
+      const row = document.getElementById('rec-row-' + idx);
+      if (row) row.insertAdjacentHTML('beforeend', '<span class="label-caps text-ok whitespace-nowrap">✓ Applied</span>');
+      if (btn) btn.remove();
+      toast('Applied');
+      loaded.optimise = false;
+      renderOptimise();
+    })
+    .catch(e => {
+      if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      showError(e.message);
+    });
 }
 function loadStrategicInsights(root) {
   const loaderId = 'si-loader-' + Math.random().toString(36).slice(2);
@@ -1688,10 +1791,11 @@ function loadStrategicInsights(root) {
     let html = '<h3 class="font-headline text-xl mb-3 mt-4">Strategic insights (from your CRM)</h3><div class="space-y-3">';
     camp.forEach(i => {
       const rec = { action: i.category === 'budget' ? 'budget' : 'add_interests', variant: 0, params: i.params || {} };
-      html += '<div class="border border-outline-variant p-4 flex justify-between items-center gap-4">' +
+      const idx = OPTIMISE_RECS.push(rec) - 1;
+      html += '<div id="rec-row-' + idx + '" class="border border-outline-variant p-4 flex justify-between items-center gap-4">' +
         '<div><p class="label-caps text-primary">' + esc(i.title) + '</p>' +
         '<p class="text-sm mt-1">' + esc(i.finding) + '</p><p class="text-sm text-on-surface-variant mt-1">' + esc(i.action) + '</p></div>' +
-        '<button onclick=\'applyRec(' + JSON.stringify(rec).replace(/'/g, "&#39;") + ')\' class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap">Apply to all</button></div>';
+        '<button onclick="applyRecAt(this, ' + idx + ')" class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed">Apply to all</button></div>';
     });
     html += '</div>';
     if (el) { el.outerHTML = html; } else { root.insertAdjacentHTML('beforeend', html); }
@@ -1711,7 +1815,7 @@ function loadMetaRecommendations(root) {
         '<div><p class="label-caps text-primary">' + title + '</p>' +
         (detail ? '<p class="text-sm text-on-surface-variant mt-1">' + detail + '</p>' : '') + '</div>';
       if (r.recommendation_id) {
-        html += '<button onclick=\'applyMetaRec("' + esc(r.recommendation_id) + '")\' class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap">Apply</button>';
+        html += '<button onclick="applyMetaRec(this, \'' + esc(r.recommendation_id) + '\')" class="label-caps border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed">Apply</button>';
       }
       html += '</div>';
     });
@@ -1719,19 +1823,35 @@ function loadMetaRecommendations(root) {
     root.insertAdjacentHTML('beforeend', html);
   }).catch(() => {});
 }
-function applyMetaRec(id) {
+function applyMetaRec(btn, id) {
+  const spin = '<span class="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>';
+  const origHtml = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Applying…'; }
   api('/meta-apply-recommendation/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ recommendation_id: id }) })
-    .then(() => toast('Recommendation applied'))
-    .catch(e => showError(e.message));
+    .then(() => { toast('Recommendation applied'); if (btn) { btn.disabled = true; btn.textContent = '✓ Applied'; } })
+    .catch(e => {
+      if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      showError(e.message);
+    });
 }
 
 /* ── Approve ── */
 function approveCampaign() {
+  const btn = document.getElementById('approve-btn');
+  const spin = '<span class="inline-block w-3.5 h-3.5 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + ' Approving…'; }
   api('/approve/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ selected_variants: [...selected] }) })
-    .then(() => { document.getElementById('approve-state').innerHTML = '<span class="label-caps text-ok">✓ Approved</span>'; toast('Approved'); })
-    .catch(e => showError(e.message));
+    .then(() => {
+      document.getElementById('approve-state').innerHTML = '<span class="label-caps text-ok">✓ Approved</span>';
+      toast('Approved');
+      if (btn) { btn.disabled = false; btn.textContent = 'Approve selected'; }
+    })
+    .catch(e => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Approve selected'; }
+      showError(e.message);
+    });
 }
 
 /* ── Error banner ── */

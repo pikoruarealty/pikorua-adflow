@@ -230,8 +230,8 @@ def meta_from_prose(meta_body: str) -> dict:
             num = int(nm_n.group(1))
         else:
             continue
-        hm = re.search(r'Headline:\s*\*{0,2}(.+?)\*{0,2}(?:\s*\[[\d\s\*]+chars\*{0,2}\])?\s*$', block, re.MULTILINE | re.IGNORECASE)
-        bm = re.search(r'Body:\s*\*{0,2}(.+?)\*{0,2}(?:\s*\[[\d\s\*]+chars\*{0,2}\])?\s*$', block, re.MULTILINE | re.IGNORECASE)
+        hm = re.search(r'Headline:\s*\*{0,2}(.+?)\*{0,2}(?:\s*[\[\(][\d\s\*]+chars\*{0,2}[\]\)])?\s*$', block, re.MULTILINE | re.IGNORECASE)
+        bm = re.search(r'Body:\s*\*{0,2}(.+?)\*{0,2}(?:\s*[\[\(][\d\s\*]+chars\*{0,2}[\]\)])?\s*$', block, re.MULTILINE | re.IGNORECASE)
         if hm or bm:
             out[num] = {
                 "headline": hm.group(1).strip() if hm else "",
@@ -286,8 +286,8 @@ def parse_scorecard(text: str) -> list:
             fr = re.search(r'FLAG\s*[—-]\s*(.+)', block)
             if fr:
                 v["flag_reason"] = fr.group(1).strip()
-        hm = re.search(r'Headline:\s*(.+)', block)
-        bm = re.search(r'Body:\s*(.+)', block)
+        hm = re.search(r'Headline:\s*\*{0,2}(.+?)\*{0,2}(?:\s*[\[\(][\d\s\*]+chars\*{0,2}[\]\)])?\s*$', block, re.MULTILINE | re.IGNORECASE)
+        bm = re.search(r'Body:\s*\*{0,2}(.+?)\*{0,2}(?:\s*[\[\(][\d\s\*]+chars\*{0,2}[\]\)])?\s*$', block, re.MULTILINE | re.IGNORECASE)
         if hm:
             v["headline"] = hm.group(1).strip()
         if bm:
@@ -307,8 +307,8 @@ def merge_rewrites(variants: list, rewrites_text: str) -> None:
         if not m:
             continue
         num = int(m.group(1))
-        hm = re.search(r'Headline:\s*(.+?)(?:\s*\[[\*\d\s]+chars[\*\s]*\])?\s*$', block, re.MULTILINE)
-        bm = re.search(r'Body:\s*(.+?)(?:\s*\[[\*\d\s]+chars[\*\s]*\])?\s*$', block, re.MULTILINE)
+        hm = re.search(r'Headline:\s*(.+?)(?:\s*[\[\(][\*\d\s]+chars[\*\s]*[\]\)])?\s*$', block, re.MULTILINE)
+        bm = re.search(r'Body:\s*(.+?)(?:\s*[\[\(][\*\d\s]+chars[\*\s]*[\]\)])?\s*$', block, re.MULTILINE)
         for v in variants:
             if v["variant"] == num and (hm or bm):
                 v["rewrite"] = {

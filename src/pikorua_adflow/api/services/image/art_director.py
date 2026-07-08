@@ -437,8 +437,11 @@ def _llm_spec(
     footer_items = " | ".join(brief.footer_items()) or "none"
     split_hint = brief.locality_split_hint
     split_note = (
-        f" — VERTICAL RAIL SPLIT: use exactly '{split_hint}' on two lines at this break point; "
-        f"never split arbitrarily or into more than 2 lines"
+        f" — VERTICAL RAIL SPLIT: set this locality on exactly two lines, line 1 "
+        f"'{split_hint.split(' / ')[0]}' and line 2 '{split_hint.split(' / ')[1]}'; "
+        f"never split arbitrarily, never into more than 2 lines, and NEVER render a "
+        f"'/' character or any slash/divider glyph between the two lines — the break "
+        f"is a line break only, not a printed character"
         if split_hint else ""
     )
     _QUALIFIERS = ["onwards", "starting from", "starting at"]

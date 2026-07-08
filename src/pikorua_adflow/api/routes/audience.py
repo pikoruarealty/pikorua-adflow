@@ -190,10 +190,30 @@ def apply_saved_audience(run_id: str, payload: dict):
     if not match:
         raise HTTPException(status_code=404, detail="Saved audience not found on this ad account.")
     base = cs.effective_audience(review_folder, run.get("brief", {}))
+    # Snapshot the pre-apply audience (minus any previous snapshot/id bookkeeping)
+    # so a later Undo can restore exactly what was there before this Apply.
+    snapshot = {k: v for k, v in base.items() if k not in ("_pre_apply_audience", "applied_saved_audience_id")}
     audience = _mt.audience_from_targeting_spec(match.get("targeting") or {}, base)
+    audience["applied_saved_audience_id"] = saved_id
+    audience["_pre_apply_audience"] = snapshot
     cs.save_audience(review_folder, audience)
     return {"run_id": run_id, "applied": match.get("name", saved_id),
             "audience": audience, "summary": _mt.audience_summary(audience)}
+
+
+@router.post("/undo-saved-audience/{run_id}")
+def undo_saved_audience(run_id: str):
+    """Revert the audience to what it was immediately before the last
+    apply-saved-audience call (single-level undo)."""
+    run = cs.require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    from pikorua_adflow.tools import meta_targeting as _mt
+    current = cs.effective_audience(review_folder, run.get("brief", {}))
+    snapshot = current.get("_pre_apply_audience")
+    if not snapshot:
+        raise HTTPException(status_code=400, detail="Nothing to undo.")
+    cs.save_audience(review_folder, snapshot)
+    return {"run_id": run_id, "audience": snapshot, "summary": _mt.audience_summary(snapshot)}
 
 
 @router.post("/save-target-audience/{run_id}")

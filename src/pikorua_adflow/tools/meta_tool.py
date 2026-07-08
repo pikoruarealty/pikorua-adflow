@@ -194,6 +194,7 @@ def _create_adset(
     page_id: str,
     end_time: str,
     token: str,
+    is_dynamic_creative: bool = False,
 ) -> tuple[str, list[str]]:
     """
     Create one PAUSED ad set. Shared by deploy_ad (one ad set per variant) and
@@ -201,6 +202,11 @@ def _create_adset(
     required fields (is_adset_budget_sharing_enabled at campaign level,
     bid_strategy, targeting_automation, promoted_object, destination_type) and
     the regulated-country retry/drop logic aren't duplicated.
+
+    is_dynamic_creative=True marks the ad set for Meta Dynamic Creative — Meta
+    rejects a dynamic-creative ad (asset_feed_spec) under an ad set that isn't
+    flagged this way ("Dynamic creative ads can only be created under dynamic
+    creative ad sets").
     Returns (adset_id, dropped_locations_iso_codes).
     """
     if targeting_spec:
@@ -251,6 +257,8 @@ def _create_adset(
         adset_payload["regional_regulated_categories"] = _regional_cats
     if end_time:
         adset_payload["end_time"] = end_time
+    if is_dynamic_creative:
+        adset_payload["is_dynamic_creative"] = True
 
     dropped_locations: list[str] = []
     _compliance_retried = False
@@ -665,6 +673,7 @@ def deploy_dynamic_ad(
             page_id=page_id,
             end_time=end_time,
             token=token,
+            is_dynamic_creative=True,
         )
         created["adset"] = adset_id_new
 
@@ -932,6 +941,28 @@ def resume_variant(ad_id: str, token: str) -> bool:
 def update_adset_budget(adset_id: str, daily_budget_inr: int, token: str) -> bool:
     # Meta stores budget in paise (1 INR = 100 paise).
     _patch(adset_id, {"daily_budget": int(daily_budget_inr) * 100}, token)
+    return True
+
+
+def set_campaign_status(campaign_id: str, status: str, token: str) -> bool:
+    """status: 'ACTIVE' or 'PAUSED'."""
+    _patch(campaign_id, {"status": status}, token)
+    return True
+
+
+def set_adset_status(adset_id: str, status: str, token: str) -> bool:
+    """status: 'ACTIVE' or 'PAUSED'."""
+    _patch(adset_id, {"status": status}, token)
+    return True
+
+
+def delete_ad(ad_id: str, token: str) -> bool:
+    """Delete a live ad from Meta. Raises on failure (unlike the best-effort
+    rollback helper) so the caller can surface the error instead of silently
+    leaving the portal thinking the ad is gone when it isn't."""
+    ok = _delete(ad_id, token)
+    if not ok:
+        raise RuntimeError(f"Failed to delete ad {ad_id} on Meta.")
     return True
 
 

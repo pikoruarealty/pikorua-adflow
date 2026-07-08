@@ -200,8 +200,15 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
     if amenities and any("scene_features" not in e for e in visual_entries):
         try:
             from ..services.image import scene_features as _sf
+            # interior_signature_moment and exterior_establishing_shot are the only two
+            # slots that show the apartment/building itself rather than a shared amenity
+            # as the setting — keep them reserved so amenity distribution never hijacks
+            # the one variant meant to depict the property, leaving every ad reading as
+            # a facilities brochure instead of a home.
+            _PROPERTY_ITSELF_VARIANTS = {"interior_signature_moment", "exterior_establishing_shot"}
             batch_keys = [
-                e.get("variant_key", "") for e in visual_entries if e.get("variant_key")
+                e.get("variant_key", "") for e in visual_entries
+                if e.get("variant_key") and e.get("variant_key") not in _PROPERTY_ITSELF_VARIANTS
             ]
             mapping = _sf.distribute(amenities, batch_keys, brief)
             if mapping:

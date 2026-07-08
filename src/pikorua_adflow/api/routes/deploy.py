@@ -250,6 +250,92 @@ def publish_additional_variant(run_id: str, variant: int):
     return {"run_id": run_id, "variant": variant, "deployed": result}
 
 
+@router.post("/go-live/{run_id}")
+def go_live(run_id: str):
+    """
+    Activate a freshly-published campaign. Every object created by /deploy-to-meta
+    (campaign, ad set(s), ad(s)) is deliberately created PAUSED so nothing spends
+    money before review — this is the one explicit action that flips them all to
+    ACTIVE and actually starts delivery.
+    """
+    run = cs.require_complete(run_id)
+    ads = run.get("meta_ads") or []
+    if not ads:
+        raise HTTPException(status_code=400, detail="This run hasn't been published yet.")
+
+    from pikorua_adflow.tools import meta_tool as _mtool
+    from pikorua_adflow.tools.errors import explain_and_log
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+
+    campaign_ids = sorted({a.get("campaign_id") for a in ads if a.get("campaign_id")})
+    adset_ids = sorted({a.get("adset_id") for a in ads if a.get("adset_id")})
+    ad_ids = sorted({a.get("ad_id") for a in ads if a.get("ad_id")})
+
+    if dry_run:
+        return {"run_id": run_id, "dry_run": True,
+                "would_activate": {"campaigns": campaign_ids, "adsets": adset_ids, "ads": ad_ids}}
+
+    activated = {"campaigns": [], "adsets": [], "ads": []}
+    errs = []
+    for cid in campaign_ids:
+        try:
+            _mtool.set_campaign_status(cid, "ACTIVE", token)
+            activated["campaigns"].append(cid)
+        except Exception as exc:
+            errs.append(explain_and_log(f"Go live — campaign {cid}", exc)["message"])
+    for aid in adset_ids:
+        try:
+            _mtool.set_adset_status(aid, "ACTIVE", token)
+            activated["adsets"].append(aid)
+        except Exception as exc:
+            errs.append(explain_and_log(f"Go live — ad set {aid}", exc)["message"])
+    for ad_id in ad_ids:
+        try:
+            _mtool.resume_variant(ad_id, token)
+            activated["ads"].append(ad_id)
+        except Exception as exc:
+            errs.append(explain_and_log(f"Go live — ad {ad_id}", exc)["message"])
+
+    with RUNS_LOCK:
+        for a in RUNS[run_id].get("meta_ads", []):
+            if a.get("ad_id") in activated["ads"]:
+                a["status"] = "ACTIVE"
+        RUNS[run_id]["live_status"] = "ACTIVE" if not errs else "PARTIAL"
+    save_runs()
+    return {"run_id": run_id, "activated": activated, "errors": errs}
+
+
+@router.post("/delete-ad/{run_id}/{variant}")
+def delete_ad(run_id: str, variant: int):
+    """Permanently delete one variant's live ad from Meta. Irreversible — the ad
+    (not just its ad set or campaign) is removed from the account entirely."""
+    run = cs.require_complete(run_id)
+    lookup = ds.variant_lookup(run)
+    ad = lookup.get(variant)
+    if not ad:
+        raise HTTPException(status_code=404, detail=f"Version {variant} isn't published live.")
+
+    from pikorua_adflow.tools import meta_tool as _mtool
+    from pikorua_adflow.tools.errors import explain_and_log
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+
+    if not dry_run:
+        try:
+            _mtool.delete_ad(ad["ad_id"], token)
+        except Exception as exc:
+            friendly = explain_and_log(f"Delete ad — variant {variant}", exc)
+            raise HTTPException(status_code=502, detail=friendly["message"])
+
+    with RUNS_LOCK:
+        RUNS[run_id]["meta_ads"] = [
+            a for a in RUNS[run_id].get("meta_ads", []) if a.get("variant") != variant
+        ]
+    save_runs()
+    return {"run_id": run_id, "variant": variant, "deleted": True, "dry_run": dry_run}
+
+
 @router.post("/refresh-creatives/{run_id}")
 def refresh_creatives(run_id: str, ab: bool = False):
     """
@@ -470,7 +556,7 @@ def meta_performance(run_id: str):
     base_spec = _mt.build_targeting_spec(base_audience)
     diagnostics = fetch_relevance_diagnostics([a["ad_id"] for a in ads], token)
 
-    def _spec_with(**changes) -> dict:
+    def _aud_with(**changes) -> dict:
         aud = dict(base_audience)
         if "radius_delta" in changes:
             cur = int(aud.get("radius_km") or _mt.DEFAULT_RADIUS_KM)
@@ -487,7 +573,36 @@ def meta_performance(run_id: str):
                 if hits:
                     resolved.append({"id": hits[0]["id"], "name": hits[0]["name"]})
             aud["interests"] = resolved
-        return _mt.build_targeting_spec(aud)
+        if changes.get("drop_roles"):
+            aud["work_positions"] = []
+            aud["industries"] = []
+        return aud
+
+    def _spec_with(**changes) -> dict:
+        return _mt.build_targeting_spec(_aud_with(**changes))
+
+    def _targeting_params(**changes) -> dict:
+        # Carries the friendly audience dict alongside the raw Meta spec so
+        # /meta-optimize can persist the change back to audience.json (the
+        # local source of truth effective_audience()/the Audience tab reads)
+        # instead of only patching the live ad set and leaving the portal's
+        # own view of the audience stale.
+        return {"targeting_spec": _spec_with(**changes), "audience": _aud_with(**changes)}
+
+    # Distinguish a geo-limited audience (radius is the bottleneck) from a
+    # role/interest-limited one (flexible_spec — work_positions/industries —
+    # is the bottleneck) before recommending a fix. Without this, a small
+    # audience always got "broaden the radius" even when the real cause was
+    # over-specific job-title/industry targeting sitting inside a generously
+    # sized city radius.
+    role_narrowed = bool(base_audience.get("work_positions") or base_audience.get("industries"))
+    geo_only_mau = None
+    if role_narrowed:
+        try:
+            geo_only_spec = _spec_with(drop_roles=True)
+            geo_only_mau = fetch_reach_estimate(account, geo_only_spec, token).get("estimate_mau", 0)
+        except Exception:
+            geo_only_mau = None
 
     def _attach_impact(rec: dict) -> None:
         if rec["action"] == "targeting" and rec["params"].get("targeting_spec"):
@@ -508,17 +623,28 @@ def meta_performance(run_id: str):
     campaign_recs: list[dict] = []
     first_variant = ads[0].get("variant", 1) if ads else 1
     if reach_mau and reach_mau < 100_000:
-        rec = {"source": "meta", "action": "targeting", "severity": "red",
-               "label": "Broaden audience (+15km)",
-               "detail": f"Audience is only ~{reach_mau:,} people — widen the radius for all variants.",
-               "params": {"targeting_spec": _spec_with(radius_delta=15)}, "apply_to_variant": first_variant}
+        # If dropping work_positions/industries alone would free up a much larger
+        # audience within the SAME radius, the role targeting is the bottleneck —
+        # recommend loosening that instead of a geo change that won't fix it.
+        if role_narrowed and geo_only_mau and geo_only_mau >= 300_000 and geo_only_mau > reach_mau * 3:
+            rec = {"source": "meta", "action": "targeting", "severity": "red",
+                   "label": "Reduce role targeting",
+                   "detail": (f"Audience is only ~{reach_mau:,} people — the job-title/industry targeting is "
+                              f"the bottleneck (same radius without it reaches ~{geo_only_mau:,}). "
+                              "Drop it for all variants."),
+                   "params": _targeting_params(drop_roles=True), "apply_to_variant": first_variant}
+        else:
+            rec = {"source": "meta", "action": "targeting", "severity": "red",
+                   "label": "Broaden audience (+15km)",
+                   "detail": f"Audience is only ~{reach_mau:,} people — widen the radius for all variants.",
+                   "params": _targeting_params(radius_delta=15), "apply_to_variant": first_variant}
         _attach_impact(rec)
         campaign_recs.append(rec)
     elif reach_mau and reach_mau > 4_000_000:
         rec = {"source": "meta", "action": "targeting", "severity": "amber",
                "label": "Narrow audience (−10km)",
                "detail": f"Audience is ~{reach_mau:,} people — tighten the radius for all variants.",
-               "params": {"targeting_spec": _spec_with(radius_delta=-10)}, "apply_to_variant": first_variant}
+               "params": _targeting_params(radius_delta=-10), "apply_to_variant": first_variant}
         _attach_impact(rec)
         campaign_recs.append(rec)
 
@@ -589,7 +715,7 @@ def meta_performance(run_id: str):
             recs.append({"source": "meta", "action": "targeting", "severity": "amber",
                          "label": "Expand to NRI countries",
                          "detail": f"Frequency is {freq} — the same people are seeing it too often. Widen the audience.",
-                         "params": {"targeting_spec": _spec_with(add_nri=True)}})
+                         "params": _targeting_params(add_nri=True)})
         if cpl is not None and cpl > 500 and not cpl_rec_added:
             recs.append({"source": "meta", "action": "pause", "severity": "red", "label": "Pause this variant",
                          "detail": f"Cost per enquiry is ₹{cpl} — above the ₹500 ceiling.", "params": {}})
@@ -698,6 +824,10 @@ def meta_optimize(run_id: str, req: MetaOptimizeReq):
             apply_error = None
             try:
                 _mtool.update_adset_targeting(adset_id, spec, token)
+                # Persist to the local audience overlay too — otherwise only the
+                # live Meta ad set changes and effective_audience() (Audience
+                # tab, next reach estimate) keeps showing the pre-apply state.
+                cs.save_audience(rf, base_audience)
             except Exception as _ae:
                 from pikorua_adflow.tools.errors import humanize as _humanize
                 apply_error = _humanize(_ae)["message"]
@@ -751,6 +881,14 @@ def meta_optimize(run_id: str, req: MetaOptimizeReq):
             apply_error = None
             try:
                 _mtool.update_adset_targeting(adset_id, spec, token)
+                # Persist the same change to the local audience overlay so
+                # effective_audience() (the Audience tab, the next reach
+                # estimate, future recommendations) reflects it too — otherwise
+                # only the live Meta ad set changes and the portal keeps
+                # showing the pre-apply audience even after a refresh.
+                new_audience = req.params.get("audience")
+                if new_audience:
+                    cs.save_audience(Path(run["review_folder"]), new_audience)
             except Exception as _ae:
                 from pikorua_adflow.tools.errors import humanize as _humanize
                 apply_error = _humanize(_ae)["message"]
