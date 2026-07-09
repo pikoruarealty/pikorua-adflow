@@ -782,6 +782,83 @@ def _attach_pincode_areas(zips: list[dict]) -> None:
         z["area"] = cache.get(z.pop("_pin", ""), "")
 
 
+# ── Geocoding (OpenStreetMap Nominatim, disk-cached, best-effort) ────────────
+# Free, no API key. Used to (a) centre the map picker on the exact property
+# locality and (b) derive a "home pincode" so area suggestions can be ranked by
+# real proximity instead of dumping every area in the city. Nominatim asks for a
+# descriptive User-Agent and ≤1 req/sec; the disk cache means we rarely hit it.
+_GEO_CACHE_PATH = pathlib.Path("outputs") / "geocode_cache.json"
+_NOMINATIM_UA = "PikoruaAdFlow/1.0 (real-estate ad targeting; contact pikorua.marketing@gmail.com)"
+
+
+def geocode_place(query: str) -> dict | None:
+    """{lat, lng, pincode, display_name} for a place string, or None.
+
+    Best-effort — any failure (network, no match, rate-limit) returns None so
+    callers degrade gracefully to city-level behaviour. Disk-cached by query."""
+    q = (query or "").strip()
+    if len(q) < 3:
+        return None
+    key = q.lower()
+    try:
+        cache = json.loads(_GEO_CACHE_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        cache = {}
+    if key in cache:
+        return cache[key] or None  # cached negative results stored as null
+
+    params = {"q": q, "format": "jsonv2", "limit": 1, "addressdetails": 1,
+              "countrycodes": "in"}
+    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": _NOMINATIM_UA})
+    result: dict | None = None
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+        if isinstance(data, list) and data:
+            top = data[0]
+            addr = top.get("address") or {}
+            result = {
+                "lat": float(top["lat"]),
+                "lng": float(top["lon"]),
+                "pincode": str(addr.get("postcode") or "").replace(" ", "")[:6],
+                "display_name": top.get("display_name", ""),
+            }
+    except Exception:
+        result = None
+
+    cache[key] = result
+    try:
+        _GEO_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _GEO_CACHE_PATH.write_text(json.dumps(cache, indent=1, ensure_ascii=False),
+                                   encoding="utf-8")
+    except OSError:
+        pass
+    return result
+
+
+def _pin_int(name: str) -> int | None:
+    """Extract a 6-digit pincode from a string as an int, else None."""
+    digits = re.sub(r"\D", "", str(name or ""))[-6:]
+    return int(digits) if len(digits) == 6 else None
+
+
+def _proximity_sort(rows: list[dict], home_pincode: str) -> list[dict]:
+    """Rank area/pincode rows by numeric closeness to `home_pincode`. Within an
+    Indian city, numerically adjacent pincodes are almost always geographically
+    adjacent (the last 3 digits fan out from the head post office), so this is a
+    cheap, dependency-free 'nearby' proxy — exactly the 'nearby pincode-wise'
+    ordering the area picker wants. Rows without a parseable pincode sort last but
+    keep their relative order (stable)."""
+    home = _pin_int(home_pincode)
+    if home is None:
+        return rows
+    def _key(r: dict) -> tuple:
+        p = _pin_int(r.get("name") or r.get("key") or "")
+        return (0, abs(p - home)) if p is not None else (1, 0)
+    return sorted(rows, key=_key)
+
+
 def suggest_neighborhoods_for_city(city_name: str, region: str, city_key: str,
                                    token: str, limit: int = 15) -> list[dict]:
     """Neighbourhoods within a city, for the 'Suggested for {city}' quick-add row.
@@ -816,18 +893,26 @@ _STATE_ZIP_PREFIXES: dict[str, list[str]] = {
 
 
 def suggest_zips_for_city(city_name: str, city_key: str, region: str, token: str,
-                          max_zips: int = 24) -> list[dict]:
-    """Pincodes belonging to a city, for the 'Suggested for {city}' quick-add row.
+                          max_zips: int = 24, home_pincode: str = "") -> list[dict]:
+    """Pincodes belonging to a city, for the area quick-add row.
     Probes the state's postal prefixes and keeps only pincodes whose primary_city_id
-    matches this city. Returns [] for regions we don't have prefixes for (the UI then
-    falls back to neighbourhood suggestions + manual pincode entry)."""
+    matches this city. When `home_pincode` is given (the property's own pincode), the
+    result is ranked nearest-first by pincode proximity so the areas around the
+    property surface at the top; otherwise sorted numerically. Returns [] for regions
+    we don't have prefixes for (the UI then falls back to neighbourhood suggestions +
+    manual pincode entry)."""
     prefixes = _STATE_ZIP_PREFIXES.get((region or "").strip().lower(), [])
     if not prefixes or not city_key:
         return []
+    # When we know the property's pincode, probe its own prefix first so nearby
+    # pincodes are the ones we actually collect (not just re-sorted after the cut).
+    hp3 = re.sub(r"\D", "", home_pincode)[:3]
+    if hp3 and hp3 in prefixes:
+        prefixes = [hp3] + [p for p in prefixes if p != hp3]
     seen: set[str] = set()
     out: list[dict] = []
     for pfx in prefixes:
-        if len(out) >= max_zips:
+        if len(out) >= max_zips * 2:
             break
         try:
             hits = search_zips(pfx, token, limit=30)
@@ -838,7 +923,70 @@ def suggest_zips_for_city(city_name: str, city_key: str, region: str, token: str
                 seen.add(z["key"])
                 out.append({"key": z["key"], "name": z["name"], "city_key": str(city_key),
                             "area": z.get("area", "")})
+    if home_pincode:
+        return _proximity_sort(out, home_pincode)[:max_zips]
     return sorted(out, key=lambda z: z["name"])[:max_zips]
+
+
+def preselect_locality_areas(city_name: str, region: str, city_key: str,
+                             locality: str, token: str) -> dict:
+    """Resolve the property's OWN locality into a pre-selected geo target.
+
+    This is the fix for 'the extracted locality was never selected in targeting'.
+    Returns everything the seed audience + map picker need, all best-effort:
+      {neighborhoods:[{key,name,city_key}], zips:[{key,name,city_key,area}],
+       center:{lat,lng} | None, home_pincode:str, matched:bool}
+
+    Strategy:
+      • geocode "<locality>, <city>, India" → map centre + the property's pincode.
+      • find the neighbourhood whose name best matches the locality (same region)
+        and pre-select it (the exact property location).
+      • pre-select the home pincode + the 1-2 nearest pincodes ('places nearby it').
+    Never raises; on total failure returns empty structures so the caller falls
+    back to today's city-radius behaviour."""
+    out = {"neighborhoods": [], "zips": [], "center": None,
+           "home_pincode": "", "matched": False}
+    loc = (locality or "").strip()
+    if not loc or not city_key:
+        return out
+    ck = str(city_key)
+
+    geo = None
+    try:
+        geo = geocode_place(f"{loc}, {city_name}, India")
+    except Exception:
+        geo = None
+    if geo:
+        out["center"] = {"lat": geo["lat"], "lng": geo["lng"]}
+        out["home_pincode"] = geo.get("pincode", "")
+
+    # Exact-locality neighbourhood (non-strict so a valid but mis-tagged area still
+    # surfaces; we pick the closest name match, same-region preferred).
+    try:
+        nbh = search_neighborhoods(loc, token, region=region, limit=8, strict=False)
+    except Exception:
+        nbh = []
+    loc_l = loc.lower()
+    best = next((n for n in nbh if n["name"].lower() == loc_l), None) \
+        or next((n for n in nbh if loc_l in n["name"].lower() or n["name"].lower() in loc_l), None) \
+        or (nbh[0] if nbh else None)
+    if best:
+        out["neighborhoods"].append({"key": best["key"], "name": best["name"], "city_key": ck})
+        out["matched"] = True
+
+    # Home pincode + nearest neighbours, pre-selected (up to 3 total).
+    hp = out["home_pincode"]
+    if hp:
+        try:
+            near = suggest_zips_for_city(city_name, ck, region, token,
+                                         max_zips=8, home_pincode=hp)
+        except Exception:
+            near = []
+        for z in near[:3]:
+            out["zips"].append({"key": z["key"], "name": z["name"], "city_key": ck,
+                                "area": z.get("area", "")})
+            out["matched"] = True
+    return out
 
 
 # ── resolve (best single match) — cached ─────────────────────────────────────
@@ -990,18 +1138,56 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
 
     nri_countries = parse_nri_countries(nri_geographies) if nri_geographies else []
 
+    # ── Pre-select the property's OWN locality (and its nearest pincodes) ──────
+    # Previously `locality` was accepted but ignored, so an extracted area like
+    # "Science Park, Ahmedabad" never landed in targeting. Now we resolve it into
+    # pre-selected areas + a map centre; if anything is matched we default the geo
+    # mode to "areas" so the good, tight targeting is on by default (the user can
+    # still flip back to a broad city radius). All best-effort — resolution
+    # failures leave the audience exactly as before (city-radius).
+    region_val = resolved_city.get("region", "") if resolved_city else ""
+    city_key_val = resolved_city["key"] if resolved_city else None
+    city_name_val = resolved_city["name"] if resolved_city else ""
+    geo_mode = "radius"
+    neighborhoods: list[dict] = []
+    zips: list[dict] = []
+    map_point = None
+    home_pincode = ""
+    if locality and city_key_val:
+        try:
+            pre = preselect_locality_areas(city_name_val, region_val, city_key_val,
+                                           locality, token)
+        except Exception:
+            pre = {"neighborhoods": [], "zips": [], "center": None,
+                   "home_pincode": "", "matched": False}
+        neighborhoods = pre["neighborhoods"]
+        zips = pre["zips"]
+        home_pincode = pre.get("home_pincode", "")
+        if pre.get("center"):
+            map_point = {"lat": pre["center"]["lat"], "lng": pre["center"]["lng"],
+                         "radius_km": DEFAULT_RADIUS_KM, "city_key": str(city_key_val),
+                         "label": locality}
+        if pre.get("matched"):
+            geo_mode = "areas"
+
     return {
         "country": country,
-        "city": resolved_city["name"] if resolved_city else "",
-        "city_key": resolved_city["key"] if resolved_city else None,
-        "region": resolved_city.get("region", "") if resolved_city else "",
+        "city": city_name_val,
+        "city_key": city_key_val,
+        "region": region_val,
+        "locality": locality or "",
         "radius_km": DEFAULT_RADIUS_KM,
-        # Geo model: "radius" (city+radius circle, default) or "areas" (specific
-        # neighbourhoods/pincodes only — set by the audience panel). Areas carry a
-        # `city_key` so downstream geo analysis can map an area back to its city.
-        "geo_mode": "radius",
-        "neighborhoods": [],
-        "zips": [],
+        # Geo model: "radius" (city+radius circle) | "areas" (specific
+        # neighbourhoods/pincodes only) | "map" (lat/lng pin + radius circle →
+        # Meta custom_locations). Areas carry a `city_key` so downstream geo
+        # analysis can map an area back to its city.
+        "geo_mode": geo_mode,
+        "neighborhoods": neighborhoods,
+        "zips": zips,
+        # Map pin (property locality lat/lng) + its own pincode — seeds the map
+        # picker and lets area suggestions rank by real proximity.
+        "map_point": map_point,
+        "home_pincode": home_pincode,
         # Platform/OS restriction: "all" (default) | "ios" | "android". Advisory
         # default can be suggested by autooptimiser's device-performance rung,
         # but is only ever applied when the user approves/saves it.
@@ -1067,9 +1253,30 @@ def build_targeting_spec(audience: dict) -> dict:
     # geo_mode "areas" means: target ONLY the chosen neighbourhoods/pincodes (tight —
     # avoids the wasteland a broad city radius sweeps in). Fall back to the city radius
     # circle if the user flipped to areas but hasn't picked any yet.
-    use_areas = audience.get("geo_mode") == "areas" and (neighborhoods or zips)
+    geo_mode = audience.get("geo_mode")
+    map_point = audience.get("map_point") or {}
+    use_areas = geo_mode == "areas" and (neighborhoods or zips)
+    use_map = (geo_mode == "map" and map_point.get("lat") is not None
+               and map_point.get("lng") is not None)
     geo: dict[str, Any] = {}
-    if use_areas:
+    if use_map:
+        # Meta custom_locations = a lat/lng circle, exactly what dropping a pin +
+        # dragging the radius in Ads Manager produces. Custom-location radius floor
+        # is 1 km (looser than the 17 km city-radius floor).
+        m_radius = int(map_point.get("radius_km") or DEFAULT_RADIUS_KM)
+        m_radius = max(1, min(_RADIUS_MAX_KM, m_radius))
+        loc: dict[str, Any] = {
+            "latitude": round(float(map_point["lat"]), 6),
+            "longitude": round(float(map_point["lng"]), 6),
+            "radius": m_radius,
+            "distance_unit": "kilometer",
+        }
+        # primary_city_id lets downstream geo-coverage analysis map the pin back to
+        # its covering city (geo_intelligence.covered_city_keys reads this field).
+        if map_point.get("city_key") or city_key:
+            loc["primary_city_id"] = str(map_point.get("city_key") or city_key)
+        geo["custom_locations"] = [loc]
+    elif use_areas:
         if neighborhoods:
             geo["neighborhoods"] = neighborhoods
         if zips:
@@ -1740,7 +1947,17 @@ def audience_from_targeting_spec(spec: dict, base: dict) -> dict:
            for n in (geo.get("neighborhoods") or []) if n.get("key")]
     zps = [{"key": str(z.get("key")), "name": z.get("name", str(z.get("key", "")))}
            for z in (geo.get("zips") or []) if z.get("key")]
-    if nbh or zps:
+    custom = geo.get("custom_locations") or []
+    if custom and custom[0].get("latitude") is not None:
+        c = custom[0]
+        aud["map_point"] = {
+            "lat": float(c["latitude"]), "lng": float(c["longitude"]),
+            "radius_km": int(c.get("radius") or DEFAULT_RADIUS_KM),
+            "city_key": str(c.get("primary_city_id") or aud.get("city_key") or ""),
+            "label": aud.get("locality", "") or aud.get("city", ""),
+        }
+        aud["geo_mode"] = "map"
+    elif nbh or zps:
         aud["neighborhoods"] = nbh
         aud["zips"] = zps
         aud["geo_mode"] = "areas"

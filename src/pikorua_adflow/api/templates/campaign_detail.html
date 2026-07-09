@@ -1020,10 +1020,13 @@ function renderAudience() {
     AUD_POOL = pool;
     AUD_STATE = {
       city: a.city || '', city_key: a.city_key || null, region: a.region || '',
+      locality: a.locality || (((DETAIL && DETAIL.brief) || {}).locality || ''),
       radius_km: a.radius_km || 25,
       geo_mode: a.geo_mode || 'radius',
       neighborhoods: (a.neighborhoods || []).slice(),
       zips: (a.zips || []).slice(),
+      map_point: a.map_point || null,
+      home_pincode: a.home_pincode || '',
       platform_os: a.platform_os || 'all',
       interests: (a.interests || []).slice(),
       behaviours: (a.behaviours || []).slice(),
@@ -1206,23 +1209,29 @@ function renderAudience() {
   }).catch(e => { root.innerHTML = '<p class="text-error">' + e.message + '</p>'; });
 }
 
-/* ── Location: city-radius vs specific areas (neighbourhoods + pincodes) ──
-   The 25km city circle sweeps in wasteland near the city, so the user can flip
-   to "Specific areas only" and target exact neighbourhoods/pincodes instead.
-   Picking any area auto-flips the mode. Each area carries city_key so downstream
-   geo analysis maps it back to its city. ── */
+/* ── Location: city-radius · specific areas · map pin ──
+   Three ways to target the property's geography:
+     • City radius   — the whole-city circle (broadest).
+     • Specific areas — neighbourhoods + pincodes in ONE unified, interchangeable
+       list, pre-seeded with the property's own locality + nearest pincodes and
+       suggesting more "Near {locality}" (nearby, pincode-wise).
+     • Map            — drop/drag a pin on the exact property and drag a radius,
+       exactly like Meta (writes Meta custom_locations lat/lng + radius).
+   Each area carries city_key so downstream geo analysis maps it back to its city. */
 function renderAudGeo() {
   const root = document.getElementById('aud-geo');
   if (!root || !AUD_STATE) return;
   const mode = AUD_STATE.geo_mode || 'radius';
-  const modeBtn = (val, label) =>
+  const modeBtn = (val, label, first) =>
     '<button type="button" onclick="setGeoMode(\'' + val + '\')" class="text-xs label-caps px-3 py-2 transition-colors' +
-      (val === 'areas' ? ' border-l border-outline-variant' : '') +
+      (first ? '' : ' border-l border-outline-variant') +
       (mode === val ? ' bg-primary text-on-primary' : ' hover:bg-surface-container-low') + '">' + label + '</button>';
-  let html = '<div class="flex justify-between items-center mb-2">' +
-      '<label class="label-caps text-outline">Location — ' + esc(AUD_STATE.city || 'city') + '</label>' +
+  const locLabel = AUD_STATE.locality || AUD_STATE.city || 'the property';
+  let html = '<div class="flex justify-between items-center mb-2 gap-2 flex-wrap">' +
+      '<label class="label-caps text-outline">Location — ' + esc(AUD_STATE.city || 'city') +
+        (AUD_STATE.locality ? ' <span class="text-primary">· ' + esc(AUD_STATE.locality) + '</span>' : '') + '</label>' +
       '<div class="inline-flex rounded border border-outline-variant overflow-hidden">' +
-        modeBtn('radius', 'City radius') + modeBtn('areas', 'Specific areas') +
+        modeBtn('radius', 'City radius', true) + modeBtn('areas', 'Specific areas', false) + modeBtn('map', 'Map', false) +
       '</div>' +
     '</div>';
   if (mode === 'radius') {
@@ -1230,41 +1239,70 @@ function renderAudGeo() {
       '<input id="aud-radius" type="number" value="' + esc(AUD_STATE.radius_km || 25) + '" min="17" max="80" oninput="AUD_STATE.radius_km=parseInt(this.value,10)||25; enableSaveAudience();" ' +
       'class="w-full border-0 border-b border-outline-variant bg-transparent py-2 focus:border-primary focus:ring-0"/>' +
       '<p class="text-xs text-on-surface-variant mt-1">Reaches everyone within this circle — simplest, but includes low-value areas on the city’s edge.</p></div>';
+  } else if (mode === 'areas') {
+    html += geoAreaEditor() +
+            '<p class="text-xs text-on-surface-variant mt-2">Delivery is confined to exactly these areas — no city-edge wasteland. Search adds neighbourhoods or pincodes interchangeably.</p>';
   } else {
-    html += geoAreaEditor('Neighbourhoods', 'neighborhoods', 'neighborhood') +
-            '<div class="mt-3">' + geoAreaEditor('Pincodes', 'zips', 'zip') + '</div>' +
-            '<p class="text-xs text-on-surface-variant mt-2">Delivery is confined to exactly these areas — no city-edge wasteland.</p>';
+    html += '<div><label class="text-xs text-on-surface-variant block mb-1">Drop a pin on ' + esc(locLabel) + ', then drag the radius</label>' +
+      '<div class="relative mb-2">' +
+        '<input id="geo-map-search" type="text" placeholder="Search a place to centre the pin…" oninput="geoMapSearch(this)" ' +
+          'class="w-full text-sm border-0 border-b border-outline-variant bg-transparent py-1.5 focus:border-primary focus:ring-0"/>' +
+        '<div class="aud-search-results absolute z-[1200] w-full bg-surface-container border border-outline-variant shadow-lg max-h-48 overflow-y-auto hidden"></div>' +
+      '</div>' +
+      '<div id="geo-map" style="height:300px;border-radius:8px;overflow:hidden" class="border border-outline-variant"></div>' +
+      '<div class="flex items-center gap-3 mt-3">' +
+        '<label class="text-xs text-on-surface-variant whitespace-nowrap">Radius <span id="geo-map-radius-val">' + esc((AUD_STATE.map_point && AUD_STATE.map_point.radius_km) || AUD_STATE.radius_km || 25) + '</span> km</label>' +
+        '<input id="geo-map-radius" type="range" min="1" max="80" value="' + esc((AUD_STATE.map_point && AUD_STATE.map_point.radius_km) || AUD_STATE.radius_km || 25) + '" oninput="geoMapSetRadius(this.value)" class="flex-1 accent-primary"/>' +
+      '</div>' +
+      '<p class="text-xs text-on-surface-variant mt-1">Targets a precise lat/long circle (Meta custom location) — best for a single project when the city radius is too broad and named areas don’t line up.</p></div>';
   }
   root.innerHTML = html;
+  if (mode === 'map') ensureLeaflet(initGeoMap);
 }
-function geoAreaEditor(label, category, searchType) {
-  const list = AUD_STATE[category] || [];
-  const sugg = AUD_GEO_SUGGEST ? (AUD_GEO_SUGGEST[category] || []) : null;
-  const chosen = new Set(list.map(x => x.key));
+
+/* Unified area editor: neighbourhoods AND pincodes in one chip list + one search
+   box + one "Near {locality}" suggestion row. The user never has to know whether
+   something is a Meta "neighbourhood" or a "pincode" — they pick a place; we route
+   it to the right bucket by its `kind`. */
+function geoAreaEditor() {
+  const nbh = (AUD_STATE.neighborhoods || []).map((it, i) => ({ item: it, cat: 'neighborhoods', i }));
+  const zip = (AUD_STATE.zips || []).map((it, i) => ({ item: it, cat: 'zips', i }));
+  const combined = nbh.concat(zip);
+  const chosen = new Set(combined.map(x => x.item.key));
+
+  // Suggestions: pincodes lead (backend proximity-ranks them to the property),
+  // then neighbourhoods — all filtered to what's not already chosen.
   let sHtml = '';
-  if (sugg && sugg.length) {
-    const avail = sugg.filter(s => !chosen.has(s.key)).slice(0, 12);
+  if (AUD_GEO_SUGGEST) {
+    const sz = (AUD_GEO_SUGGEST.zips || []).map(s => Object.assign({ kind: 'zip' }, s));
+    const sn = (AUD_GEO_SUGGEST.neighborhoods || []).map(s => Object.assign({ kind: 'neighborhood' }, s));
+    const avail = sz.concat(sn).filter(s => !chosen.has(s.key)).slice(0, 14);
     if (avail.length) {
-      sHtml = '<div class="mt-1.5"><p class="text-[10px] label-caps text-outline mb-1">Suggested for ' + esc(AUD_STATE.city || 'city') + '</p>' +
+      const near = AUD_STATE.locality ? ('Near ' + esc(AUD_STATE.locality)) : ('Suggested for ' + esc(AUD_STATE.city || 'city'));
+      sHtml = '<div class="mt-1.5"><p class="text-[10px] label-caps text-outline mb-1">' + near + '</p>' +
         '<div class="flex flex-wrap gap-1.5">' +
         avail.map(s => {
           const sLabel = s.area ? s.name + ' — ' + s.area : s.name;
-          const sItem = Object.assign({}, s, { name: sLabel });
-          return '<button type="button" onclick=\'addGeoArea("' + category + '",' + JSON.stringify(sItem).replace(/'/g, "&#39;") + ')\' ' +
+          const cat = s.kind === 'zip' ? 'zips' : 'neighborhoods';
+          const sItem = { key: s.key, name: sLabel, city_key: s.city_key || AUD_STATE.city_key || '' };
+          return '<button type="button" onclick=\'addGeoArea("' + cat + '",' + JSON.stringify(sItem).replace(/'/g, "&#39;") + ')\' ' +
             'class="text-xs border border-outline-variant rounded-full px-2.5 py-1 hover:bg-primary hover:text-on-primary transition-colors" title="' + esc(s.area || '') + '">+ ' + esc(sLabel) + '</button>';
         }).join('') +
         '</div></div>';
     }
-  } else if (sugg === null) {
-    sHtml = '<p class="text-[10px] text-on-surface-variant mt-1">Loading suggestions…</p>';
+  } else {
+    sHtml = '<p class="text-[10px] text-on-surface-variant mt-1">Loading nearby suggestions…</p>';
   }
+
+  const kindTag = cat => '<span class="text-[9px] label-caps text-outline ml-0.5">' + (cat === 'zips' ? 'pin' : 'area') + '</span>';
   return '<div>' +
-    '<p class="label-caps text-outline mb-1">' + label + ' (' + list.length + ')</p>' +
+    '<p class="label-caps text-outline mb-1">Areas &amp; pincodes (' + combined.length + ')</p>' +
     '<div class="flex flex-wrap gap-2 mb-2">' +
-      (list.map((it, i) => chip(it.name || it.key, "removeGeoArea('" + category + "'," + i + ")")).join('') || '<span class="text-sm text-on-surface-variant">None selected</span>') +
+      (combined.map(x => chip((x.item.name || x.item.key), "removeGeoArea('" + x.cat + "'," + x.i + ")", kindTag(x.cat))).join('') ||
+        '<span class="text-sm text-on-surface-variant">None selected</span>') +
     '</div>' +
     '<div class="relative">' +
-      '<input type="text" placeholder="Search to add ' + esc(label.toLowerCase()) + '…" oninput="geoSearchInput(this,\'' + category + '\',\'' + searchType + '\')" ' +
+      '<input type="text" placeholder="Search a neighbourhood or pincode to add…" oninput="geoSearchInput(this)" ' +
         'class="w-full text-sm border-0 border-b border-outline-variant bg-transparent py-1.5 focus:border-primary focus:ring-0"/>' +
       '<div class="aud-search-results absolute z-10 w-full bg-surface-container border border-outline-variant shadow-lg max-h-48 overflow-y-auto hidden"></div>' +
     '</div>' +
@@ -1315,24 +1353,30 @@ function removeGeoArea(category, idx) {
   renderAudGeo();
 }
 let GEO_SEARCH_TIMER = null;
-function geoSearchInput(input, category, searchType) {
+/* Unified area typeahead — one box that returns neighbourhoods AND pincodes
+   interchangeably (type=area), nearest-first when we know the property's pincode.
+   Each result carries `kind` so we route it to the right AUD_STATE bucket. */
+function geoSearchInput(input) {
   const box = input.nextElementSibling;
   const q = input.value.trim();
   clearTimeout(GEO_SEARCH_TIMER);
   if (q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
   GEO_SEARCH_TIMER = setTimeout(() => {
     const region = encodeURIComponent(AUD_STATE.region || '');
-    api('/audience-search?type=' + searchType + '&q=' + encodeURIComponent(q) + '&region=' + region).then(d => {
-      const results = (d.results || []).slice(0, 10);
+    const home = encodeURIComponent(AUD_STATE.home_pincode || '');
+    api('/audience-search?type=area&q=' + encodeURIComponent(q) + '&region=' + region + '&home=' + home).then(d => {
+      const results = (d.results || []).slice(0, 12);
       if (!results.length) { box.innerHTML = '<div class="px-3 py-2 text-sm text-on-surface-variant">No matches</div>'; box.classList.remove('hidden'); return; }
       box.innerHTML = results.map(r => {
-        // Pincodes carry an `area` (locality names from India Post) — bake it into the
-        // saved chip's name so "380015 — Nehru Nagar" survives into the audience list.
+        // Pincodes carry an `area` (locality names) — bake it into the saved chip
+        // name so "380015 — Nehru Nagar" survives into the audience list.
         const label = r.area ? r.name + ' — ' + r.area : r.name;
+        const cat = r.kind === 'zip' ? 'zips' : 'neighborhoods';
         const item = { key: r.key, name: label, city_key: AUD_STATE.city_key || '' };
-        const sub = [r.area, r.region || r.primary_city].filter(Boolean).join(' · ');
+        const tag = r.kind === 'zip' ? 'pincode' : 'area';
+        const sub = [tag, r.area, r.region || r.primary_city].filter(Boolean).join(' · ');
         return '<button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-surface-container-low" ' +
-          'onclick=\'addGeoArea("' + category + '",' + JSON.stringify(item).replace(/'/g, "&#39;") + '); this.closest(".aud-search-results").classList.add("hidden"); this.closest(".relative").querySelector("input").value="";\'>' +
+          'onclick=\'addGeoArea("' + cat + '",' + JSON.stringify(item).replace(/'/g, "&#39;") + '); this.closest(".aud-search-results").classList.add("hidden"); this.closest(".relative").querySelector("input").value="";\'>' +
           esc(r.name) + (sub ? ' <span class="text-xs text-on-surface-variant">' + esc(sub) + '</span>' : '') + '</button>';
       }).join('');
       box.classList.remove('hidden');
@@ -1343,17 +1387,118 @@ function loadGeoSuggestions() {
   if (AUD_GEO_SUGGEST) { return; }
   api('/audience-geo-suggest/' + RUN_ID).then(d => {
     AUD_GEO_SUGGEST = { neighborhoods: d.neighborhoods || [], zips: d.zips || [] };
-    if ((AUD_STATE.geo_mode || 'radius') === 'areas') renderAudGeo();
+    // Capture the property centre + pincode so the map opens on it and area
+    // search ranks by proximity — even for audiences seeded before this existed.
+    if (d.center && !AUD_STATE.map_point) {
+      AUD_STATE.map_point = { lat: d.center.lat, lng: d.center.lng,
+        radius_km: AUD_STATE.radius_km || 25, city_key: AUD_STATE.city_key || '',
+        label: AUD_STATE.locality || AUD_STATE.city || '' };
+    }
+    if (d.home_pincode && !AUD_STATE.home_pincode) AUD_STATE.home_pincode = d.home_pincode;
+    if (d.locality && !AUD_STATE.locality) AUD_STATE.locality = d.locality;
+    const m = AUD_STATE.geo_mode || 'radius';
+    if (m === 'areas' || m === 'map') renderAudGeo();
   }).catch(() => { AUD_GEO_SUGGEST = { neighborhoods: [], zips: [] }; });
+}
+
+/* ── Leaflet map picker (lazy-loaded from CDN, same pattern as Tailwind/fonts) ──
+   Drop/drag a pin + drag the radius → writes Meta custom_locations (lat/lng+km).
+   Loaded on demand so the library only downloads when the user opens Map mode. */
+let _LEAFLET_LOADING = null;
+let GEO_MAP = null, GEO_MARKER = null, GEO_CIRCLE = null, GEO_MAP_SEARCH_TIMER = null;
+function ensureLeaflet(cb) {
+  if (window.L) { cb(); return; }
+  if (_LEAFLET_LOADING) { _LEAFLET_LOADING.then(cb); return; }
+  _LEAFLET_LOADING = new Promise((resolve) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = () => resolve();
+    js.onerror = () => resolve();  // resolve anyway; initGeoMap guards on window.L
+    document.head.appendChild(js);
+  });
+  _LEAFLET_LOADING.then(cb);
+}
+function _geoMapCenter() {
+  const mp = AUD_STATE.map_point;
+  if (mp && typeof mp.lat === 'number') return [mp.lat, mp.lng];
+  const c = AUD_GEO_SUGGEST && AUD_GEO_SUGGEST.center;
+  if (c) return [c.lat, c.lng];
+  return [23.0225, 72.5714];  // Ahmedabad fallback
+}
+function initGeoMap() {
+  const el = document.getElementById('geo-map');
+  if (!el) return;
+  if (!window.L) { el.innerHTML = '<p class="p-4 text-sm text-error">Map failed to load. Check your connection, or use City radius / Specific areas.</p>'; return; }
+  const center = _geoMapCenter();
+  const radius = (AUD_STATE.map_point && AUD_STATE.map_point.radius_km) || AUD_STATE.radius_km || 25;
+  // Tear down any prior instance (tab re-renders) so Leaflet doesn't double-bind.
+  if (GEO_MAP) { try { GEO_MAP.remove(); } catch (e) {} GEO_MAP = null; }
+  GEO_MAP = L.map(el, { scrollWheelZoom: true }).setView(center, 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(GEO_MAP);
+  GEO_MARKER = L.marker(center, { draggable: true }).addTo(GEO_MAP);
+  GEO_CIRCLE = L.circle(center, { radius: radius * 1000, color: '#775a19', fillColor: '#775a19', fillOpacity: 0.12 }).addTo(GEO_MAP);
+  const commit = (latlng) => {
+    GEO_MARKER.setLatLng(latlng);
+    GEO_CIRCLE.setLatLng(latlng);
+    AUD_STATE.map_point = { lat: +latlng.lat.toFixed(6), lng: +latlng.lng.toFixed(6),
+      radius_km: (AUD_STATE.map_point && AUD_STATE.map_point.radius_km) || radius,
+      city_key: AUD_STATE.city_key || '', label: AUD_STATE.locality || AUD_STATE.city || '' };
+    AUD_STATE.geo_mode = 'map';
+    enableSaveAudience();
+  };
+  GEO_MARKER.on('dragend', () => commit(GEO_MARKER.getLatLng()));
+  GEO_MAP.on('click', (e) => commit(e.latlng));
+  // Ensure map_point exists even before the first interaction (so Save persists it).
+  if (!AUD_STATE.map_point) commit({ lat: center[0], lng: center[1] });
+  setTimeout(() => { try { GEO_MAP.invalidateSize(); } catch (e) {} }, 60);
+}
+function geoMapSetRadius(v) {
+  const km = parseInt(v, 10) || 25;
+  const lbl = document.getElementById('geo-map-radius-val');
+  if (lbl) lbl.textContent = km;
+  if (!AUD_STATE.map_point) {
+    const c = _geoMapCenter();
+    AUD_STATE.map_point = { lat: c[0], lng: c[1], city_key: AUD_STATE.city_key || '',
+      label: AUD_STATE.locality || AUD_STATE.city || '' };
+  }
+  AUD_STATE.map_point.radius_km = km;
+  AUD_STATE.geo_mode = 'map';
+  if (GEO_CIRCLE) GEO_CIRCLE.setRadius(km * 1000);
+  enableSaveAudience();
+}
+function geoMapSearch(input) {
+  const box = input.nextElementSibling;
+  const q = input.value.trim();
+  clearTimeout(GEO_MAP_SEARCH_TIMER);
+  if (q.length < 3) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  GEO_MAP_SEARCH_TIMER = setTimeout(() => {
+    api('/geocode?q=' + encodeURIComponent(q + (AUD_STATE.city ? ', ' + AUD_STATE.city : ''))).then(d => {
+      const r = d.result;
+      if (!r) { box.innerHTML = '<div class="px-3 py-2 text-sm text-on-surface-variant">No match</div>'; box.classList.remove('hidden'); return; }
+      box.innerHTML = '<button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-surface-container-low">' +
+        esc(r.display_name || q) + '</button>';
+      box.firstChild.onclick = () => {
+        box.classList.add('hidden'); input.value = '';
+        if (r.pincode) AUD_STATE.home_pincode = r.pincode;
+        if (GEO_MAP) { GEO_MAP.setView([r.lat, r.lng], 13); GEO_MAP.fire('click', { latlng: L.latLng(r.lat, r.lng) }); }
+      };
+      box.classList.remove('hidden');
+    }).catch(() => {});
+  }, 350);
 }
 
 /* ── Structured, editable targeting lists (interests/behaviours/job titles/
    income & company size/NRI geo/Advantage+) — all backed by AUD_STATE so
    Save sends the full picture instead of silently dropping anything the
    old UI didn't render. ── */
-function chip(name, onRemove) {
+function chip(name, onRemove, extra) {
   return '<span class="label-caps bg-primary-fixed/40 text-on-primary-container pl-3 pr-1.5 py-1 inline-flex items-center gap-1.5">' +
-    esc(name) +
+    esc(name) + (extra || '') +
     '<button type="button" onclick="' + onRemove + '" class="text-on-primary-container/70 hover:text-error leading-none" aria-label="Remove">✕</button>' +
   '</span>';
 }
@@ -1609,9 +1754,12 @@ function saveAudience() {
     city_key: AUD_STATE.city_key,
     region: AUD_STATE.region || '',
     radius_km: radiusEl ? (parseInt(radiusEl.value, 10) || 25) : (AUD_STATE.radius_km || 25),
+    locality: AUD_STATE.locality || '',
     geo_mode: AUD_STATE.geo_mode || 'radius',
     neighborhoods: AUD_STATE.neighborhoods || [],
     zips: AUD_STATE.zips || [],
+    map_point: AUD_STATE.map_point || null,
+    home_pincode: AUD_STATE.home_pincode || '',
     platform_os: AUD_STATE.platform_os || 'all',
     age_min: parseInt(document.getElementById('aud-agemin').value, 10) || 28,
     age_max: parseInt(document.getElementById('aud-agemax').value, 10) || 65,
@@ -1629,6 +1777,9 @@ function saveAudience() {
   };
   if (payload.geo_mode === 'areas' && !payload.neighborhoods.length && !payload.zips.length) {
     toast('Specific-areas mode is on but no areas/pincodes are selected — Meta will fall back to the city radius. Add areas or switch back to City radius.');
+  }
+  if (payload.geo_mode === 'map' && !(payload.map_point && payload.map_point.lat)) {
+    toast('Map mode is on but no pin is placed — Meta will fall back to the city radius. Drop a pin on the map or switch modes.');
   }
   api('/audience/' + RUN_ID, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     .then(() => { toast('Audience saved'); enableSaveAudience(); document.getElementById('save-aud-btn').disabled = true; })

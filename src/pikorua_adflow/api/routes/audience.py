@@ -82,8 +82,14 @@ def save_audience(run_id: str, payload: AudienceSave):
 
 
 @router.get("/audience-search")
-def audience_search(q: str, type: str = "interest", region: str = ""):
-    """Typeahead proxy to Meta's read-only Targeting Search (for the add-chip UI)."""
+def audience_search(q: str, type: str = "interest", region: str = "", home: str = ""):
+    """Typeahead proxy to Meta's read-only Targeting Search (for the add-chip UI).
+
+    type='area' is the unified locality search — neighbourhoods AND pincodes in one
+    list (the user shouldn't have to know whether "Bopal" is a Meta neighbourhood or
+    reach for a separate pincode box). Each result carries a `kind` so the caller
+    stores it in the right bucket; when `home` (the property's pincode) is passed,
+    results are ranked nearest-first."""
     from pikorua_adflow.tools import meta_targeting as _mt
     token = os.getenv("META_ACCESS_TOKEN", "")
     if not token:
@@ -100,16 +106,44 @@ def audience_search(q: str, type: str = "interest", region: str = ""):
             return {"results": _mt.search_neighborhoods(q, token, region=region)}
         if type == "zip":
             return {"results": _mt.search_zips(q, token)}
+        if type == "area":
+            merged: list[dict] = []
+            # Pincode-looking queries lead with pincodes; name queries lead with
+            # neighbourhoods — but always include both so the two are interchangeable.
+            digits = "".join(c for c in q if c.isdigit())
+            for n in _mt.search_neighborhoods(q, token, region=region, limit=8):
+                merged.append({"kind": "neighborhood", "key": n["key"], "name": n["name"],
+                               "region": n.get("region", "")})
+            if digits:
+                for z in _mt.search_zips(q, token, limit=10):
+                    merged.append({"kind": "zip", "key": z["key"], "name": z["name"],
+                                   "area": z.get("area", ""), "primary_city": z.get("primary_city", "")})
+            if home:
+                merged = _mt._proximity_sort(merged, home)
+            return {"results": merged}
         return {"results": _mt.search_interests(q, token)}
     except Exception as exc:
         return {"results": [], "error": str(exc)}
 
 
+@router.get("/geocode")
+def geocode(q: str):
+    """Free-text place → {lat,lng,pincode} via OpenStreetMap Nominatim (best-effort).
+    Powers the map picker's 'search a place' box. Read-only, no Meta token needed."""
+    from pikorua_adflow.tools import meta_targeting as _mt
+    hit = _mt.geocode_place((q or "").strip())
+    return {"result": hit}
+
+
 @router.get("/audience-geo-suggest/{run_id}")
 def audience_geo_suggest(run_id: str):
-    """Suggested neighbourhoods + pincodes for the campaign's city — powers the
-    'Suggested for {city}' quick-add rows in the area-targeting UI. Each entry
-    carries city_key so the saved audience can map an area back to its city."""
+    """Suggested areas near the property for the quick-add row + map picker seed.
+
+    Returns neighbourhoods + pincodes for the campaign's city, ranked by proximity
+    to the property's own locality/pincode ('Near {locality}', not just 'anywhere in
+    the city'). Also returns the map centre + home pincode so the map picker can
+    open on the exact property. Each entry carries city_key so the saved audience
+    can map an area back to its city."""
     from pikorua_adflow.tools import meta_targeting as _mt
     token = os.getenv("META_ACCESS_TOKEN", "")
     if not token:
@@ -117,15 +151,32 @@ def audience_geo_suggest(run_id: str):
     run = cs.require_complete(run_id)
     review_folder = Path(run["review_folder"])
     audience = cs.effective_audience(review_folder, run.get("brief", {}))
-    city = audience.get("city") or run.get("brief", {}).get("city", "")
+    brief = run.get("brief", {})
+    city = audience.get("city") or brief.get("city", "")
     region = audience.get("region", "")
     city_key = audience.get("city_key") or ""
+    locality = audience.get("locality") or brief.get("locality", "")
+    home_pincode = audience.get("home_pincode", "")
+    center = None
+    mp = audience.get("map_point") or {}
+    if mp.get("lat") is not None:
+        center = {"lat": mp["lat"], "lng": mp["lng"]}
     try:
+        # Recover the property centre/pincode if the saved audience predates this
+        # (e.g. was seeded before locality resolution existed).
+        if (not center or not home_pincode) and locality and city:
+            geo = _mt.geocode_place(f"{locality}, {city}, India")
+            if geo:
+                center = center or {"lat": geo["lat"], "lng": geo["lng"]}
+                home_pincode = home_pincode or geo.get("pincode", "")
         nbh = _mt.suggest_neighborhoods_for_city(city, region, city_key, token)
-        zips = _mt.suggest_zips_for_city(city, city_key, region, token)
-        return {"city": city, "neighborhoods": nbh, "zips": zips}
+        zips = _mt.suggest_zips_for_city(city, city_key, region, token,
+                                         home_pincode=home_pincode)
+        return {"city": city, "locality": locality, "home_pincode": home_pincode,
+                "center": center, "neighborhoods": nbh, "zips": zips}
     except Exception as exc:
-        return {"city": city, "neighborhoods": [], "zips": [], "error": str(exc)}
+        return {"city": city, "locality": locality, "center": center,
+                "neighborhoods": [], "zips": [], "error": str(exc)}
 
 
 @router.get("/audience-pool")

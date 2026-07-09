@@ -124,11 +124,16 @@ class AudienceSave(BaseModel):
     region: str = ""
     country: str = "IN"
     radius_km: int = 25
-    # Geo model: "radius" (city+radius circle) or "areas" (specific neighbourhoods/
-    # pincodes only). neighborhoods/zips entries are {key,name,city_key}.
+    locality: str = ""
+    # Geo model: "radius" (city+radius circle) | "areas" (specific neighbourhoods/
+    # pincodes only) | "map" (lat/lng pin + radius → Meta custom_locations).
+    # neighborhoods/zips entries are {key,name,city_key}.
     geo_mode: str = "radius"
     neighborhoods: list[dict] = Field(default_factory=list)
     zips: list[dict] = Field(default_factory=list)
+    # Map pin: {lat, lng, radius_km, city_key, label}. Property's own pincode.
+    map_point: dict | None = None
+    home_pincode: str = ""
     # Device/OS restriction: "all" (default) | "ios" | "android".
     platform_os: str = "all"
     age_min: int = 28

@@ -59,7 +59,10 @@ _DAILY_MODEL  = os.getenv("AO_STRATEGIST_DAILY_MODEL",
                            "openrouter/anthropic/claude-sonnet-4.5")
 _WEEKLY_MODEL = os.getenv("AO_STRATEGIST_WEEKLY_MODEL",
                            "openrouter/anthropic/claude-opus-4.5")
-_MAX_TOKENS   = int(os.getenv("AO_STRATEGIST_MAX_TOKENS", "2048"))
+# 2048 was too small: multi-campaign runs produce explanations + anomalies +
+# suggestions that overrun it, and a response cut off mid-JSON can't be parsed
+# (the "Strategist response not valid JSON" log). 4096 comfortably fits a full pass.
+_MAX_TOKENS   = int(os.getenv("AO_STRATEGIST_MAX_TOKENS", "4096"))
 
 # ── State path ────────────────────────────────────────────────────────────────
 # analytics/llm_strategist.py -> parents[0]=analytics, [1]=pikorua_adflow, [2]=src,
@@ -256,6 +259,76 @@ def _build_user_message(evals: list[dict], crm_report: dict,
     return f"{task}\n\nData:\n{json.dumps(data, ensure_ascii=False, indent=2)}"
 
 
+def _parse_strategist_json(raw_text: str) -> dict | None:
+    """Best-effort parse of the strategist's JSON reply. Returns the dict, or None
+    if unrecoverable. Handles the two real-world failure modes seen in the logs:
+      1. Markdown code fences (```json … ```) around the object.
+      2. Truncation at max_tokens — the object is cut off with no closing brace(s);
+         we recover the largest valid prefix by appending the missing brackets."""
+    import re
+
+    text = (raw_text or "").strip()
+    if not text:
+        return None
+
+    # 1) Strip a leading/trailing markdown fence if present.
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    else:
+        text = re.sub(r"^```(?:json)?\s*", "", text).strip()
+
+    # Narrow to the first '{' onward (drop any prose preamble).
+    start = text.find("{")
+    if start == -1:
+        return None
+    text = text[start:]
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # 2) Truncated object — close any open string + brackets (in correct LIFO
+    # nesting order) and retry, trimming the dangling tail each attempt.
+    for cut in (text, text.rsplit(",", 1)[0], text.rsplit(",", 2)[0]):
+        candidate = _close_truncated_json(cut)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def _close_truncated_json(text: str) -> str:
+    """Append the minimal suffix to make a truncated JSON prefix parseable:
+    terminate an open string, then close every open [ / { in LIFO order."""
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "[{":
+            stack.append(ch)
+        elif ch == "]" and stack and stack[-1] == "[":
+            stack.pop()
+        elif ch == "}" and stack and stack[-1] == "{":
+            stack.pop()
+    suffix = '"' if in_string else ""
+    for opener in reversed(stack):
+        suffix += "]" if opener == "[" else "}"
+    return text + suffix
+
+
 def _call_llm(system_prompt: str, user_msg: str, model: str) -> dict:
     """
     Call the LLM through litellm → OpenRouter using the existing OPENROUTER_API_KEY.
@@ -337,21 +410,19 @@ def _call_llm(system_prompt: str, user_msg: str, model: str) -> dict:
         usage_dict["cache_creation_input_tokens"],
     )
 
-    # Parse structured JSON
-    try:
-        result = json.loads(raw_text)
-    except json.JSONDecodeError:
-        import re
-        match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-        if match:
-            try:
-                result = json.loads(match.group())
-            except json.JSONDecodeError:
-                logger.error("Strategist response not valid JSON: %s", raw_text[:300])
-                return {}
-        else:
-            logger.error("No JSON in strategist response: %s", raw_text[:300])
-            return {}
+    # Parse structured JSON. Models routinely wrap the object in ```json fences
+    # despite the "no markdown fences" instruction, and a run that hits max_tokens
+    # gets truncated mid-object (no closing brace) — handle both before giving up.
+    result = _parse_strategist_json(raw_text)
+    if result is None:
+        logger.warning(
+            "Strategist response not valid JSON (len=%d, finish=%s) — skipping this "
+            "pass. Head: %s",
+            len(raw_text),
+            getattr(response.choices[0], "finish_reason", "?"),
+            raw_text[:200].replace("\n", " "),
+        )
+        return {}
 
     result["model_used"] = model
     result["usage"] = usage_dict

@@ -246,6 +246,12 @@ def covered_city_keys(targeting: dict, saved_audience: dict | None = None) -> se
             ck = str(a.get("city_key") or "")
             if ck:
                 keys.add(ck)
+    # Map-pin (custom_locations) targeting carries its covering city on the saved
+    # audience's map_point too — count it so a pin-targeted campaign isn't flagged
+    # as leaving its own city untargeted.
+    mp_ck = str((aud.get("map_point") or {}).get("city_key") or "")
+    if mp_ck:
+        keys.add(mp_ck)
     return keys
 
 

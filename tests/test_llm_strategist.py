@@ -1,5 +1,27 @@
 from unittest.mock import patch
-from pikorua_adflow.analytics.llm_strategist import _build_user_message, run_daily_pass, _STATE_PATH
+from pikorua_adflow.analytics.llm_strategist import (
+    _build_user_message, run_daily_pass, _STATE_PATH, _parse_strategist_json,
+)
+
+
+def test_parse_plain_json():
+    assert _parse_strategist_json('{"a": 1}') == {"a": 1}
+
+
+def test_parse_strips_markdown_fences():
+    assert _parse_strategist_json('```json\n{"a": 1}\n```') == {"a": 1}
+
+
+def test_parse_recovers_truncated_object():
+    # A response cut off at max_tokens (the real "not valid JSON" log cause).
+    raw = '{"explanations":[{"campaign_name":"X","state":"bleeding","plain_why":"CPL spiked to'
+    out = _parse_strategist_json(raw)
+    assert out["explanations"][0]["campaign_name"] == "X"
+
+
+def test_parse_returns_none_on_garbage():
+    assert _parse_strategist_json("not json at all") is None
+    assert _parse_strategist_json("") is None
 
 def test_build_user_message():
     evals = [
