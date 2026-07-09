@@ -40,6 +40,7 @@ def audience_retarget_suggestions(run_id: str):
         clientele_type=brief.get("clientele_type", "") or "",
         crm_leads=crm_leads,
         token=token,
+        property_type=brief.get("property_type", "") or "",
     )
     return {"run_id": run_id, **result}
 
@@ -82,7 +83,8 @@ def save_audience(run_id: str, payload: AudienceSave):
 
 
 @router.get("/audience-search")
-def audience_search(q: str, type: str = "interest", region: str = "", home: str = ""):
+def audience_search(q: str, type: str = "interest", region: str = "", home: str = "",
+                    city: str = ""):
     """Typeahead proxy to Meta's read-only Targeting Search (for the add-chip UI).
 
     type='area' is the unified locality search — neighbourhoods AND pincodes in one
@@ -111,15 +113,29 @@ def audience_search(q: str, type: str = "interest", region: str = "", home: str 
             # Pincode-looking queries lead with pincodes; name queries lead with
             # neighbourhoods — but always include both so the two are interchangeable.
             digits = "".join(c for c in q if c.isdigit())
+            seen_names: set[str] = set()
             for n in _mt.search_neighborhoods(q, token, region=region, limit=8):
                 merged.append({"kind": "neighborhood", "key": n["key"], "name": n["name"],
                                "region": n.get("region", "")})
+                seen_names.add(n["name"].strip().lower())
             if digits:
                 for z in _mt.search_zips(q, token, limit=10):
                     merged.append({"kind": "zip", "key": z["key"], "name": z["name"],
                                    "area": z.get("area", ""), "primary_city": z.get("primary_city", "")})
             if home:
                 merged = _mt._proximity_sort(merged, home)
+            # Google-Maps-style fallback: any real place (even one Meta has no named
+            # target for, e.g. "Science City") resolves via geocoding and is offered
+            # as a dropped-pin custom location. Appended AFTER Meta's exact targets.
+            city_hint = city if not digits else ""
+            gq = q + (f", {city_hint}" if city_hint and city_hint.lower() not in q.lower() else "")
+            for p in _mt.geocode_search(gq, limit=6):
+                nm = p["name"].strip()
+                if nm.lower() in seen_names:
+                    continue
+                seen_names.add(nm.lower())
+                merged.append({"kind": "place", "name": nm, "lat": p["lat"], "lng": p["lng"],
+                               "pincode": p.get("pincode", ""), "display_name": p.get("display_name", "")})
             return {"results": merged}
         return {"results": _mt.search_interests(q, token)}
     except Exception as exc:
@@ -177,6 +193,58 @@ def audience_geo_suggest(run_id: str):
     except Exception as exc:
         return {"city": city, "locality": locality, "center": center,
                 "neighborhoods": [], "zips": [], "error": str(exc)}
+
+
+@router.post("/preselect-property-location/{run_id}")
+def preselect_property_location(run_id: str):
+    """Resolve the campaign's OWN property locality into ready-to-add geo targets:
+    the matching neighbourhood, its nearest pincodes, and a dropped pin at the exact
+    property (so it's targeted even when Meta has no named area for it). Powers the
+    one-click 'Add property location' button — the fallback for campaigns created
+    before auto-preselect existed, or where geocoding was momentarily unavailable at
+    seed time. Read-only; the client merges the result and the user still saves."""
+    from pikorua_adflow.tools import meta_targeting as _mt
+    token = os.getenv("META_ACCESS_TOKEN", "")
+    run = cs.require_complete(run_id)
+    review_folder = Path(run["review_folder"])
+    audience = cs.effective_audience(review_folder, run.get("brief", {}))
+    brief = run.get("brief", {})
+    city = audience.get("city") or brief.get("city", "")
+    region = audience.get("region", "")
+    city_key = str(audience.get("city_key") or "")
+    locality = audience.get("locality") or brief.get("locality", "")
+    if not locality:
+        raise HTTPException(status_code=400, detail="This campaign has no property locality set.")
+
+    neighborhoods: list[dict] = []
+    zips: list[dict] = []
+    center = None
+    home_pincode = audience.get("home_pincode", "")
+    if city_key and token:
+        try:
+            pre = _mt.preselect_locality_areas(city, region, city_key, locality, token)
+            neighborhoods = pre.get("neighborhoods", [])
+            zips = pre.get("zips", [])
+            center = pre.get("center")
+            home_pincode = home_pincode or pre.get("home_pincode", "")
+        except Exception:
+            pass
+    # A pin at the exact property guarantees coverage even if Meta has no named area.
+    pin = None
+    if not center:
+        geo = _mt.geocode_place(f"{locality}, {city}, India")
+        if geo:
+            center = {"lat": geo["lat"], "lng": geo["lng"]}
+            home_pincode = home_pincode or geo.get("pincode", "")
+    if center:
+        pin = {"name": locality, "lat": center["lat"], "lng": center["lng"],
+               "radius_km": 5, "city_key": city_key}
+
+    if not (neighborhoods or zips or pin):
+        raise HTTPException(status_code=404,
+                            detail=f"Couldn't locate “{locality}”. Add areas manually or drop a pin on the map.")
+    return {"run_id": run_id, "locality": locality, "home_pincode": home_pincode,
+            "center": center, "neighborhoods": neighborhoods, "zips": zips, "pin": pin}
 
 
 @router.get("/audience-pool")

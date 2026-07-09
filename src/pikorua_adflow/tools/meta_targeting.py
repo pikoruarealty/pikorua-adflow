@@ -837,6 +837,63 @@ def geocode_place(query: str) -> dict | None:
     return result
 
 
+def geocode_search(query: str, limit: int = 5, viewbox: str = "") -> list[dict]:
+    """Google-Maps-style place search: return up to `limit` candidate places for a
+    free-text query as [{lat, lng, pincode, name, display_name}].
+
+    This is the escape hatch from Meta's limited neighbourhood/pincode taxonomy —
+    real places that aren't Meta targets (e.g. "Science City, Ahmedabad") still
+    resolve here and can be targeted as a dropped-pin custom location. Best-effort,
+    disk-cached; returns [] on any failure. `viewbox` (lon1,lat1,lon2,lat2) softly
+    biases results toward the campaign's city when provided."""
+    q = (query or "").strip()
+    if len(q) < 3:
+        return []
+    ckey = f"multi::{limit}::{viewbox}::{q.lower()}"
+    try:
+        cache = json.loads(_GEO_CACHE_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        cache = {}
+    if ckey in cache:
+        return cache[ckey] or []
+
+    params = {"q": q, "format": "jsonv2", "limit": max(1, min(limit, 10)),
+              "addressdetails": 1, "countrycodes": "in"}
+    if viewbox:
+        params["viewbox"] = viewbox
+        params["bounded"] = 0  # bias, don't hard-restrict
+    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": _NOMINATIM_UA})
+    out: list[dict] = []
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+        for d in data if isinstance(data, list) else []:
+            addr = d.get("address") or {}
+            # A short, human label — the first comma-segment of the display name
+            # ("Science City, Sola, Ahmedabad…" → "Science City").
+            disp = d.get("display_name", "")
+            short = d.get("name") or disp.split(",")[0].strip()
+            out.append({
+                "lat": float(d["lat"]),
+                "lng": float(d["lon"]),
+                "pincode": str(addr.get("postcode") or "").replace(" ", "")[:6],
+                "name": short,
+                "display_name": disp,
+            })
+    except Exception:
+        out = []
+
+    cache[ckey] = out
+    try:
+        _GEO_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _GEO_CACHE_PATH.write_text(json.dumps(cache, indent=1, ensure_ascii=False),
+                                   encoding="utf-8")
+    except OSError:
+        pass
+    return out
+
+
 def _pin_int(name: str) -> int | None:
     """Extract a 6-digit pincode from a string as an int, else None."""
     digits = re.sub(r"\D", "", str(name or ""))[-6:]
@@ -1184,6 +1241,8 @@ def build_default_audience(city: str, token: str, *, locality: str = "",
         "geo_mode": geo_mode,
         "neighborhoods": neighborhoods,
         "zips": zips,
+        # Dropped-pin places (Google-Maps-style) → Meta custom_locations in areas mode.
+        "custom_locations": [],
         # Map pin (property locality lat/lng) + its own pincode — seeds the map
         # picker and lets area suggestions rank by real proximity.
         "map_point": map_point,
@@ -1255,7 +1314,19 @@ def build_targeting_spec(audience: dict) -> dict:
     # circle if the user flipped to areas but hasn't picked any yet.
     geo_mode = audience.get("geo_mode")
     map_point = audience.get("map_point") or {}
-    use_areas = geo_mode == "areas" and (neighborhoods or zips)
+    # Dropped-pin places → Meta custom_locations (lat/lng circle each).
+    pinned: list[dict] = []
+    for p in (audience.get("custom_locations") or []):
+        if p.get("lat") is None or p.get("lng") is None:
+            continue
+        pr = int(p.get("radius_km") or DEFAULT_RADIUS_KM)
+        pr = max(1, min(_RADIUS_MAX_KM, pr))
+        loc = {"latitude": round(float(p["lat"]), 6), "longitude": round(float(p["lng"]), 6),
+               "radius": pr, "distance_unit": "kilometer"}
+        if p.get("city_key") or city_key:
+            loc["primary_city_id"] = str(p.get("city_key") or city_key)
+        pinned.append(loc)
+    use_areas = geo_mode == "areas" and (neighborhoods or zips or pinned)
     use_map = (geo_mode == "map" and map_point.get("lat") is not None
                and map_point.get("lng") is not None)
     geo: dict[str, Any] = {}
@@ -1281,6 +1352,8 @@ def build_targeting_spec(audience: dict) -> dict:
             geo["neighborhoods"] = neighborhoods
         if zips:
             geo["zips"] = zips
+        if pinned:
+            geo["custom_locations"] = pinned
     elif city_key:
         radius = int(audience.get("radius_km") or DEFAULT_RADIUS_KM)
         radius = max(_RADIUS_MIN_KM, min(_RADIUS_MAX_KM, radius))
@@ -1947,8 +2020,10 @@ def audience_from_targeting_spec(spec: dict, base: dict) -> dict:
            for n in (geo.get("neighborhoods") or []) if n.get("key")]
     zps = [{"key": str(z.get("key")), "name": z.get("name", str(z.get("key", "")))}
            for z in (geo.get("zips") or []) if z.get("key")]
-    custom = geo.get("custom_locations") or []
-    if custom and custom[0].get("latitude") is not None:
+    custom = [c for c in (geo.get("custom_locations") or []) if c.get("latitude") is not None]
+    # A single pin with no named areas = Map mode. Multiple pins, or pins mixed with
+    # named areas = "areas" mode carrying dropped-pin places.
+    if custom and not (nbh or zps) and len(custom) == 1:
         c = custom[0]
         aud["map_point"] = {
             "lat": float(c["latitude"]), "lng": float(c["longitude"]),
@@ -1957,9 +2032,15 @@ def audience_from_targeting_spec(spec: dict, base: dict) -> dict:
             "label": aud.get("locality", "") or aud.get("city", ""),
         }
         aud["geo_mode"] = "map"
-    elif nbh or zps:
+    elif nbh or zps or custom:
         aud["neighborhoods"] = nbh
         aud["zips"] = zps
+        aud["custom_locations"] = [{
+            "name": aud.get("city", "Pinned area"),
+            "lat": float(c["latitude"]), "lng": float(c["longitude"]),
+            "radius_km": int(c.get("radius") or DEFAULT_RADIUS_KM),
+            "city_key": str(c.get("primary_city_id") or aud.get("city_key") or ""),
+        } for c in custom]
         aud["geo_mode"] = "areas"
     elif cities:
         aud["geo_mode"] = "radius"
@@ -1980,12 +2061,18 @@ def audience_summary(audience: dict) -> str:
     geo = audience.get("city") or audience.get("country") or "India"
     nbh = audience.get("neighborhoods") or []
     zps = audience.get("zips") or []
-    if audience.get("geo_mode") == "areas" and (nbh or zps):
+    pins = audience.get("custom_locations") or []
+    mp = audience.get("map_point") or {}
+    if audience.get("geo_mode") == "map" and mp.get("lat") is not None:
+        geo = f"{audience.get('city') or 'pin'} · pin +{mp.get('radius_km', DEFAULT_RADIUS_KM)}km"
+    elif audience.get("geo_mode") == "areas" and (nbh or zps or pins):
         area_bits = []
         if nbh:
             area_bits.append(f"{len(nbh)} area{'s' if len(nbh) != 1 else ''}")
         if zps:
             area_bits.append(f"{len(zps)} pincode{'s' if len(zps) != 1 else ''}")
+        if pins:
+            area_bits.append(f"{len(pins)} pin{'s' if len(pins) != 1 else ''}")
         city_lbl = audience.get("city") or ""
         geo = (f"{city_lbl}: " if city_lbl else "") + " + ".join(area_bits)
     elif audience.get("city") and audience.get("city_key"):

@@ -53,6 +53,37 @@ def test_covered_city_keys_counts_map_point():
     assert "12345" in gi.covered_city_keys(spec, saved)
 
 
+def test_areas_mode_emits_pinned_custom_locations():
+    # A dropped-pin place (Google-Maps geocode fallback) rides alongside pincodes.
+    aud = {"geo_mode": "areas", "city_key": "12345", "city": "Ahmedabad",
+           "zips": [{"key": "z1"}],
+           "custom_locations": [{"name": "Science City", "lat": 23.077, "lng": 72.516,
+                                 "radius_km": 4, "city_key": "12345"}],
+           "interests": [], "behaviours": []}
+    geo = mt.build_targeting_spec(aud)["geo_locations"]
+    assert geo["zips"] == [{"key": "z1"}]
+    loc = geo["custom_locations"][0]
+    assert loc["latitude"] == 23.077 and loc["radius"] == 4
+    assert loc["primary_city_id"] == "12345"
+
+
+def test_areas_with_pins_round_trip_stays_areas():
+    aud = {"geo_mode": "areas", "city_key": "12345", "city": "Ahmedabad",
+           "zips": [{"key": "z1"}],
+           "custom_locations": [{"name": "Science City", "lat": 23.077, "lng": 72.516,
+                                 "radius_km": 4, "city_key": "12345"}],
+           "interests": [], "behaviours": []}
+    back = mt.audience_from_targeting_spec(mt.build_targeting_spec(aud),
+                                           {"city_key": "12345", "city": "Ahmedabad"})
+    assert back["geo_mode"] == "areas"
+    assert len(back["custom_locations"]) == 1 and back["zips"]
+
+
+def test_covered_city_keys_counts_pinned_places():
+    saved = {"custom_locations": [{"city_key": "999"}]}
+    assert "999" in gi.covered_city_keys({"geo_locations": {}}, saved)
+
+
 def test_radius_and_areas_modes_unchanged():
     # radius mode still emits cities[key,radius]
     r = mt.build_targeting_spec({"geo_mode": "radius", "city_key": "9", "radius_km": 25,

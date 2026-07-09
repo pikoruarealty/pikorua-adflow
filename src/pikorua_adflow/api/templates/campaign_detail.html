@@ -1025,6 +1025,7 @@ function renderAudience() {
       geo_mode: a.geo_mode || 'radius',
       neighborhoods: (a.neighborhoods || []).slice(),
       zips: (a.zips || []).slice(),
+      custom_locations: (a.custom_locations || []).slice(),
       map_point: a.map_point || null,
       home_pincode: a.home_pincode || '',
       platform_os: a.platform_os || 'all',
@@ -1294,20 +1295,109 @@ function geoAreaEditor() {
     sHtml = '<p class="text-[10px] text-on-surface-variant mt-1">Loading nearby suggestions…</p>';
   }
 
-  const kindTag = cat => '<span class="text-[9px] label-caps text-outline ml-0.5">' + (cat === 'zips' ? 'pin' : 'area') + '</span>';
+  const kindTag = cat => '<span class="text-[9px] label-caps text-outline ml-0.5">' + (cat === 'zips' ? 'pincode' : 'area') + '</span>';
+  const pins = AUD_STATE.custom_locations || [];
+  const total = combined.length + pins.length;
+
+  // Dropped-pin places (from the Google-Maps-style geocode fallback) — each with
+  // its own editable radius, exactly like a dropped pin in Ads Manager.
+  let pinHtml = '';
+  if (pins.length) {
+    pinHtml = '<div class="mt-2"><p class="text-[10px] label-caps text-outline mb-1">Pinned places (radius targeting)</p>' +
+      '<div class="space-y-1">' +
+      pins.map((p, i) =>
+        '<div class="flex items-center gap-2 text-sm">' +
+          '<span class="material-symbols-outlined text-[15px] text-primary">location_on</span>' +
+          '<span class="flex-1 truncate" title="' + esc(p.display_name || p.name) + '">' + esc(p.name) + '</span>' +
+          '<input type="number" min="1" max="80" value="' + esc(p.radius_km || 5) + '" ' +
+            'oninput="setCustomLocationRadius(' + i + ', this.value)" class="w-14 text-xs border-0 border-b border-outline-variant bg-transparent py-0.5 text-right focus:border-primary focus:ring-0"/>' +
+          '<span class="text-xs text-on-surface-variant">km</span>' +
+          '<button type="button" onclick="removeCustomLocation(' + i + ')" class="text-outline hover:text-error leading-none" aria-label="Remove">✕</button>' +
+        '</div>').join('') +
+      '</div></div>';
+  }
+
+  // One-click add the property's own location (fallback when auto-preselect
+  // didn't run — e.g. campaigns created before this feature, or a geocode hiccup).
+  let propBtn = '';
+  if (AUD_STATE.locality) {
+    propBtn = '<button type="button" id="add-prop-loc-btn" onclick="addPropertyLocation(this)" ' +
+      'class="mb-2 inline-flex items-center gap-1 text-xs label-caps border border-primary text-primary rounded-full px-3 py-1 hover:bg-primary hover:text-on-primary transition-colors">' +
+      '<span class="material-symbols-outlined text-[14px]">my_location</span> Add property location — ' + esc(AUD_STATE.locality) + '</button>';
+  }
+
   return '<div>' +
-    '<p class="label-caps text-outline mb-1">Areas &amp; pincodes (' + combined.length + ')</p>' +
+    '<p class="label-caps text-outline mb-1">Areas, pincodes &amp; pins (' + total + ')</p>' +
+    propBtn +
     '<div class="flex flex-wrap gap-2 mb-2">' +
       (combined.map(x => chip((x.item.name || x.item.key), "removeGeoArea('" + x.cat + "'," + x.i + ")", kindTag(x.cat))).join('') ||
-        '<span class="text-sm text-on-surface-variant">None selected</span>') +
+        (pins.length ? '' : '<span class="text-sm text-on-surface-variant">None selected</span>')) +
     '</div>' +
-    '<div class="relative">' +
-      '<input type="text" placeholder="Search a neighbourhood or pincode to add…" oninput="geoSearchInput(this)" ' +
+    pinHtml +
+    '<div class="relative mt-2">' +
+      '<input type="text" placeholder="Search any area, pincode or place (like Google Maps)…" oninput="geoSearchInput(this)" ' +
         'class="w-full text-sm border-0 border-b border-outline-variant bg-transparent py-1.5 focus:border-primary focus:ring-0"/>' +
-      '<div class="aud-search-results absolute z-10 w-full bg-surface-container border border-outline-variant shadow-lg max-h-48 overflow-y-auto hidden"></div>' +
+      '<div class="aud-search-results absolute z-10 w-full bg-surface-container border border-outline-variant shadow-lg max-h-56 overflow-y-auto hidden"></div>' +
     '</div>' +
     sHtml +
   '</div>';
+}
+/* Dropped-pin places (Meta custom_locations) — added from the geocode fallback in
+   area search. Default 5 km, per-pin editable. */
+function addCustomLocation(p) {
+  if (!p || typeof p.lat !== 'number') return;
+  AUD_STATE.custom_locations = AUD_STATE.custom_locations || [];
+  if (AUD_STATE.custom_locations.some(x => Math.abs(x.lat - p.lat) < 1e-5 && Math.abs(x.lng - p.lng) < 1e-5)) return;
+  AUD_STATE.custom_locations.push({ name: p.name, lat: p.lat, lng: p.lng, radius_km: p.radius_km || 5,
+    city_key: AUD_STATE.city_key || '', display_name: p.display_name || '' });
+  AUD_STATE.geo_mode = 'areas';
+  enableSaveAudience();
+  renderAudGeo();
+}
+function removeCustomLocation(i) {
+  AUD_STATE.custom_locations.splice(i, 1);
+  enableSaveAudience();
+  renderAudGeo();
+}
+function setCustomLocationRadius(i, v) {
+  const km = Math.max(1, Math.min(80, parseInt(v, 10) || 5));
+  if (AUD_STATE.custom_locations[i]) AUD_STATE.custom_locations[i].radius_km = km;
+  enableSaveAudience();
+}
+/* One-click: resolve the campaign's own property locality and merge the matching
+   neighbourhood + nearest pincodes + a pin at the property into the selection. */
+function addPropertyLocation(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Locating…'; }
+  api('/preselect-property-location/' + RUN_ID, { method: 'POST' }).then(d => {
+    let added = 0;
+    AUD_STATE.neighborhoods = AUD_STATE.neighborhoods || [];
+    AUD_STATE.zips = AUD_STATE.zips || [];
+    AUD_STATE.custom_locations = AUD_STATE.custom_locations || [];
+    (d.neighborhoods || []).forEach(n => {
+      if (!AUD_STATE.neighborhoods.some(x => x.key === n.key)) {
+        AUD_STATE.neighborhoods.push({ key: n.key, name: n.name, city_key: n.city_key || AUD_STATE.city_key || '' }); added++;
+      }
+    });
+    (d.zips || []).forEach(z => {
+      if (!AUD_STATE.zips.some(x => x.key === z.key)) {
+        AUD_STATE.zips.push({ key: z.key, name: z.name, city_key: z.city_key || AUD_STATE.city_key || '', area: z.area || '' }); added++;
+      }
+    });
+    if (d.pin && typeof d.pin.lat === 'number' &&
+        !AUD_STATE.custom_locations.some(x => Math.abs(x.lat - d.pin.lat) < 1e-5 && Math.abs(x.lng - d.pin.lng) < 1e-5)) {
+      AUD_STATE.custom_locations.push({ name: d.pin.name, lat: d.pin.lat, lng: d.pin.lng,
+        radius_km: d.pin.radius_km || 5, city_key: d.pin.city_key || AUD_STATE.city_key || '' });
+      added++;
+    }
+    if (d.home_pincode) AUD_STATE.home_pincode = d.home_pincode;
+    if (d.center && !AUD_STATE.map_point) AUD_STATE.map_point = { lat: d.center.lat, lng: d.center.lng,
+      radius_km: 5, city_key: AUD_STATE.city_key || '', label: AUD_STATE.locality || '' };
+    AUD_STATE.geo_mode = 'areas';
+    enableSaveAudience();
+    renderAudGeo();
+    toast(added ? ('Added ' + added + ' target' + (added > 1 ? 's' : '') + ' for ' + (d.locality || 'the property') + ' — review and Save.')
+                : 'Property location is already in your selection.');
+  }).catch(e => { showError(e.message || 'Could not locate the property.'); renderAudGeo(); });
 }
 function setGeoMode(mode) {
   AUD_STATE.geo_mode = mode;
@@ -1353,9 +1443,10 @@ function removeGeoArea(category, idx) {
   renderAudGeo();
 }
 let GEO_SEARCH_TIMER = null;
-/* Unified area typeahead — one box that returns neighbourhoods AND pincodes
-   interchangeably (type=area), nearest-first when we know the property's pincode.
-   Each result carries `kind` so we route it to the right AUD_STATE bucket. */
+/* Unified area typeahead — one box that returns Meta neighbourhoods AND pincodes,
+   PLUS a Google-Maps-style geocode fallback (kind='place') for any real place Meta
+   has no named target for. Named targets route to neighborhoods/zips; places become
+   dropped-pin custom locations. Nearest-first when we know the property's pincode. */
 function geoSearchInput(input) {
   const box = input.nextElementSibling;
   const q = input.value.trim();
@@ -1364,10 +1455,21 @@ function geoSearchInput(input) {
   GEO_SEARCH_TIMER = setTimeout(() => {
     const region = encodeURIComponent(AUD_STATE.region || '');
     const home = encodeURIComponent(AUD_STATE.home_pincode || '');
-    api('/audience-search?type=area&q=' + encodeURIComponent(q) + '&region=' + region + '&home=' + home).then(d => {
-      const results = (d.results || []).slice(0, 12);
+    const cityQ = encodeURIComponent(AUD_STATE.city || '');
+    box.innerHTML = '<div class="px-3 py-2 text-sm text-on-surface-variant">Searching…</div>'; box.classList.remove('hidden');
+    api('/audience-search?type=area&q=' + encodeURIComponent(q) + '&region=' + region + '&home=' + home + '&city=' + cityQ).then(d => {
+      const results = (d.results || []).slice(0, 14);
       if (!results.length) { box.innerHTML = '<div class="px-3 py-2 text-sm text-on-surface-variant">No matches</div>'; box.classList.remove('hidden'); return; }
       box.innerHTML = results.map(r => {
+        if (r.kind === 'place') {
+          // Google-Maps-style hit → dropped-pin custom location (default 5 km).
+          const place = { name: r.name, lat: r.lat, lng: r.lng, radius_km: 5, display_name: r.display_name || '' };
+          const sub = ['drop pin', r.display_name].filter(Boolean).join(' · ');
+          return '<button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-surface-container-low" ' +
+            'onclick=\'addCustomLocation(' + JSON.stringify(place).replace(/'/g, "&#39;") + '); this.closest(".aud-search-results").classList.add("hidden"); this.closest(".relative").querySelector("input").value="";\'>' +
+            '<span class="material-symbols-outlined text-[14px] text-primary align-middle mr-1">location_on</span>' +
+            esc(r.name) + (sub ? ' <span class="text-xs text-on-surface-variant">' + esc(sub) + '</span>' : '') + '</button>';
+        }
         // Pincodes carry an `area` (locality names) — bake it into the saved chip
         // name so "380015 — Nehru Nagar" survives into the audience list.
         const label = r.area ? r.name + ' — ' + r.area : r.name;
@@ -1380,8 +1482,8 @@ function geoSearchInput(input) {
           esc(r.name) + (sub ? ' <span class="text-xs text-on-surface-variant">' + esc(sub) + '</span>' : '') + '</button>';
       }).join('');
       box.classList.remove('hidden');
-    }).catch(() => {});
-  }, 300);
+    }).catch(() => { box.innerHTML = '<div class="px-3 py-2 text-sm text-error">Search failed</div>'; });
+  }, 350);
 }
 function loadGeoSuggestions() {
   if (AUD_GEO_SUGGEST) { return; }
@@ -1758,6 +1860,7 @@ function saveAudience() {
     geo_mode: AUD_STATE.geo_mode || 'radius',
     neighborhoods: AUD_STATE.neighborhoods || [],
     zips: AUD_STATE.zips || [],
+    custom_locations: AUD_STATE.custom_locations || [],
     map_point: AUD_STATE.map_point || null,
     home_pincode: AUD_STATE.home_pincode || '',
     platform_os: AUD_STATE.platform_os || 'all',

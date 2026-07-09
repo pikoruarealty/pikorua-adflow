@@ -131,7 +131,11 @@ class AudienceSave(BaseModel):
     geo_mode: str = "radius"
     neighborhoods: list[dict] = Field(default_factory=list)
     zips: list[dict] = Field(default_factory=list)
-    # Map pin: {lat, lng, radius_km, city_key, label}. Property's own pincode.
+    # Dropped-pin places (Google-Maps-style, for areas Meta has no named target for).
+    # Each: {name, lat, lng, radius_km, city_key}. Emitted as Meta custom_locations
+    # alongside neighborhoods/zips in "areas" mode.
+    custom_locations: list[dict] = Field(default_factory=list)
+    # Single map-pin (Map mode): {lat, lng, radius_km, city_key, label}.
     map_point: dict | None = None
     home_pincode: str = ""
     # Device/OS restriction: "all" (default) | "ios" | "android".

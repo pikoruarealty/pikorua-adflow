@@ -252,6 +252,10 @@ def covered_city_keys(targeting: dict, saved_audience: dict | None = None) -> se
     mp_ck = str((aud.get("map_point") or {}).get("city_key") or "")
     if mp_ck:
         keys.add(mp_ck)
+    for p in (aud.get("custom_locations") or []):
+        ck = str(p.get("city_key") or "")
+        if ck:
+            keys.add(ck)
     return keys
 
 
