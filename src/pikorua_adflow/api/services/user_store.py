@@ -159,4 +159,17 @@ def reject_user(user_id: int) -> dict | None:
     return _public(row)
 
 
+def count_admins() -> int:
+    with _LOCK, _connect() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").fetchone()
+    return row["n"]
+
+
+def delete_user(user_id: int) -> bool:
+    with _LOCK, _connect() as conn:
+        cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+    return cur.rowcount > 0
+
+
 init_db()

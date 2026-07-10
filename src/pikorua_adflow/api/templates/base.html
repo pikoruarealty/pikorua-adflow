@@ -64,7 +64,10 @@
         "inverse-surface": _c('inverse-surface'), "inverse-on-surface": _c('inverse-on-surface'),
         "error": _c('error'), "ok": _c('ok'), "warn": _c('warn'),
       },
-      borderRadius: { "DEFAULT": "8px", "sm": "4px", "md": "8px", "lg": "12px", "xl": "16px", "2xl": "20px", "full": "9999px" },
+      // Flat, editorial look everywhere — every `rounded-*` utility across every
+      // page that extends this layout resolves to a square corner from this one
+      // scale, so no template can accidentally reintroduce a curve.
+      borderRadius: { "none": "0px", "DEFAULT": "0px", "sm": "0px", "md": "0px", "lg": "0px", "xl": "0px", "2xl": "0px", "3xl": "0px", "full": "0px" },
       spacing: { "container-max": "1440px", "margin-mobile": "20px", "margin-desktop": "56px" },
       fontFamily: {
         "display": ["Playfair Display", "serif"], "headline": ["Playfair Display", "serif"],
@@ -97,13 +100,25 @@
   }
   [contenteditable]:focus { outline: 1px solid rgb(var(--primary)); }
 
+  /* Flat everywhere: some browsers paint their own native corner-rounding on
+     buttons/inputs/selects unless appearance is reset, which is how curves
+     were sneaking back in despite no `rounded-*` class being used. */
+  button, input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+    border-radius: 0; appearance: none; -webkit-appearance: none; }
+  /* appearance:none also strips the native <select> chevron — replace it with a
+     flat CSS one (light/dark variants, since it's baked into a background image). */
+  select { background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 12px;
+    padding-right: 2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%234e4639' stroke-width='2'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E"); }
+  .dark select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23d1c5b4' stroke-width='2'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E"); }
+
   /* Shared button baseline — every clickable action (<button> or <a>) gets the
      same box height/line-height/vertical centering, so mixed action rows never
      look "just placed there" next to each other regardless of tag or variant. */
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
     padding: 0.625rem 1.25rem; font-family: Inter, sans-serif; font-size: 11px; font-weight: 600;
     letter-spacing: 0.08em; text-transform: uppercase; line-height: 1; white-space: nowrap;
-    text-decoration: none; cursor: pointer; border: 1px solid transparent;
+    text-decoration: none; cursor: pointer; border: 1px solid transparent; border-radius: 0;
     transition: background-color .15s ease, color .15s ease, opacity .15s ease; }
   .btn:disabled { opacity: 0.55; cursor: default; }
   .btn-primary { background-color: rgb(var(--primary)); color: rgb(var(--on-primary)); }
@@ -124,9 +139,9 @@
   <div class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto">
     <div class="flex items-center gap-8">
       <a href="/portal" aria-label="PIKORUA" class="flex items-center shrink-0">
-        <img src="/logo/light" alt="PIKORUA" class="h-9 w-auto block dark:hidden"
+        <img src="/logo/light" alt="PIKORUA" class="h-14 w-14 object-contain block dark:hidden"
              onerror="this.outerHTML='&lt;span class=\'font-display text-3xl text-primary\'&gt;PIKORUA&lt;/span&gt;'"/>
-        <img src="/logo/dark" alt="PIKORUA" class="h-9 w-auto hidden dark:block"
+        <img src="/logo/dark" alt="PIKORUA" class="h-14 w-14 object-contain hidden dark:block"
              onerror="this.outerHTML='&lt;span class=\'font-display text-3xl text-primary\'&gt;PIKORUA&lt;/span&gt;'"/>
       </a>
       <div class="hidden md:flex gap-6 items-center">

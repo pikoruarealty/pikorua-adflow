@@ -8,10 +8,10 @@ for session/role checks rather than per-route dependencies).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from ..services import user_store
+from ..services import auth, user_store
 
 router = APIRouter(prefix="/api/users")
 
@@ -53,3 +53,17 @@ def reject_user(user_id: int):
     if user is None:
         raise HTTPException(status_code=404, detail="User not found.")
     return {"user": user}
+
+
+@router.delete("/{user_id}")
+def delete_user(user_id: int, request: Request):
+    payload = auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)) or {}
+    if payload.get("uid") == user_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account.")
+    user = user_store.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user["role"] == "admin" and user_store.count_admins() <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete the last remaining admin.")
+    user_store.delete_user(user_id)
+    return {"deleted": True}

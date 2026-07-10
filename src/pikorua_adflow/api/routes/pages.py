@@ -20,7 +20,8 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 def _user_ctx(request: Request) -> dict:
     """Session info for nav rendering (admin-only links, etc)."""
     payload = auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)) or {}
-    return {"username": payload.get("sub"), "is_admin": payload.get("role") == "admin"}
+    return {"username": payload.get("sub"), "is_admin": payload.get("role") == "admin",
+            "uid": payload.get("uid")}
 
 
 @router.get("/", response_class=RedirectResponse)

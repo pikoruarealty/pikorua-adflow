@@ -26,23 +26,26 @@
 <!-- Create user -->
 <section class="mb-10 border border-outline-variant p-5">
   <h2 class="font-headline text-xl mb-4">Add a user</h2>
-  <form id="create-form" class="grid md:grid-cols-4 gap-3 items-end" onsubmit="createUser(event)">
+  <form id="create-form" class="grid md:grid-cols-4 gap-3 items-stretch" onsubmit="createUser(event)">
     <div>
       <label class="label-caps text-outline block mb-1">Username</label>
-      <input name="username" required class="w-full border border-outline-variant rounded px-3 py-2 bg-surface"/>
+      <input name="username" required class="w-full border border-outline-variant px-3 py-2 bg-surface"/>
     </div>
     <div>
       <label class="label-caps text-outline block mb-1">Password</label>
-      <input name="password" type="password" required class="w-full border border-outline-variant rounded px-3 py-2 bg-surface"/>
+      <input name="password" type="password" required class="w-full border border-outline-variant px-3 py-2 bg-surface"/>
     </div>
     <div>
       <label class="label-caps text-outline block mb-1">Role</label>
-      <select name="role" class="w-full border border-outline-variant rounded px-3 py-2 bg-surface">
+      <select name="role" class="w-full border border-outline-variant px-3 py-2 bg-surface">
         <option value="user">User</option>
         <option value="admin">Admin</option>
       </select>
     </div>
-    <button type="submit" class="btn btn-primary">Create user</button>
+    <div class="flex flex-col">
+      <label class="label-caps text-outline block mb-1 invisible" aria-hidden="true">Add</label>
+      <button type="submit" class="btn btn-primary w-full flex-1">Create user</button>
+    </div>
   </form>
   <div id="create-result" class="text-sm mt-3"></div>
 </section>
@@ -54,7 +57,7 @@
     <table class="w-full">
       <thead>
         <tr class="border-b border-outline-variant label-caps text-outline text-left">
-          <th class="p-4">Username</th><th class="p-4">Role</th><th class="p-4">Status</th><th class="p-4">Created</th>
+          <th class="p-4">Username</th><th class="p-4">Role</th><th class="p-4">Status</th><th class="p-4">Created</th><th class="p-4"></th>
         </tr>
       </thead>
       <tbody id="all-rows"></tbody>
@@ -65,6 +68,8 @@
 
 {% block scripts %}
 <script>
+const CURRENT_UID = {{ uid if uid is not none else 'null' }};
+
 async function loadUsers() {
   const res = await fetch('/api/users');
   if (!res.ok) return;
@@ -92,9 +97,19 @@ async function loadUsers() {
         <span class="label-caps ${u.status === 'approved' ? 'text-ok' : u.status === 'pending' ? 'text-warn' : 'text-error'}">${u.status}</span>
       </td>
       <td class="p-4 text-sm text-on-surface-variant">${new Date(u.created_at).toLocaleString()}</td>
+      <td class="p-4 text-right">
+        ${u.id === CURRENT_UID
+          ? '<span class="label-caps text-outline">This is you</span>'
+          : `<button class="btn btn-danger" data-delete-id="${u.id}" data-delete-username="${u.username}">Delete</button>`}
+      </td>
     </tr>
   `).join('');
 }
+
+document.getElementById('all-rows').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-delete-id]');
+  if (btn) deleteUser(Number(btn.dataset.deleteId), btn.dataset.deleteUsername);
+});
 
 async function approveUser(id) {
   await fetch(`/api/users/${id}/approve`, { method: 'POST' });
@@ -103,6 +118,17 @@ async function approveUser(id) {
 
 async function rejectUser(id) {
   await fetch(`/api/users/${id}/reject`, { method: 'POST' });
+  loadUsers();
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.detail || 'Could not delete user.');
+    return;
+  }
   loadUsers();
 }
 

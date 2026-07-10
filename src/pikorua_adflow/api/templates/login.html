@@ -5,38 +5,53 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Sign in — PIKORUA AdFlow</title>
 <link rel="icon" type="image/png" href="/favicon.ico"/>
+<script>(function(){try{if(localStorage.getItem('pikorua-theme')==='dark')document.documentElement.classList.add('dark');}catch(e){}})();</script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config = { darkMode: "class" };</script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
-<style>body{font-family:Inter,sans-serif;} .font-display{font-family:'Playfair Display',serif;}</style>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="/static/app.js" defer></script>
+<style>
+body{font-family:Inter,sans-serif;} .font-display{font-family:'Playfair Display',serif;}
+button, input { border-radius: 0; appearance: none; -webkit-appearance: none; }
+.material-symbols-outlined { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal;
+  font-size: 22px; display: inline-block; line-height: 1; white-space: nowrap; word-wrap: normal; direction: ltr;
+  -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; }
+</style>
 </head>
-<body class="min-h-screen flex items-center justify-center bg-[#faf9f7]">
+<body class="min-h-screen flex items-center justify-center bg-[#faf9f7] dark:bg-[#141310] transition-colors">
+  <button onclick="pikToggleTheme()" title="Toggle light / dark" class="fixed top-4 right-4 text-gray-500 dark:text-gray-400 hover:text-[#775a19] dark:hover:text-[#e9c176] hover:bg-black/5 dark:hover:bg-white/5 p-2 transition-colors">
+    <span class="material-symbols-outlined">contrast</span>
+  </button>
   <div class="w-full max-w-sm px-6">
     <div class="text-center mb-8">
-      <img src="/logo/light" alt="PIKORUA" class="h-10 w-auto mx-auto"
+      <img src="/logo/light" alt="PIKORUA" class="h-32 w-64 mx-auto object-contain dark:hidden"
            onerror="this.outerHTML='&lt;span class=\'font-display text-3xl\'&gt;PIKORUA&lt;/span&gt;'"/>
-      <p class="text-sm text-gray-500 mt-2">AdFlow Portal — sign in to continue</p>
+      <img src="/logo/dark" alt="PIKORUA" class="h-32 w-64 mx-auto object-contain hidden dark:block"
+           onerror="this.outerHTML='&lt;span class=\'font-display text-3xl\'&gt;PIKORUA&lt;/span&gt;'"/>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">AdFlow Portal — sign in to continue</p>
     </div>
     <form method="post" action="/login" class="space-y-4">
       {% if error %}
-      <div class="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{{ error }}</div>
+      <div class="text-sm text-red-700 bg-red-50 border border-red-200 dark:text-red-300 dark:bg-red-950/40 dark:border-red-800 px-3 py-2">{{ error }}</div>
       {% endif %}
       <input type="hidden" name="next" value="{{ next or '/portal' }}"/>
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1" for="username">Username</label>
+        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1" for="username">Username</label>
         <input id="username" name="username" type="text" autofocus required value="{{ username or '' }}"
-               class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#775a19]"/>
+               class="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1f211f] text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#775a19] dark:focus:ring-[#e9c176]"/>
       </div>
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1" for="password">Password</label>
+        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1" for="password">Password</label>
         <input id="password" name="password" type="password" required
-               class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#775a19]"/>
+               class="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1f211f] text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#775a19] dark:focus:ring-[#e9c176]"/>
       </div>
-      <button type="submit" class="w-full bg-[#775a19] text-white rounded py-2 font-medium hover:bg-[#5f4714] transition-colors">
+      <button type="submit" class="w-full bg-[#775a19] text-white py-2 font-medium hover:bg-[#5f4714] transition-colors">
         Sign in
       </button>
     </form>
-    <p class="text-center text-sm text-gray-500 mt-4">
-      Don't have an account? <a href="/register" class="text-[#775a19] font-medium hover:underline">Request access</a>
+    <p class="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
+      Don't have an account? <a href="/register" class="text-[#775a19] dark:text-[#e9c176] font-medium hover:underline">Request access</a>
     </p>
   </div>
 </body>
