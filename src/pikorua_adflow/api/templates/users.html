@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}PIKORUA — Users{% endblock %}
+
+{% block content %}
+<header class="mb-8 border-b border-outline-variant pb-6">
+  <p class="label-caps text-outline mb-2">Admin</p>
+  <h1 class="font-display text-4xl md:text-5xl">Users</h1>
+</header>
+
+<!-- Awaiting approval -->
+<section class="mb-10">
+  <h2 class="label-caps text-warn mb-3">Awaiting approval</h2>
+  <div id="pending-empty" class="text-sm text-on-surface-variant hidden">No accounts are waiting for approval.</div>
+  <div class="border border-outline-variant hidden" id="pending-table-wrap">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-outline-variant label-caps text-outline text-left">
+          <th class="p-4">Username</th><th class="p-4">Requested</th><th class="p-4"></th>
+        </tr>
+      </thead>
+      <tbody id="pending-rows"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Create user -->
+<section class="mb-10 border border-outline-variant p-5">
+  <h2 class="font-headline text-xl mb-4">Add a user</h2>
+  <form id="create-form" class="grid md:grid-cols-4 gap-3 items-end" onsubmit="createUser(event)">
+    <div>
+      <label class="label-caps text-outline block mb-1">Username</label>
+      <input name="username" required class="w-full border border-outline-variant rounded px-3 py-2 bg-surface"/>
+    </div>
+    <div>
+      <label class="label-caps text-outline block mb-1">Password</label>
+      <input name="password" type="password" required class="w-full border border-outline-variant rounded px-3 py-2 bg-surface"/>
+    </div>
+    <div>
+      <label class="label-caps text-outline block mb-1">Role</label>
+      <select name="role" class="w-full border border-outline-variant rounded px-3 py-2 bg-surface">
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Create user</button>
+  </form>
+  <div id="create-result" class="text-sm mt-3"></div>
+</section>
+
+<!-- All users -->
+<section>
+  <h2 class="label-caps text-outline mb-3">All users</h2>
+  <div class="border border-outline-variant">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-outline-variant label-caps text-outline text-left">
+          <th class="p-4">Username</th><th class="p-4">Role</th><th class="p-4">Status</th><th class="p-4">Created</th>
+        </tr>
+      </thead>
+      <tbody id="all-rows"></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadUsers() {
+  const res = await fetch('/api/users');
+  if (!res.ok) return;
+  const { users } = await res.json();
+
+  const pending = users.filter(u => u.status === 'pending');
+  document.getElementById('pending-empty').classList.toggle('hidden', pending.length > 0);
+  document.getElementById('pending-table-wrap').classList.toggle('hidden', pending.length === 0);
+  document.getElementById('pending-rows').innerHTML = pending.map(u => `
+    <tr class="border-b border-outline-variant last:border-0">
+      <td class="p-4 font-medium">${u.username}</td>
+      <td class="p-4 text-sm text-on-surface-variant">${new Date(u.created_at).toLocaleString()}</td>
+      <td class="p-4 text-right">
+        <button class="btn btn-primary" onclick="approveUser(${u.id})">Approve</button>
+        <button class="btn btn-outline" onclick="rejectUser(${u.id})">Reject</button>
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('all-rows').innerHTML = users.map(u => `
+    <tr class="border-b border-outline-variant last:border-0">
+      <td class="p-4 font-medium">${u.username}</td>
+      <td class="p-4">${u.role}</td>
+      <td class="p-4">
+        <span class="label-caps ${u.status === 'approved' ? 'text-ok' : u.status === 'pending' ? 'text-warn' : 'text-error'}">${u.status}</span>
+      </td>
+      <td class="p-4 text-sm text-on-surface-variant">${new Date(u.created_at).toLocaleString()}</td>
+    </tr>
+  `).join('');
+}
+
+async function approveUser(id) {
+  await fetch(`/api/users/${id}/approve`, { method: 'POST' });
+  loadUsers();
+}
+
+async function rejectUser(id) {
+  await fetch(`/api/users/${id}/reject`, { method: 'POST' });
+  loadUsers();
+}
+
+async function createUser(e) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const body = { username: form.get('username'), password: form.get('password'), role: form.get('role') };
+  const resultEl = document.getElementById('create-result');
+  const res = await fetch('/api/users', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    resultEl.className = 'text-sm mt-3 text-error';
+    resultEl.textContent = data.detail || 'Could not create user.';
+    return;
+  }
+  resultEl.className = 'text-sm mt-3 text-ok';
+  resultEl.textContent = `User "${data.user.username}" created and approved.`;
+  e.target.reset();
+  loadUsers();
+}
+
+loadUsers();
+</script>
+{% endblock %}

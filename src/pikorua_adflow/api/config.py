@@ -30,6 +30,7 @@ STATIC_DIR = API_DIR / "static"
 
 # ── Persistent files in outputs/ ─────────────────────────────────────────────
 RUNS_PATH = OUTPUT_DIR / "runs.json"
+USERS_DB_PATH = OUTPUT_DIR / "users.db"
 BRAND_LOGO_PATH = OUTPUT_DIR / "brand_logo.png"
 REFERENCE_IMAGES_DIR = OUTPUT_DIR / "reference_images"
 AUDIENCES_REGISTRY_PATH = OUTPUT_DIR / "meta_audiences_registry.json"

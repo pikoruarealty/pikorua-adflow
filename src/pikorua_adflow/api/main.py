@@ -31,13 +31,16 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import STATIC_DIR
 from .routes import (analytics, assets, audience, autooptimiser, campaigns, deploy,
-                     pages, visuals, webhook)
+                     pages, users, visuals, webhook)
 from .services import auth
 
-# Paths reachable with no session cookie: the login flow itself, static assets,
+# Paths reachable with no session cookie: the login/register flow, static assets,
 # brand imagery, and the Meta webhook (an external service, not a browser session).
-_PUBLIC_PATH_PREFIXES = ("/login", "/static", "/logo/", "/favicon.ico",
+_PUBLIC_PATH_PREFIXES = ("/login", "/register", "/static", "/logo/", "/favicon.ico",
                          "/meta-lead-webhook", "/health")
+
+# Paths that additionally require role == "admin" once authenticated.
+_ADMIN_PATH_PREFIXES = ("/users", "/api/users")
 
 
 # ── Scheduled jobs ────────────────────────────────────────────────────────────
@@ -104,18 +107,25 @@ app = FastAPI(
 
 @app.middleware("http")
 async def require_session(request: Request, call_next):
-    """Single shared-password gate — no accounts, just a signed session cookie."""
+    """Per-user session gate, plus a role check for admin-only paths."""
     path = request.url.path
     if path == "/" or path.startswith(_PUBLIC_PATH_PREFIXES):
         return await call_next(request)
 
-    if auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)):
-        return await call_next(request)
-
-    if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
-        return RedirectResponse(url=f"/login?next={path}")
     from fastapi.responses import JSONResponse
-    return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+    payload = auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if payload is None:
+        if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(url=f"/login?next={path}")
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+    if path.startswith(_ADMIN_PATH_PREFIXES) and payload.get("role") != "admin":
+        if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(url="/portal")
+        return JSONResponse({"detail": "Admin access required"}, status_code=403)
+
+    return await call_next(request)
 
 # Static assets (app.js, bundled CSS/icons). Created on first import if absent.
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -130,4 +140,5 @@ app.include_router(analytics.router)
 app.include_router(autooptimiser.router)
 app.include_router(webhook.router)
 app.include_router(assets.router)
+app.include_router(users.router)
 app.include_router(pages.router)

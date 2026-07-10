@@ -1,18 +1,19 @@
-"""Single shared-password gate for the whole portal — no user accounts.
+"""Per-user login — accounts live in SQLite (services/user_store.py).
 
-The password lives in .env (PORTAL_PASSWORD). A correct login issues a JWT
-signed with JWT_SECRET (.env), stored as an httpOnly cookie. AuthMiddleware
-in main.py checks that cookie on every request and redirects to /login if
-it's missing, expired, or invalid.
+A correct username/password issues a JWT signed with JWT_SECRET (.env),
+carrying the username, user id, and role, stored as an httpOnly cookie.
+AuthMiddleware in main.py checks that cookie on every request and further
+requires role == "admin" for admin-only paths (/users, /api/users/*).
 """
 
 from __future__ import annotations
 
-import hmac
 import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
+
+from . import user_store
 
 COOKIE_NAME = "pikorua_session"
 _ALGORITHM = "HS256"
@@ -26,29 +27,31 @@ def _secret() -> str:
     return secret
 
 
-def portal_password() -> str:
-    pw = os.getenv("PORTAL_PASSWORD")
-    if not pw:
-        raise RuntimeError("PORTAL_PASSWORD is not set in .env — required for portal login.")
-    return pw
+def authenticate(username: str, password: str) -> tuple[dict | None, str | None]:
+    """Returns (user, None) on success, or (None, error_message) on failure."""
+    user = user_store.verify_credentials(username, password)
+    if user is None:
+        return None, "Incorrect username or password."
+    if user["status"] == "pending":
+        return None, "Your account is awaiting admin approval."
+    if user["status"] == "rejected":
+        return None, "Your account request was rejected. Contact an admin."
+    return user, None
 
 
-def check_password(candidate: str) -> bool:
-    # Constant-time compare so login timing can't be used to guess the password.
-    return bool(candidate) and hmac.compare_digest(candidate, portal_password())
-
-
-def create_session_token() -> str:
+def create_session_token(user: dict) -> str:
     now = datetime.now(timezone.utc)
-    payload = {"sub": "pikorua-portal", "iat": now, "exp": now + timedelta(hours=_SESSION_HOURS)}
+    payload = {
+        "sub": user["username"], "uid": user["id"], "role": user["role"],
+        "iat": now, "exp": now + timedelta(hours=_SESSION_HOURS),
+    }
     return jwt.encode(payload, _secret(), algorithm=_ALGORITHM)
 
 
-def verify_session_token(token: str | None) -> bool:
+def verify_session_token(token: str | None) -> dict | None:
     if not token:
-        return False
+        return None
     try:
-        jwt.decode(token, _secret(), algorithms=[_ALGORITHM])
-        return True
+        return jwt.decode(token, _secret(), algorithms=[_ALGORITHM])
     except jwt.PyJWTError:
-        return False
+        return None

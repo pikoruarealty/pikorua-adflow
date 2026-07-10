@@ -78,7 +78,11 @@ class UndoFixReq(BaseModel):
 
 @router.get("/autooptimiser", response_class=HTMLResponse)
 def autooptimiser_page(request: Request):
-    return templates.TemplateResponse(request, "autooptimiser.html", {"active": "autooptimiser"})
+    from ..services import auth
+    payload = auth.verify_session_token(request.cookies.get(auth.COOKIE_NAME)) or {}
+    is_admin = payload.get("role") == "admin"
+    return templates.TemplateResponse(
+        request, "autooptimiser.html", {"active": "autooptimiser", "is_admin": is_admin})
 
 
 @router.get("/autooptimiser-data")
