@@ -77,3 +77,12 @@ function pikToggleTheme() {
     if (t === 'dark') document.documentElement.classList.add('dark');
   } catch (e) {}
 })();
+
+/* ── Show/hide password toggle ── */
+function pikToggleShowPassword(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const icon = btn.querySelector('.material-symbols-outlined');
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  icon.textContent = showing ? 'visibility' : 'visibility_off';
+}
