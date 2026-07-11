@@ -12,6 +12,12 @@
       name the firm is governed entirely by the COMPANY NAME RULE below — never default
       to naming a brand.
     - No two variants may open with the same word or share a sentence shape.
+    - LOCATION-FIRST BODY (when the headline does not already carry the address): if a
+      variant's body mentions the locality or city at all, place it within the first
+      2-4 words of the body — not buried mid-sentence or at the end. Meta truncates body
+      text in-feed before a viewer expands it, so the address must survive the truncation
+      to stay visible without a click. Do not force a location mention into a body where
+      it doesn't belong — this only applies when the body already names the place.
 
     STEP 1 — FIND 5 HOOKS IN THE BRIEF, NOT IN A CATEGORY LIST.
     Before writing a single word, read {product} and {persona}. List 5 specific things
@@ -57,6 +63,12 @@
       USE THIS SPARINGLY — at most ONE variant, and only if the address genuinely carries
       prestige on its own. A bare locality name ("Sindhu Bhavan Road.") is the laziest
       possible headline; if every campaign defaults to it, it stops meaning anything.
+      REDUNDANCY WARNING: the ad's own creative image already renders the locality and
+      city as the single largest text on the ad — a headline that ONLY repeats that same
+      locality/city (e.g. "Science Park, Ahmedabad.") adds zero new information over the
+      image itself and reads as an empty headline once the ad is assembled. Prefer this
+      technique only when you can add a clause beyond the bare name; a headline that is
+      nothing but the locality + city is a HARD FAIL for this technique, not a safe default.
     - Contrast: name what the category does, then name what this property does instead.
       The gap between them is the headline. (A car brand: faster vs. quieter.)
     - Fragment sequence: short, rhythmic pieces accumulate to a single decision.

@@ -111,13 +111,16 @@ class BriefModel:
         """
         loc = self.locality
         words = loc.split()
+        if len(loc) <= 15:
+            # Short enough (single word or multi-word, e.g. "Science Park") to fit one
+            # line at large scale — forcing a split here only invites Ideogram to
+            # mangle a short word across the break (e.g. "PARK" -> "PA" / "PARK").
+            return ""
         if len(words) >= 2:
             # Real multi-word name: split into two balanced halves at word boundaries,
             # never mid-word.
             mid = (len(words) + 1) // 2
             return f"{' '.join(words[:mid]).upper()} / {' '.join(words[mid:]).upper()}"
-        if len(loc) <= 15:
-            return ""
         low = loc.lower()
         for suffix in self._LOCALITY_SUFFIXES:
             if low.endswith(suffix) and len(loc) - len(suffix) >= 3:

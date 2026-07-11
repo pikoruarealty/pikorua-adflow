@@ -16,6 +16,19 @@ from .art_director import AdSpec
 from .brief_model import BriefModel
 
 
+def _is_locality_echo(text: str, brief: BriefModel) -> bool:
+    """True if `text` adds no words beyond the locality/city already baked in large
+    text elsewhere on the ad (e.g. headline "Science Park, Ahmedabad." when locality
+    is "Science Park" and city is "Ahmedabad") — rendering it again as a tagline
+    would duplicate the same words in one image."""
+    import re as _re
+    words = {w for w in _re.findall(r"[a-z]+", text.lower()) if w}
+    if not words:
+        return False
+    place_words = {w for w in _re.findall(r"[a-z]+", f"{brief.locality} {brief.city}".lower()) if w}
+    return words.issubset(place_words)
+
+
 def _palette_line(palette: dict) -> str:
     return (
         f"Colour palette (use these and only these) — locality {palette.get('locality_color')}, "
@@ -84,6 +97,13 @@ def _text_strings(brief: BriefModel) -> str:
         )
     # ONE tagline only — never headline AND eyebrow competing as two messages.
     tagline = brief.headline or brief.eyebrow
+    if tagline and _is_locality_echo(tagline, brief):
+        # The headline is just the locality/city restated (e.g. "Science Park,
+        # Ahmedabad.") — that same text is already the single largest element on
+        # the ad via the locality/city block above. Rendering it again as the
+        # tagline prints the same words twice in one image. Fall back to the
+        # eyebrow if it says something different; otherwise drop the tagline.
+        tagline = brief.eyebrow if brief.eyebrow and not _is_locality_echo(brief.eyebrow, brief) else ""
     if tagline:
         lines.append(
             f'Tagline — RENDER EXACTLY THIS TEXT AND NO OTHER: "{tagline}". No '

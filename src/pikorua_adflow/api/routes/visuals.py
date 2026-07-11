@@ -82,9 +82,14 @@ def _pipeline_version() -> str:
 _PIPELINE_VERSION = _pipeline_version()
 
 
-def _brief_fingerprint(brief: dict) -> str:
+def _brief_fingerprint(brief: dict, headline: str = "") -> str:
     sig = {k: brief.get(k) for k in _FINGERPRINT_FIELDS}
     sig["_pipeline_version"] = _PIPELINE_VERSION
+    # The headline is baked as literal text into the prompt but lives on the ad-copy
+    # side (ContentEdit), not on `brief` — without it here, editing/approving a new
+    # headline for a slot never invalidates that slot's saved AI-rewrite override,
+    # so regenerating the image silently keeps rendering the old headline text.
+    sig["_headline"] = headline
     return hashlib.sha1(json.dumps(sig, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
@@ -291,9 +296,10 @@ def generate_images(run_id: str, payload: ImageGenReq | None = None):
         # fingerprint still matches the run's current brief. Anything else — including
         # overrides saved before this fingerprinting existed — is treated as stale and
         # falls through to a fresh pipeline run instead of being resent verbatim.
+        slot_headline = (gen_eff_meta.get(i) or {}).get("headline", "")
         is_trusted_override = override_meta.get("source") == "manual" or (
             override_meta.get("source") == "ai_rewrite"
-            and override_meta.get("fingerprint") == _brief_fingerprint(brief)
+            and override_meta.get("fingerprint") == _brief_fingerprint(brief, slot_headline)
         )
         use_baked_override = bool(
             saved_override and saved_override.startswith(_BAKED_MARKER) and is_trusted_override
@@ -531,7 +537,7 @@ async def regenerate_prompt(run_id: str, payload: RegeneratePromptPayload):
     overrides = saved_edits.setdefault("prompt_overrides", {})
     overrides[str(n)] = new_prompt
     meta = saved_edits.setdefault("prompt_override_meta", {})
-    meta[str(n)] = {"source": "ai_rewrite", "fingerprint": _brief_fingerprint(brief)}
+    meta[str(n)] = {"source": "ai_rewrite", "fingerprint": _brief_fingerprint(brief, headline)}
     cs.save_edits(review_folder, saved_edits)
 
     return {"prompt_num": n, "prompt": new_prompt}

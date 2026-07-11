@@ -66,8 +66,9 @@
       },
       // Flat, editorial look everywhere — every `rounded-*` utility across every
       // page that extends this layout resolves to a square corner from this one
-      // scale, so no template can accidentally reintroduce a curve.
-      borderRadius: { "none": "0px", "DEFAULT": "0px", "sm": "0px", "md": "0px", "lg": "0px", "xl": "0px", "2xl": "0px", "3xl": "0px", "full": "0px" },
+      // scale, so no template can accidentally reintroduce a curve. `full` stays
+      // circular — it's what spinners/dots use, not a decorative curve.
+      borderRadius: { "none": "0px", "DEFAULT": "0px", "sm": "0px", "md": "0px", "lg": "0px", "xl": "0px", "2xl": "0px", "3xl": "0px", "full": "9999px" },
       spacing: { "container-max": "1440px", "margin-mobile": "20px", "margin-desktop": "56px" },
       fontFamily: {
         "display": ["Playfair Display", "serif"], "headline": ["Playfair Display", "serif"],
