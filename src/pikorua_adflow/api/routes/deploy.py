@@ -11,8 +11,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
 from ..config import REFERENCE_IMAGES_DIR
-from ..models import (AdvantageToggleReq, ApplyRecommendationReq, CboToggleReq,
-                      CreativeModeReq, DeployToMetaReq, MetaOptimizeReq,
+from ..models import (AdvantageToggleReq, ApplyRecommendationReq, CapiLeadUpdateReq,
+                      CboToggleReq, CreativeModeReq, DeployToMetaReq, MetaOptimizeReq,
                       RetargetCampaignReq)
 from ..services import campaign_service as cs
 from ..services import crm_service
@@ -21,6 +21,62 @@ from ..services import image_service as imgs
 from ..state import RUNS, RUNS_LOCK, save_runs
 
 router = APIRouter()
+
+
+@router.get("/capi-status")
+def capi_status():
+    """
+    Report whether the CAPI qualified-lead feedback loop can actually send.
+
+    Every step of CAPI swallows its own errors so a bad lead can't break the daily
+    pass — which means a total no-op looks identical to a healthy quiet day. This
+    endpoint is the one place that tells the truth about it.
+    """
+    from pikorua_adflow.analytics import meta_capi
+    return meta_capi.check_readiness()
+
+
+@router.post("/capi-backfill")
+def capi_backfill(form_ids: str = ""):
+    """
+    Populate the leadgen mapping from the full history of Meta's lead forms.
+
+    The webhook only maps leads that arrive AFTER it goes live, so leads already in
+    the CRM can never be matched. This backfills them. Read-only against Meta (it
+    only GETs lead data); safe to re-run — it merges rather than replaces.
+
+    form_ids: optional comma-separated override; defaults to META_LEAD_FORM_ID.
+    """
+    from pikorua_adflow.analytics import meta_capi
+    ids = [f.strip() for f in form_ids.split(",") if f.strip()] or None
+    result = meta_capi.backfill_mapping_from_forms(ids)
+    result["readiness"] = meta_capi.check_readiness()
+    return result
+
+
+@router.post("/capi-lead-update")
+def capi_lead_update(req: CapiLeadUpdateReq, request: Request):
+    """
+    Real-time CAPI trigger for an external CRM: call this the moment a lead's
+    status changes instead of AdFlow polling and re-scanning every lead once a
+    day. Requires header 'X-API-Key' matching CRM_CAPI_API_KEY in .env.
+
+    Always returns 200 (even on a no-op) so the CRM can log the response body
+    without treating "nothing to send yet" as a caller-side error.
+    """
+    expected_key = os.getenv("CRM_CAPI_API_KEY", "").strip()
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="CRM_CAPI_API_KEY not configured on the server.")
+    got_key = request.headers.get("X-API-Key", "").strip()
+    if not got_key or got_key != expected_key:
+        raise HTTPException(status_code=401, detail="Missing or invalid X-API-Key.")
+
+    from pikorua_adflow.analytics import meta_capi
+    return meta_capi.handle_status_update(
+        phone=req.phone, email=req.email, client_status=req.client_status,
+        buying_status=req.buying_status, hwc=req.hwc,
+        site_visit_status=req.site_visit_status,
+    )
 
 
 @router.post("/creative-mode/{run_id}")

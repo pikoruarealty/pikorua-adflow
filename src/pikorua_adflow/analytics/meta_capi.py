@@ -30,6 +30,7 @@ import hashlib
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -128,6 +129,161 @@ def store_leadgen_id(leadgen_id: str, phone: str = "", email: str = "",
     if email:
         mapping[f"em:{_sha256(email)}"] = entry
     _save_mapping(mapping)
+
+
+def check_readiness(token: str = "") -> dict:
+    """
+    Preflight the whole CAPI path and say exactly what is blocking it.
+
+    CAPI fails silently by design (every step swallows errors so a bad lead can
+    never break the daily pass), which historically hid a total no-op for weeks.
+    This surfaces the real state. Returns:
+        {ready, blockers: [str], warnings: [str], mapping_entries, real_entries}
+
+    The `leads_retrieval` check matters most: WITHOUT it the webhook's
+    fetch_lead_fields() call 403s, so store_leadgen_id() never receives a
+    phone/email, the mapping stays empty, and every lead is skipped_no_mapping
+    forever. No amount of waiting fixes it.
+    """
+    blockers: list[str] = []
+    warnings: list[str] = []
+
+    if not _creds():
+        blockers.append(
+            "META_CAPI_TOKEN and/or META_CAPI_DATASET_ID not set in .env — "
+            "CAPI is a no-op until both are present."
+        )
+
+    mapping = _load_mapping()
+    real = {k: v for k, v in mapping.items()
+            if not str(v.get("leadgen_id", "")).startswith("test_")}
+    if not real:
+        blockers.append(
+            "leadgen_mapping.json has no real leads (only test rows). Nothing can "
+            "be matched to a Meta lead. Run backfill_mapping_from_forms() once the "
+            "token has leads_retrieval."
+        )
+
+    token = token or os.getenv("META_ACCESS_TOKEN", "").strip()
+    if not token:
+        blockers.append("META_ACCESS_TOKEN not set — cannot read lead data from Meta.")
+    else:
+        scopes = _token_scopes(token)
+        if scopes is None:
+            warnings.append("Could not read token scopes (network or token issue).")
+        elif "leads_retrieval" not in scopes:
+            blockers.append(
+                "META_ACCESS_TOKEN is missing the 'leads_retrieval' permission. This "
+                "blocks BOTH the live webhook (fetch_lead_fields 403s) and any "
+                "backfill. Regenerate the System User token in Business Settings "
+                "with leads_retrieval added, then re-run the backfill."
+            )
+
+    return {
+        "ready": not blockers,
+        "blockers": blockers,
+        "warnings": warnings,
+        "mapping_entries": len(mapping),
+        "real_entries": len(real),
+    }
+
+
+def _token_scopes(token: str) -> list[str] | None:
+    """Scopes granted to `token`, or None if the debug call fails."""
+    import urllib.parse
+    q = urllib.parse.urlencode({"input_token": token, "access_token": token})
+    try:
+        with urllib.request.urlopen(
+            f"https://graph.facebook.com/v21.0/debug_token?{q}", timeout=15
+        ) as resp:
+            return list(json.loads(resp.read()).get("data", {}).get("scopes", []))
+    except Exception:
+        return None
+
+
+def backfill_mapping_from_forms(form_ids: list[str] | None = None,
+                                token: str = "",
+                                max_pages: int = 50) -> dict:
+    """
+    Populate leadgen_mapping.json from the FULL history of Meta lead forms.
+
+    Why this exists: store_leadgen_id() is only ever called by the live webhook,
+    so the mapping can only cover leads that arrived after the webhook went up.
+    Every lead the CRM already holds is invisible to CAPI. This walks
+    GET /{form_id}/leads (paged) and maps each historical lead's hashed
+    phone/email → leadgen_id, so the next daily pass can send real signal.
+
+    Idempotent: re-running only adds rows. Requires the token to hold
+    `leads_retrieval` (see check_readiness). Returns a per-form summary.
+    """
+    import urllib.parse
+
+    token = token or os.getenv("META_ACCESS_TOKEN", "").strip()
+    if not token:
+        return {"error": "META_ACCESS_TOKEN not set.", "added": 0}
+
+    if not form_ids:
+        env_ids = os.getenv("META_LEAD_FORM_ID", "").strip()
+        form_ids = [f.strip() for f in env_ids.split(",") if f.strip()]
+    if not form_ids:
+        return {"error": "No form IDs supplied and META_LEAD_FORM_ID is empty.", "added": 0}
+
+    mapping = _load_mapping()
+    before = len(mapping)
+    per_form: dict[str, object] = {}
+
+    for form_id in form_ids:
+        url: str | None = (
+            f"https://graph.facebook.com/v21.0/{form_id}/leads?"
+            + urllib.parse.urlencode(
+                {"fields": "id,created_time,field_data", "limit": 100, "access_token": token}
+            )
+        )
+        seen = 0
+        try:
+            for _ in range(max_pages):
+                if not url:
+                    break
+                with urllib.request.urlopen(url, timeout=30) as resp:
+                    page = json.loads(resp.read())
+                for row in page.get("data", []):
+                    leadgen_id = str(row.get("id", ""))
+                    if not leadgen_id:
+                        continue
+                    phone = email = ""
+                    for field in row.get("field_data", []):
+                        name = str(field.get("name", "")).lower()
+                        values = field.get("values") or []
+                        if not values:
+                            continue
+                        if not phone and "phone" in name:
+                            phone = str(values[0])
+                        elif not email and "email" in name:
+                            email = str(values[0])
+                    if not (phone or email):
+                        continue
+                    created = row.get("created_time", "")
+                    entry = {"leadgen_id": leadgen_id, "created_time": created}
+                    if phone:
+                        norm = _norm_phone(phone)
+                        if norm:
+                            mapping[f"ph:{_sha256(norm)}"] = entry
+                    if email:
+                        mapping[f"em:{_sha256(email)}"] = entry
+                    seen += 1
+                url = page.get("paging", {}).get("next")
+            per_form[form_id] = seen
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")
+            hint = (" — token is missing the leads_retrieval permission"
+                    if "leads_retrieval" in detail else "")
+            per_form[form_id] = f"HTTP {exc.code}{hint}"
+        except Exception as exc:
+            per_form[form_id] = str(exc)
+
+    _save_mapping(mapping)
+    return {"added": len(mapping) - before, "total_entries": len(mapping),
+            "per_form": per_form}
 
 
 def _lookup_leadgen_id(phone: str, email: str) -> str | None:
@@ -297,7 +453,87 @@ def fire_pending_lead_events(crm_leads: list[dict]) -> dict:
        any(f.get("ok") for f in results["disqualified"]["fired"]):
         _save_sent(sent)
 
+    # If we sent nothing and everything fell out for lack of a mapping, the cause is
+    # setup, not data. Attach it so the pass reports a reason instead of silence.
+    sent_any = results["qualified"]["fired"] or results["disqualified"]["fired"]
+    if not sent_any and results["skipped_no_mapping"]:
+        readiness = check_readiness()
+        if not readiness["ready"]:
+            results["blocked_by"] = readiness["blockers"]
+            activity_log.log_event(
+                "capi_qualified",
+                f"CAPI sent nothing: {results['skipped_no_mapping']} leads had no Meta "
+                "lead-ID mapping",
+                detail=" | ".join(readiness["blockers"]),
+                status="error",
+            )
+
     return results
+
+
+def handle_status_update(phone: str = "", email: str = "", client_status: str = "",
+                         buying_status: str = "", hwc: str = "",
+                         site_visit_status: str = "") -> dict:
+    """
+    Real-time counterpart to fire_pending_lead_events() — call this the instant a
+    lead's status changes in the CRM, instead of waiting for the daily pass to
+    re-scan every lead. Classifies via the same ordered rule engine
+    (analytics.lead_rules) so this agrees with Lead Insights and the lookalike
+    seed, matches to a Meta leadgen_id via the existing phone/email mapping, and
+    sends the qualified/disqualified event at most once per lead per direction
+    (shares outputs/capi_sent.json with the daily pass, so the two never double-send).
+    """
+    from pikorua_adflow.analytics import activity_log, lead_rules
+
+    if not phone and not email:
+        return {"ok": False, "sent": False, "reason": "phone or email required"}
+
+    norm_row = {
+        "clientstatus": client_status,
+        "buyingstatus": buying_status,
+        "hwc": hwc,
+        "sitevisitstatus": site_visit_status,
+    }
+    category = lead_rules.classify(norm_row)
+    if category not in ("good", "bad", "broker"):
+        return {"ok": True, "sent": False, "reason": "unclassified — no signal to send",
+                "category": category}
+
+    leadgen_id = _lookup_leadgen_id(phone, email)
+    if not leadgen_id:
+        return {"ok": True, "sent": False,
+                "reason": "no Meta leadgen_id mapped yet for this phone/email "
+                          "(webhook hasn't captured it, or backfill hasn't run)",
+                "category": category}
+
+    bucket = "qualified" if category == "good" else "disqualified"
+    sender = send_qualified_lead_event if bucket == "qualified" else send_disqualified_lead_event
+    event_kind = "capi_qualified" if bucket == "qualified" else "capi_disqualified"
+
+    sent = _load_sent()
+    if leadgen_id in sent[bucket]:
+        return {"ok": True, "sent": False, "reason": "already sent for this lead+direction",
+                "category": category, "leadgen_id": leadgen_id}
+
+    result = sender(leadgen_id, phone=phone, email=email)
+    ok = bool(result.get("ok"))
+    if ok:
+        sent[bucket].add(leadgen_id)
+        _save_sent(sent)
+
+    phone_tail = phone[-4:] if len(phone) >= 4 else ""
+    label = "Good lead" if bucket == "qualified" else "Bad lead"
+    verb = "sent to Meta" if bucket == "qualified" else "flagged to Meta"
+    activity_log.log_event(
+        event_kind,
+        f"{label} {verb} (CAPI, real-time): •••{phone_tail}" if phone_tail
+        else f"{label} {verb} (CAPI, real-time)",
+        detail=result.get("error") or "",
+        status="ok" if ok else "error",
+        meta={"leadgen_id": leadgen_id, "category": category},
+    )
+    return {"ok": ok, "sent": ok, "category": category, "leadgen_id": leadgen_id,
+            "error": result.get("error")}
 
 
 # Backward-compat alias — older callers import this name.

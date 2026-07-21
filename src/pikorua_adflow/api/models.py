@@ -211,6 +211,15 @@ class CreativeModeReq(BaseModel):
     )
 
 
+class CapiLeadUpdateReq(BaseModel):
+    phone: str = Field("", description="Lead's phone number, any format (normalised internally).")
+    email: str = Field("", description="Lead's email address.")
+    client_status: str = Field("", description="clients.status value, e.g. warm/hot/cold/lost/broker.")
+    buying_status: str = Field("", description="lead_crm_details.buying_status value.")
+    hwc: str = Field("", description="Hot/Warm/Cold flag, if tracked separately.")
+    site_visit_status: str = Field("", description="Site visit status, e.g. visited/confirmed.")
+
+
 class GenerateRefVariantPayload(BaseModel):
     reference_filename: str
     mode: str = Field(

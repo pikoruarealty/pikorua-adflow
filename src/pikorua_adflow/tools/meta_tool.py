@@ -679,9 +679,14 @@ def deploy_dynamic_ad(
 
         # Step 4 — create the dynamic creative (asset_feed_spec pools every asset;
         # Meta mixes image × headline × body per viewer instead of a fixed pairing).
-        # NOTE: the lead-gen-form wiring under asset_feed_spec has not been verified
-        # against a live account yet — confirm against Meta's current Marketing API
-        # docs / a supervised live PAUSED test before treating this as production-ready.
+        #
+        # Lead form wiring: the curated path puts the form in
+        # link_data.call_to_action.value.lead_gen_form_id. asset_feed_spec has no
+        # link_data, so the form goes in `onsite_destinations` instead. Without it
+        # the ad renders as a plain link ad to landing_page_url under a QUALITY_LEAD
+        # ad set — it would spend against a funnel that can never return a lead.
+        # STILL UNVERIFIED against a live account: do one supervised PAUSED deploy
+        # and check the ad preview opens the form before trusting this in production.
         asset_feed_spec: dict[str, Any] = {
             "images": [{"hash": h} for h in image_hashes],
             "bodies": [{"text": b} for b in bodies],
@@ -689,6 +694,7 @@ def deploy_dynamic_ad(
             "link_urls": [{"website_url": landing_page_url}],
             "call_to_action_types": [cta],
             "ad_formats": ["SINGLE_IMAGE"],
+            "onsite_destinations": [{"lead_gen_form_id": lead_form_id}],
         }
         object_story_spec: dict[str, Any] = {"page_id": page_id}
         if instagram_actor_id:
