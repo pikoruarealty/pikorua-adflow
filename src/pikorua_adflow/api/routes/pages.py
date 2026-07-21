@@ -113,6 +113,11 @@ def crm_dashboard(request: Request):
     return templates.TemplateResponse(request, "lead_insights.html", {"active": "leads", **_user_ctx(request)})
 
 
+@router.get("/activity", response_class=HTMLResponse)
+def activity_page(request: Request):
+    return templates.TemplateResponse(request, "activity.html", {"active": "activity", **_user_ctx(request)})
+
+
 @router.get("/health")
 def health():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}

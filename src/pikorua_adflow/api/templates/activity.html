@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}PIKORUA — Activity{% endblock %}
+
+{% block content %}
+<header class="mb-8 border-b border-outline-variant pb-6">
+  <p class="label-caps text-outline mb-2">What the system did on its own</p>
+  <h1 class="font-display text-4xl md:text-5xl">Activity</h1>
+  <p class="text-on-surface-variant mt-2 max-w-2xl">A live record of everything running automatically — daily optimisation passes, new leads arriving, lead-quality signals sent back to Meta, and targeting refreshes. Newest first.</p>
+</header>
+
+<div class="flex flex-wrap items-center gap-2 mb-6">
+  <button data-group="all"       class="act-chip label-caps px-4 py-1.5 rounded-full border border-primary bg-primary text-on-primary transition-colors">All</button>
+  <button data-group="optimise"  class="act-chip label-caps px-4 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:border-primary transition-colors">Optimisations</button>
+  <button data-group="leads"     class="act-chip label-caps px-4 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:border-primary transition-colors">Leads</button>
+  <button data-group="capi"      class="act-chip label-caps px-4 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:border-primary transition-colors">Meta signals</button>
+  <button data-group="scheduler" class="act-chip label-caps px-4 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:border-primary transition-colors">Scheduler</button>
+  <button id="act-refresh" title="Refresh" class="ml-auto text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-low transition-colors">
+    <span class="material-symbols-outlined">refresh</span>
+  </button>
+</div>
+
+<div id="act-loading" class="text-on-surface-variant py-16 text-center">
+  <span class="material-symbols-outlined animate-spin align-middle">progress_activity</span>
+  <span class="align-middle ml-2">Loading activity…</span>
+</div>
+
+<div id="act-empty" class="hidden text-center py-16 text-on-surface-variant">
+  <span class="material-symbols-outlined text-5xl text-outline-variant">history</span>
+  <p class="mt-3">No activity recorded yet. Automated actions will appear here as they happen.</p>
+</div>
+
+<div id="act-error" class="hidden border border-error/40 bg-error/5 text-error p-5"></div>
+
+<ol id="act-list" class="hidden relative border-l border-outline-variant ml-3 space-y-1"></ol>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  // kind → {icon, label, tone}. tone drives the dot colour; status='error' overrides to error.
+  const KIND = {
+    crm_fetch:         { icon: 'cloud_download', label: 'CRM sync',      tone: 'muted' },
+    optimise_auto:     { icon: 'auto_fix_high',  label: 'Auto-optimised', tone: 'primary' },
+    optimise_manual:   { icon: 'tune',           label: 'Optimised',      tone: 'primary' },
+    retarget:          { icon: 'ads_click',      label: 'Retargeting',    tone: 'primary' },
+    capi_qualified:    { icon: 'thumb_up',       label: 'Good lead → Meta', tone: 'ok' },
+    capi_disqualified: { icon: 'thumb_down',     label: 'Bad lead → Meta',  tone: 'warn' },
+    webhook_lead:      { icon: 'person_add',     label: 'New lead',       tone: 'ok' },
+    scheduler_run:     { icon: 'schedule',       label: 'Scheduled run',  tone: 'muted' },
+    scheduler_error:   { icon: 'error',          label: 'Scheduler error', tone: 'error' },
+  };
+  const DOT = { ok: 'bg-ok', warn: 'bg-warn', error: 'bg-error', primary: 'bg-primary', muted: 'bg-outline' };
+
+  let currentGroup = 'all';
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function fmtWhen(iso) {
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const sameDay = d.toDateString() === now.toDateString();
+      const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (sameDay) return 'Today · ' + time;
+      return d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' · ' + time;
+    } catch (e) { return iso || ''; }
+  }
+
+  function render(events) {
+    const list = document.getElementById('act-list');
+    const empty = document.getElementById('act-empty');
+    list.innerHTML = '';
+    if (!events.length) {
+      list.classList.add('hidden');
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    list.classList.remove('hidden');
+    for (const ev of events) {
+      const meta = KIND[ev.kind] || { icon: 'bolt', label: 'Activity', tone: 'muted' };
+      const tone = ev.status === 'error' ? 'error' : meta.tone;
+      const li = document.createElement('li');
+      li.className = 'ml-6 py-4 border-b border-outline-variant/50';
+      li.innerHTML =
+        '<span class="absolute -left-[7px] mt-1.5 h-3.5 w-3.5 rounded-full ring-4 ring-surface ' + (DOT[tone] || 'bg-outline') + '"></span>' +
+        '<div class="flex items-start gap-3">' +
+          '<span class="material-symbols-outlined text-outline shrink-0 mt-0.5">' + esc(meta.icon) + '</span>' +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="flex items-baseline justify-between gap-3">' +
+              '<span class="label-caps text-outline">' + esc(meta.label) + '</span>' +
+              '<span class="text-xs text-outline shrink-0">' + esc(fmtWhen(ev.ts)) + '</span>' +
+            '</div>' +
+            '<p class="mt-0.5">' + esc(ev.summary) + '</p>' +
+            (ev.detail ? '<p class="text-sm text-on-surface-variant mt-0.5">' + esc(ev.detail) + '</p>' : '') +
+            (ev.campaign_name ? '<p class="text-xs text-outline mt-1">' + esc(ev.campaign_name) + '</p>' : '') +
+          '</div>' +
+        '</div>';
+      list.appendChild(li);
+    }
+  }
+
+  async function load() {
+    const loading = document.getElementById('act-loading');
+    const err = document.getElementById('act-error');
+    const list = document.getElementById('act-list');
+    const empty = document.getElementById('act-empty');
+    loading.classList.remove('hidden');
+    err.classList.add('hidden');
+    list.classList.add('hidden');
+    empty.classList.add('hidden');
+    try {
+      const url = '/activity-data?limit=300' + (currentGroup !== 'all' ? '&group=' + currentGroup : '');
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Request failed (' + r.status + ')');
+      const data = await r.json();
+      render(data.events || []);
+    } catch (e) {
+      err.textContent = 'Could not load activity: ' + e.message;
+      err.classList.remove('hidden');
+    } finally {
+      loading.classList.add('hidden');
+    }
+  }
+
+  document.querySelectorAll('.act-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      currentGroup = chip.dataset.group;
+      document.querySelectorAll('.act-chip').forEach(c => {
+        const on = c === chip;
+        c.classList.toggle('bg-primary', on);
+        c.classList.toggle('text-on-primary', on);
+        c.classList.toggle('border-primary', on);
+        c.classList.toggle('text-on-surface-variant', !on);
+        c.classList.toggle('border-outline-variant', !on);
+      });
+      load();
+    });
+  });
+  document.getElementById('act-refresh').addEventListener('click', load);
+
+  load();
+})();
+</script>
+{% endblock %}

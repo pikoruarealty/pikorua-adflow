@@ -1076,11 +1076,37 @@ async def meta_lead_webhook_verify(request: Request):
     raise HTTPException(status_code=403, detail="Webhook verification failed")
 
 
+def _verify_webhook_signature(raw: bytes, header: str, app_secret: str) -> bool:
+    """Verify Meta's X-Hub-Signature-256 HMAC over the raw body (constant-time).
+    Only enforced when META_APP_SECRET is set — otherwise verification is skipped."""
+    import hashlib
+    import hmac
+    if not header.startswith("sha256="):
+        return False
+    expected = hmac.new(app_secret.encode(), raw, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header.split("=", 1)[1])
+
+
 @router.post("/meta-lead-webhook")
 async def meta_lead_webhook_receive(request: Request):
+    from pikorua_adflow.analytics import activity_log
+    from pikorua_adflow.analytics import meta_capi
     from pikorua_adflow.tools.errors import explain_and_log
+
+    raw = await request.body()
+
+    # Reject forged/unsigned calls when an app secret is configured (recommended).
+    # This endpoint is public (no session cookie), so without this anyone could POST
+    # a crafted payload and make us fetch data with our ads token + write leads.
+    app_secret = os.getenv("META_APP_SECRET", "")
+    if app_secret:
+        sig = request.headers.get("x-hub-signature-256", "")
+        if not _verify_webhook_signature(raw, sig, app_secret):
+            # 200 so Meta doesn't retry-storm, but the payload is NOT processed.
+            return JSONResponse({"status": "ok", "error": "signature verification failed"})
+
     try:
-        body = await request.json()
+        body = json.loads(raw)
     except Exception:
         return JSONResponse({"status": "ok"})
     token = os.getenv("META_ACCESS_TOKEN", "")
@@ -1123,11 +1149,31 @@ async def meta_lead_webhook_receive(request: Request):
                 "ad_id": str(raw.get("ad_id") or val.get("ad_id") or ""),
                 "form_data": json.dumps(raw.get("field_data", [])),
             }
+            # Populate the CAPI leadgen mapping (hashed phone/email → leadgen_id) so
+            # the daily CAPI pass can send QualifiedLead/DisqualifiedLead events for
+            # this lead later. Zero extra Graph calls — phone/email already in hand.
+            try:
+                meta_capi.store_leadgen_id(
+                    leadgen_id=leadgen_id, phone=phone, email=email,
+                    created_time=int(val.get("created_time") or 0) or None,
+                )
+            except Exception as exc:
+                explain_and_log(exc, context=f"webhook CAPI mapping {leadgen_id}")
+
             try:
                 new_id = crm_service.insert_lead_supabase(lead_row)
                 if new_id:
                     inserted.append({"leadgen_id": leadgen_id, "supabase_id": new_id, "name": full_name})
                     crm_service.invalidate_crm_cache()
+                    activity_log.log_event(
+                        "webhook_lead",
+                        f"New lead received: {full_name or 'Unknown'}"
+                        + (f" ({city})" if city else ""),
+                        detail=f"Source: Meta Lead Form · Campaign: {lead_row.get('campaign_name') or '—'}",
+                        campaign_name=lead_row.get("campaign_name") or "",
+                        status="ok",
+                        meta={"leadgen_id": leadgen_id, "supabase_id": new_id},
+                    )
                 else:
                     errors.append(f"Supabase insert returned no ID for {leadgen_id}")
             except Exception as exc:

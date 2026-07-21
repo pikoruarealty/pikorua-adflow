@@ -1012,6 +1012,23 @@ def apply_fix(fix: dict, *, auto: bool = False) -> dict:
     cs["applied"].insert(0, entry)
     cs.setdefault("cooldowns", {})[fix["fix_type"]] = _now().isoformat()
     _save_state(state)
+
+    # Timeline entry for the client-facing Activity page.
+    try:
+        from pikorua_adflow.analytics import activity_log
+        impact_summary = impact.get("summary") or impact.get("metric") or ""
+        activity_log.log_event(
+            "optimise_auto" if auto else "optimise_manual",
+            fix.get("title", "Optimisation applied"),
+            detail=fix.get("detail", "") + (f" — {impact_summary}" if impact_summary else ""),
+            campaign_id=fix.get("campaign_id", ""),
+            campaign_name=fix.get("campaign_name", ""),
+            status="ok",
+            meta={"fix_type": fix.get("fix_type", ""), "auto": auto, "impact": impact},
+        )
+    except Exception:
+        pass  # activity logging must never break an apply
+
     return {"ok": True, "impact": impact}
 
 
@@ -1093,6 +1110,16 @@ def run_autooptimiser(apply_safe: bool = True) -> dict:
     from . import crm_service
 
     crm_leads, crm_source_label = _safe_crm_leads()
+    try:
+        from pikorua_adflow.analytics import activity_log
+        activity_log.log_event(
+            "crm_fetch",
+            f"Fetched {len(crm_leads)} CRM leads from {crm_source_label}",
+            status="ok" if crm_source_label.strip().lower().startswith("supabase") else "info",
+            meta={"rows": len(crm_leads), "source": crm_source_label},
+        )
+    except Exception:
+        pass
     crm_report = _safe_crm_report(crm_service)
     # Safety: never AUTO-APPLY on stale data. If the live CRM (Supabase) was
     # unreachable and we fell back to the local CSV snapshot, the quality/geo signals
@@ -1251,11 +1278,12 @@ def run_autooptimiser(apply_safe: bool = True) -> dict:
     _final["ab_groups"] = state.get("ab_groups", _final.get("ab_groups", {}))
     _save_state(_final)
 
-    # Rung 11 — CAPI: fire QualifiedLead events for newly-qualified CRM leads.
+    # Rung 11 — CAPI: fire QualifiedLead (good) AND DisqualifiedLead (bad) events
+    # for newly-classified CRM leads, so Meta learns which profiles convert.
     capi_result: dict = {}
     try:
         from pikorua_adflow.analytics import meta_capi as _capi
-        capi_result = _capi.fire_pending_qualified_leads(crm_leads)
+        capi_result = _capi.fire_pending_lead_events(crm_leads)
     except Exception:
         pass  # never let CAPI break the autooptimiser
 

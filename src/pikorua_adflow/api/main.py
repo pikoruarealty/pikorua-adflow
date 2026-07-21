@@ -30,8 +30,8 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import STATIC_DIR
-from .routes import (analytics, assets, audience, autooptimiser, campaigns, deploy,
-                     pages, users, visuals, webhook)
+from .routes import (activity, analytics, assets, audience, autooptimiser, campaigns,
+                     deploy, pages, users, visuals)
 from .services import auth
 
 # Paths reachable with no session cookie: the login/register flow, static assets,
@@ -47,23 +47,54 @@ _ADMIN_PATH_PREFIXES = ("/users", "/api/users")
 
 def _daily_autooptimiser_run() -> None:
     """Daily pass at 7:30 AM IST (02:00 UTC). Auto-applies safe fixes."""
+    from pikorua_adflow.analytics import activity_log
     try:
         from .services import autooptimiser as ao
-        ao.run_autooptimiser(apply_safe=True)
+        result = ao.run_autooptimiser(apply_safe=True)
+        applied = len(result.get("auto_applied", []))
+        capi = result.get("capi", {}) or {}
+        q = len((capi.get("qualified", {}) or {}).get("fired", []))
+        d = len((capi.get("disqualified", {}) or {}).get("fired", []))
+        activity_log.log_event(
+            "scheduler_run",
+            f"Daily auto-optimisation ran — {applied} fix"
+            f"{'' if applied == 1 else 'es'} applied, "
+            f"{len(result.get('campaigns', []))} campaigns reviewed",
+            detail=f"CAPI: {q} good + {d} bad lead events · CRM: {result.get('crm_source', '—')}",
+            status="ok",
+            meta={"auto_applied": applied, "capi_qualified": q, "capi_disqualified": d,
+                  "crm_source": result.get("crm_source", ""),
+                  "crm_fallback": result.get("crm_fallback", False)},
+        )
     except Exception as exc:
         print(f"[scheduler] daily autooptimiser error: {exc}")
+        activity_log.log_event("scheduler_error",
+                               "Daily auto-optimisation failed",
+                               detail=str(exc), status="error")
 
 
 def _monthly_retarget() -> None:
     """Rung 12 — refresh targeting on all active campaigns every 30 days."""
+    from pikorua_adflow.analytics import activity_log
     try:
         from .services import autooptimiser as ao
         result = ao.periodic_retarget_all()
         n = len(result.get("results", []))
         print(f"[scheduler] monthly retarget: {n} campaigns processed "
               f"(dry_run={result.get('dry_run')})")
+        activity_log.log_event(
+            "retarget",
+            f"Monthly targeting refresh — {n} campaign{'' if n == 1 else 's'} processed",
+            detail=f"dry_run={result.get('dry_run')}"
+                   + (f" · {result.get('reason')}" if result.get("skipped") else ""),
+            status="ok",
+            meta={"processed": n, "skipped": result.get("skipped", False)},
+        )
     except Exception as exc:
         print(f"[scheduler] monthly retarget error: {exc}")
+        activity_log.log_event("scheduler_error",
+                               "Monthly targeting refresh failed",
+                               detail=str(exc), status="error")
 
 
 @asynccontextmanager
@@ -138,7 +169,7 @@ app.include_router(audience.router)
 app.include_router(deploy.router)
 app.include_router(analytics.router)
 app.include_router(autooptimiser.router)
-app.include_router(webhook.router)
+app.include_router(activity.router)
 app.include_router(assets.router)
 app.include_router(users.router)
 app.include_router(pages.router)
